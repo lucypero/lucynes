@@ -115,19 +115,27 @@ read_u16_be :: proc(buffer: []u8, index: u16) -> u16 {
 	return u16(buffer[index + 1]) + (u16(buffer[index]) << 2)
 }
 
-instr_lda :: proc(using nes: ^NES, mem: u8) {
-	accumulator = mem
+instr_lda_value :: proc(using nes: ^NES, val: u16) {
+	accumulator = u8(val)
 
 	// flags
 	set_flag(&flags, .Zero, accumulator == 0)
 	set_flag(&flags, .Negative, (accumulator & 0x80) != 0)
 }
 
-instr_and :: proc(using nes: ^NES, mem: u8) {
+instr_lda :: proc(using nes: ^NES, mem: u16) {
+	accumulator = ram[mem]
 
+	// flags
+	set_flag(&flags, .Zero, accumulator == 0)
+	set_flag(&flags, .Negative, (accumulator & 0x80) != 0)
+}
+
+// todo: code is duplicated
+instr_and_value :: proc(using nes: ^NES, value: u16) {
 	// A, Z, N = A&M
 
-	temp: u16 = u16(nes.accumulator) & u16(mem)
+	temp: u16 = u16(nes.accumulator) & value
 
 	set_flag(&flags, .Zero, temp == 0)
 	set_flag(&flags, .Negative, (temp & 0x80) != 0)
@@ -135,30 +143,50 @@ instr_and :: proc(using nes: ^NES, mem: u8) {
 	accumulator = u8(temp)
 }
 
-instr_asl :: proc(using nes: ^NES, mem: ^u8) {
+instr_and :: proc(using nes: ^NES, mem: u16) {
 
-	// A,Z,C,N = M*2 or M,Z,C,N = M*2
+	// A, Z, N = A&M
 
-	// u screwed up. sometimes instructions need to write to the address.
-	// now u are just taking a number as a value, not a pointer u can write to.
+	temp: u16 = u16(nes.accumulator) & u16(ram[mem])
 
-	// "mem" should be the address to the thing, always.
-
-	// if you want to read mem /write to mem, then you do nes.ram[mem]
-
-	// well in this case, mem can be A so this just takes a pointer to a u8
-
-	temp := mem^ << 1
-
-	set_flag(&flags, .Carry, (mem^ & 0x80) == 1)
 	set_flag(&flags, .Zero, temp == 0)
 	set_flag(&flags, .Negative, (temp & 0x80) != 0)
 
-	mem^ = temp
+	accumulator = u8(temp)
 }
 
-instr_adc :: proc(using nes: ^NES, mem: u8) {
-	temp: u16 = u16(nes.accumulator) + u16(mem)
+// todo: code is duplicated
+instr_asl_accum :: proc(using nes: ^NES, _mem: u16) {
+	// A,Z,C,N = M*2 or M,Z,C,N = M*2
+
+	temp := accumulator << 1
+
+	set_flag(&flags, .Carry, (accumulator & 0x80) == 1)
+	set_flag(&flags, .Zero, temp == 0)
+	set_flag(&flags, .Negative, (temp & 0x80) != 0)
+
+	accumulator = temp
+}
+
+instr_asl :: proc(using nes: ^NES, mem: u16) {
+
+	// A,Z,C,N = M*2 or M,Z,C,N = M*2
+
+	temp := ram[mem] << 1
+
+	set_flag(&flags, .Carry, (ram[mem] & 0x80) == 1)
+	set_flag(&flags, .Zero, temp == 0)
+	set_flag(&flags, .Negative, (temp & 0x80) != 0)
+
+	ram[mem] = temp
+}
+
+instr_adc :: proc(using nes: ^NES, mem: u16) {
+
+	val :u16 = u16(ram[mem])
+
+
+	temp: u16 = u16(nes.accumulator) + val
 
 	if .Carry in nes.flags {
 		temp += 1
@@ -170,12 +198,50 @@ instr_adc :: proc(using nes: ^NES, mem: u8) {
 	set_flag(
 		&flags,
 		.Overflow,
-		((~(u16(accumulator) ~ u16(mem)) & (u16(accumulator) ~ u16(temp))) & 0x0080) != 0,
+		((~(u16(accumulator) ~ val) & (u16(accumulator) ~ u16(temp))) & 0x0080) != 0,
 	)
 
 	accumulator = u8(temp & 0x00FF)
 }
 
+instr_bcc :: proc(using nes: ^NES, mem: u16) {
+	if .Carry not_in flags {
+		program_counter = mem
+	}
+}
+
+instr_bcs :: proc(using nes: ^NES, mem: u16) {
+	if .Carry in flags {
+		program_counter = mem
+	}
+}
+
+instr_beq :: proc(using nes: ^NES, mem: u16) {
+	if .Zero in flags {
+		program_counter = mem
+	}
+}
+
+instr_bit :: proc(using nes: ^NES, mem: u16) {
+
+	// A & M, N = M7, V = M6
+
+	set_flag(&flags, .Zero, (accumulator & ram[mem]) == 0)
+	set_flag(&flags, .Overflow, (ram[mem] & 0x40) != 0)
+	set_flag(&flags, .Negative, (ram[mem] & 0x80) != 0)
+}
+
+instr_bmi :: proc(using nes: ^NES, mem: u16) {
+	if .Negative in flags {
+		program_counter = mem
+	}
+}
+
+instr_bne :: proc(using nes: ^NES, mem: u16) {
+	if .Negative not_in flags {
+		program_counter = mem
+	}
+}
 
 run_instruction :: proc(using nes: ^NES) {
 	// get first byte of instruction
@@ -187,129 +253,147 @@ run_instruction :: proc(using nes: ^NES) {
 	// LDA
 
 	case 0xA9:
-		mem := do_addrmode_immediate(nes)
-		instr_lda(nes, u8(mem))
-		cycles += 2
+		do_opcode(nes, .Immediate, instr_lda_value, 2)
 	case 0xA5:
-		fmt.println("lda zp instruction")
-		mem := do_addrmode_zp(nes)
-		instr_lda(nes, ram[mem])
-		cycles += 3
+		do_opcode(nes, .ZeroPage, instr_lda, 3)
 	case 0xB5:
-		mem := do_addrmode_zpx(nes)
-		instr_lda(nes, ram[mem])
-		cycles += 4
+		do_opcode(nes, .ZeroPageX, instr_lda, 4)
 	case 0xAD:
-		mem := do_addrmode_absolute(nes)
-		instr_lda(nes, ram[mem])
-		cycles += 4
+		do_opcode(nes, .Absolute, instr_lda, 4)
 	case 0xBD:
-		mem, extra_cycles := do_addrmode_absolute_x(nes)
-		instr_lda(nes, ram[mem])
-		cycles += 4 + extra_cycles // TODO +1 if page crossed
+		do_opcode(nes, .AbsoluteX, instr_lda, 4)
 	case 0xB9:
-		mem, extra_cycles := do_addrmode_absolute_y(nes)
-		instr_lda(nes, ram[mem])
-		cycles += 4 + extra_cycles // TODO +1 if page crossed
+		do_opcode(nes, .AbsoluteY, instr_lda, 4)
 	case 0xA1:
-		mem := do_addrmode_ind_x(nes)
-		instr_lda(nes, ram[mem])
-		cycles += 6
+		do_opcode(nes, .IndirectX, instr_lda, 6)
 	case 0xB1:
-		mem, extra_cycles := do_addrmode_ind_y(nes)
-		instr_lda(nes, ram[mem])
-		cycles += 5 + extra_cycles
+		do_opcode(nes, .IndirectY, instr_lda, 5)
 
 	// AND
 
 	case 0x29:
-		val := do_addrmode_immediate(nes)
-		instr_and(nes, val)
-		cycles += 2
+		do_opcode(nes, .Immediate, instr_and_value, 2)
 	case 0x25:
-		mem := do_addrmode_zp(nes)
-		instr_and(nes, ram[mem])
-		cycles += 3
+		do_opcode(nes, .ZeroPage, instr_and, 3)
 	case 0x35:
-		mem := do_addrmode_zpx(nes)
-		instr_and(nes, ram[mem])
-		cycles += 4
+		do_opcode(nes, .ZeroPageX, instr_and, 4)
 	case 0x2D:
-		mem := do_addrmode_absolute(nes)
-		instr_and(nes, ram[mem])
-		cycles += 4
+		do_opcode(nes, .Absolute, instr_and, 4)
 	case 0x3D:
-		mem, extra_cycles := do_addrmode_absolute_x(nes)
-		instr_and(nes, ram[mem])
-		cycles += 4 + extra_cycles
+		do_opcode(nes, .AbsoluteX, instr_and, 4)
 	case 0x39:
-		mem, extra_cycles := do_addrmode_absolute_y(nes)
-		instr_and(nes, ram[mem])
-		cycles += 4 + extra_cycles
+		do_opcode(nes, .AbsoluteY, instr_and, 4)
 	case 0x21:
-		mem := do_addrmode_ind_x(nes)
-		instr_and(nes, ram[mem])
-		cycles += 6
+		do_opcode(nes, .IndirectX, instr_and, 6)
 	case 0x31:
-		mem, extra_cycles := do_addrmode_ind_y(nes)
-		instr_and(nes, ram[mem])
-		cycles += 5 + extra_cycles
+		do_opcode(nes, .IndirectY, instr_and, 5)
 
 	// ASL
 
 	case 0x0A:
-		instr_asl(nes, &nes.accumulator)
-		cycles += 2
+		do_opcode(nes, .Accumulator, instr_asl_accum, 2)
 	case 0x06:
-		mem := do_addrmode_zp(nes)
-		instr_asl(nes, &ram[mem])
-		cycles += 5
+		do_opcode(nes, .ZeroPage, instr_asl, 5)
 	case 0x16:
-		mem := do_addrmode_zpx(nes)
-		instr_asl(nes, &ram[mem])
-		cycles += 6
+		do_opcode(nes, .ZeroPageX, instr_asl, 6)
 	case 0x0E:
-		mem := do_addrmode_absolute(nes)
-		instr_asl(nes, &ram[mem])
-		cycles += 6
+		do_opcode(nes, .Absolute, instr_asl, 6)
 	case 0x1E:
-		mem, _ := do_addrmode_absolute_x(nes)
-		instr_asl(nes, &ram[mem])
-		cycles += 7
+		do_opcode(nes, .AbsoluteX, instr_asl, 7)
 
 	// ADC
 	case 0x69:
-		mem := do_addrmode_immediate(nes)
-		instr_adc(nes, mem)
-		cycles += 2
+		do_opcode(nes, .Immediate, instr_adc, 2)
 	case 0x65:
-		mem := do_addrmode_zp(nes)
-		instr_adc(nes, ram[mem])
-		cycles += 3
+		do_opcode(nes, .ZeroPage, instr_adc, 3)
 	case 0x75:
-		mem := do_addrmode_zpx(nes)
-		instr_adc(nes, ram[mem])
-		cycles += 4
+		do_opcode(nes, .ZeroPageX, instr_adc, 4)
 	case 0x6D:
-		mem := do_addrmode_absolute(nes)
-		instr_adc(nes, ram[mem])
-		cycles += 4
+		do_opcode(nes, .Absolute, instr_adc, 4)
 	case 0x7D:
-		mem, extra_cycles := do_addrmode_absolute_x(nes)
-		instr_adc(nes, ram[mem])
-		cycles += 4 + extra_cycles
+		do_opcode(nes, .AbsoluteX, instr_adc, 4)
 	case 0x79:
-		mem, extra_cycles := do_addrmode_absolute_y(nes)
-		instr_adc(nes, ram[mem])
-		cycles += 4 + extra_cycles
+		do_opcode(nes, .AbsoluteY, instr_adc, 4)
 	case 0x61:
-		mem := do_addrmode_ind_x(nes)
-		instr_adc(nes, ram[mem])
-		cycles += 6
+		do_opcode(nes, .IndirectX, instr_adc, 6)
 	case 0x71:
-		mem, extra_cycles := do_addrmode_ind_y(nes)
-		instr_adc(nes, ram[mem])
-		cycles += 5 + extra_cycles
+		do_opcode(nes, .IndirectY, instr_adc, 5)
+
+	// BCC
+	case 0x90:
+		do_opcode(nes, .Relative, instr_bcc, 2)
+
+	// BCS
+	case 0xB0:
+		do_opcode(nes, .Relative, instr_bcs, 2)
+
+	// BEQ
+	case 0xF0:
+		do_opcode(nes, .Relative, instr_beq, 2)
+
+	// BIT
+	case 0x24:
+		do_opcode(nes, .ZeroPage, instr_bit, 3)
+	case 0x2C:
+		do_opcode(nes, .Absolute, instr_bit, 4)
+
+	// BMI
+	case 0x30:
+		do_opcode(nes, .Relative, instr_bmi, 2)
+
+	// BNE
+	case 0xD0:
+		do_opcode(nes, .Relative, instr_bne, 2)
+
+	// BPL
+	case 0x10:
+		do_opcode(nes, .Relative, instr_bpl, 2)
+
+	// BRK
+	case 0x00:
+		do_opcode(nes, .Implicit, instr_brk, 7)
+
+	// BVC
+	case 0x50:
+		do_opcode(nes, .Relative, instr_bvc, 2)
+
+	// BVS
+	case 0x70:
+		do_opcode(nes, .Relative, instr_bvs, 2)
+
+	// CLC
+	case 0x18:
+		do_opcode(nes, .Implicit, instr_clc, 2)
+
+	// CLD
+	case 0xD8:
+		do_opcode(nes, .Implicit, instr_cld, 2)
+
+	// CLI
+	case 0x58:
+		do_opcode(nes, .Implicit, instr_cli, 2)
+
+	// CLV
+	case 0xB8:
+		do_opcode(nes, .Implicit, instr_clv, 2)
+
+	// CMP
+	case 0xC9:
+		do_opcode(nes, .Immediate, instr_cmp_value, 2)
+	case 0xC5:
+		do_opcode(nes, .ZeroPage, instr_cmp, 3)
+	case 0xD5:
+		do_opcode(nes, .ZeroPageX, instr_cmp, 4)
+	case 0xCD:
+		do_opcode(nes, .Absolute, instr_cmp, 4)
+	case 0xDD:
+		do_opcode(nes, .AbsoluteX, instr_cmp, 4)
+	case 0xD9:
+		do_opcode(nes, .AbsoluteY, instr_cmp, 4)
+	case 0xC1:
+		do_opcode(nes, .IndirectX, instr_cmp, 6)
+	case 0xD1:
+		do_opcode(nes, .IndirectY, instr_cmp, 5)
 
 
 	// TODO: this one is not done yet
