@@ -131,7 +131,6 @@ instr_lda :: proc(using nes: ^NES, mem: u16) {
 	set_flag(&flags, .Negative, (accumulator & 0x80) != 0)
 }
 
-// todo: code is duplicated
 instr_and_value :: proc(using nes: ^NES, value: u16) {
 	// A, Z, N = A&M
 
@@ -144,41 +143,27 @@ instr_and_value :: proc(using nes: ^NES, value: u16) {
 }
 
 instr_and :: proc(using nes: ^NES, mem: u16) {
-
-	// A, Z, N = A&M
-
-	temp: u16 = u16(nes.accumulator) & u16(ram[mem])
-
-	set_flag(&flags, .Zero, temp == 0)
-	set_flag(&flags, .Negative, (temp & 0x80) != 0)
-
-	accumulator = u8(temp)
+	instr_and_value(nes, u16(ram[mem]))
 }
 
-// todo: code is duplicated
-instr_asl_accum :: proc(using nes: ^NES, _mem: u16) {
+instr_asl_inner :: proc(using nes: ^NES, value: ^u8) {
 	// A,Z,C,N = M*2 or M,Z,C,N = M*2
 
-	temp := accumulator << 1
+	temp := value^ << 1
 
-	set_flag(&flags, .Carry, (accumulator & 0x80) == 1)
+	set_flag(&flags, .Carry, (value^ & 0x80) == 1)
 	set_flag(&flags, .Zero, temp == 0)
 	set_flag(&flags, .Negative, (temp & 0x80) != 0)
 
-	accumulator = temp
+	value^ = temp
+}
+
+instr_asl_accum :: proc(using nes: ^NES, _mem: u16) {
+	instr_asl_inner(nes, &accumulator)
 }
 
 instr_asl :: proc(using nes: ^NES, mem: u16) {
-
-	// A,Z,C,N = M*2 or M,Z,C,N = M*2
-
-	temp := ram[mem] << 1
-
-	set_flag(&flags, .Carry, (ram[mem] & 0x80) == 1)
-	set_flag(&flags, .Zero, temp == 0)
-	set_flag(&flags, .Negative, (temp & 0x80) != 0)
-
-	ram[mem] = temp
+	instr_asl_inner(nes, &ram[mem])
 }
 
 instr_adc :: proc(using nes: ^NES, mem: u16) {
