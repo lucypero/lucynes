@@ -117,10 +117,7 @@ do_addrmode_zpy :: proc(using nes: ^NES) -> u16 {
 }
 
 // it returns the absolute address that the instruction will jump to.
-// todo: look into where it should offset from. i am not sure.
-// maybe at the point before the cpu reads the whole instruction?
 do_addrmode_relative :: proc(using nes: ^NES) -> u16 {
-	// todo
 	res := ram[program_counter]
 	program_counter += 1
 	return program_counter + u16(res)
@@ -167,7 +164,7 @@ do_addrmode_indirect :: proc(using nes: ^NES) -> u16 {
 	// read u16 value at address given. just return the value but the bytes flipped (little endian)
 
 	// read the address in the argument:
-	res_addr := read_u16_be(ram[:], program_counter) // TODO: u might have to read it as LE too.
+	res_addr := read_u16_le(ram[:], program_counter)
 
 	// read the value at the address
 	res := read_u16_le(ram[:], res_addr)

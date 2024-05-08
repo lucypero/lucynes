@@ -1,20 +1,3 @@
-
-addrs modes
-
-x implicit
-x accumulator
-x immediate
-x zp
-x zpx
-x zpy
-x relative
-x absolute
-x absolute x
-x absolute y
-x indirect
-x indexed indirect
-x indirect indexed
-
 instructions
 
 x ADC
@@ -74,31 +57,5 @@ xBNE
  TXS
  TYA
 
-notes
 
-
-u screwed up. sometimes instructions need to write to the address.
-now u are just taking a number as a value, not a pointer u can write to.
-
-- addr mode should always return an offset to nes.ram so u can read and write to however u want to.
-
-- u might want to read addresses from the code as little endian too.
-    you were decieved by the assembly code. it's not the actual code.
-    the addresses in the code will be in little endian even if
-    the human readable assembly is in big endian.
-
-
-- keep thinking about the right abstraction for stuff. there must be a 
-    neat way to do this so the opcodes are easy to write.
-
-    - maybe every instruction could take a ^u8
-    - if it just has to read, it reads
-    - if it has to write, it can write.
-    - and with that u have a universal interface.
-
-    - do_opcode :: proc(nes: ^NES, addr_mode: AddressMode, instruction: proc(^NES, ^u8), cycles: uint)
-
-    - concern: JMP has to take a u16 address.
-
-    - do not abstract anything for now. keep doing everything like u are doing in the switch statement.
 

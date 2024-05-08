@@ -183,7 +183,7 @@ instr_asl :: proc(using nes: ^NES, mem: u16) {
 
 instr_adc :: proc(using nes: ^NES, mem: u16) {
 
-	val :u16 = u16(ram[mem])
+	val: u16 = u16(ram[mem])
 
 
 	temp: u16 = u16(nes.accumulator) + val
@@ -393,7 +393,7 @@ run_instruction :: proc(using nes: ^NES) {
 		do_opcode(nes, .ZeroPage, instr_cpy, 3)
 	case 0xCC:
 		do_opcode(nes, .Absolute, instr_cpy, 4)
-	
+
 
 	// DEC
 	case 0xC6:
@@ -558,7 +558,7 @@ run_instruction :: proc(using nes: ^NES) {
 
 	case 0x48:
 		do_opcode(nes, .Implicit, instr_pha, 3)
-	
+
 
 	// PHP
 
@@ -630,7 +630,6 @@ run_instruction :: proc(using nes: ^NES) {
 		do_opcode(nes, .IndirectX, instr_sbc, 6)
 	case 0xF1:
 		do_opcode(nes, .IndirectY, instr_sbc, 5)
-
 
 
 	// SEC
