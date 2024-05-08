@@ -250,25 +250,6 @@ run_instruction :: proc(using nes: ^NES) {
 
 	switch instr {
 
-	// LDA
-
-	case 0xA9:
-		do_opcode(nes, .Immediate, instr_lda_value, 2)
-	case 0xA5:
-		do_opcode(nes, .ZeroPage, instr_lda, 3)
-	case 0xB5:
-		do_opcode(nes, .ZeroPageX, instr_lda, 4)
-	case 0xAD:
-		do_opcode(nes, .Absolute, instr_lda, 4)
-	case 0xBD:
-		do_opcode(nes, .AbsoluteX, instr_lda, 4)
-	case 0xB9:
-		do_opcode(nes, .AbsoluteY, instr_lda, 4)
-	case 0xA1:
-		do_opcode(nes, .IndirectX, instr_lda, 6)
-	case 0xB1:
-		do_opcode(nes, .IndirectY, instr_lda, 5)
-
 	// AND
 
 	case 0x29:
@@ -395,13 +376,338 @@ run_instruction :: proc(using nes: ^NES) {
 	case 0xD1:
 		do_opcode(nes, .IndirectY, instr_cmp, 5)
 
+	// CPX
 
-	// TODO: this one is not done yet
+	case 0xE0:
+		do_opcode(nes, .Immediate, instr_cpx_value, 2)
+	case 0xE4:
+		do_opcode(nes, .ZeroPage, instr_cpx, 3)
+	case 0xEC:
+		do_opcode(nes, .Absolute, instr_cpx, 4)
+
+	// CPY
+
+	case 0xC0:
+		do_opcode(nes, .Immediate, instr_cpy_value, 2)
+	case 0xC4:
+		do_opcode(nes, .ZeroPage, instr_cpy, 3)
+	case 0xCC:
+		do_opcode(nes, .Absolute, instr_cpy, 4)
+	
+
+	// DEC
+	case 0xC6:
+		do_opcode(nes, .ZeroPage, instr_dec, 5)
+	case 0xD6:
+		do_opcode(nes, .ZeroPageX, instr_dec, 6)
+	case 0xCE:
+		do_opcode(nes, .Absolute, instr_dec, 6)
+	case 0xDE:
+		do_opcode(nes, .AbsoluteX, instr_dec, 7)
+
+	// DEX
+
+	case 0xCA:
+		do_opcode(nes, .Implicit, instr_dex, 2)
+
+
+	// DEY
+
+	case 0x88:
+		do_opcode(nes, .Implicit, instr_dey, 2)
+
+	// EOR
+
+	case 0x49:
+		do_opcode(nes, .Immediate, instr_eor_value, 2)
+	case 0x45:
+		do_opcode(nes, .ZeroPage, instr_eor, 3)
+	case 0x55:
+		do_opcode(nes, .ZeroPageX, instr_eor, 4)
+	case 0x4D:
+		do_opcode(nes, .Absolute, instr_eor, 4)
+	case 0x5D:
+		do_opcode(nes, .AbsoluteX, instr_eor, 4)
+	case 0x59:
+		do_opcode(nes, .AbsoluteY, instr_eor, 4)
+	case 0x41:
+		do_opcode(nes, .IndirectX, instr_eor, 6)
+	case 0x51:
+		do_opcode(nes, .IndirectY, instr_eor, 5)
+
+	// INC
+
+	case 0xE6:
+		do_opcode(nes, .ZeroPage, instr_inc, 5)
+	case 0xF6:
+		do_opcode(nes, .ZeroPageX, instr_inc, 6)
+	case 0xEE:
+		do_opcode(nes, .Absolute, instr_inc, 6)
+	case 0xFE:
+		do_opcode(nes, .AbsoluteX, instr_inc, 7)
+
+	// INX
+
+	case 0xE8:
+		do_opcode(nes, .Implicit, instr_inx, 2)
+
+	// INY
+
+	case 0xC8:
+		do_opcode(nes, .Implicit, instr_iny, 2)
+
+	// JMP
+	case 0x4C:
+		do_opcode(nes, .Absolute, instr_jmp, 3)
+	case 0x6C:
+		do_opcode(nes, .Indirect, instr_jmp, 5)
+
+
+	// JSR
+
+	case 0x20:
+		do_opcode(nes, .Absolute, instr_jsr, 6)
+
+
+	// LDA
+
+	case 0xA9:
+		do_opcode(nes, .Immediate, instr_lda_value, 2)
+	case 0xA5:
+		do_opcode(nes, .ZeroPage, instr_lda, 3)
+	case 0xB5:
+		do_opcode(nes, .ZeroPageX, instr_lda, 4)
+	case 0xAD:
+		do_opcode(nes, .Absolute, instr_lda, 4)
+	case 0xBD:
+		do_opcode(nes, .AbsoluteX, instr_lda, 4)
+	case 0xB9:
+		do_opcode(nes, .AbsoluteY, instr_lda, 4)
+	case 0xA1:
+		do_opcode(nes, .IndirectX, instr_lda, 6)
+	case 0xB1:
+		do_opcode(nes, .IndirectY, instr_lda, 5)
+
+
+	// LDX
+
+	case 0xA2:
+		do_opcode(nes, .Immediate, instr_ldx_value, 2)
+	case 0xA6:
+		do_opcode(nes, .ZeroPage, instr_ldx, 3)
+	case 0xB6:
+		do_opcode(nes, .ZeroPageY, instr_ldx, 4)
+	case 0xAE:
+		do_opcode(nes, .Absolute, instr_ldx, 4)
+	case 0xBE:
+		do_opcode(nes, .AbsoluteY, instr_ldx, 4)
+
+	// LDY
+
+	case 0xA0:
+		do_opcode(nes, .Immediate, instr_ldy_value, 2)
+	case 0xA4:
+		do_opcode(nes, .ZeroPage, instr_ldy, 3)
+	case 0xB4:
+		do_opcode(nes, .ZeroPageX, instr_ldy, 4)
+	case 0xAC:
+		do_opcode(nes, .Absolute, instr_ldy, 4)
+	case 0xBC:
+		do_opcode(nes, .AbsoluteX, instr_ldy, 4)
+
+
+	// LSR
+
+	case 0x4A:
+		do_opcode(nes, .Accumulator, instr_lsr_accumulator, 2)
+	case 0x46:
+		do_opcode(nes, .ZeroPage, instr_lsr, 5)
+	case 0x56:
+		do_opcode(nes, .ZeroPageX, instr_lsr, 6)
+	case 0x4E:
+		do_opcode(nes, .Absolute, instr_lsr, 6)
+	case 0x5E:
+		do_opcode(nes, .AbsoluteX, instr_lsr, 7)
+
+
+	// NOP
+
+	case 0xEA:
+		do_opcode(nes, .Implicit, instr_nop, 2)
+
+	// ORA
+
+	case 0x09:
+		do_opcode(nes, .Immediate, instr_ora_value, 2)
+	case 0x05:
+		do_opcode(nes, .ZeroPage, instr_ora, 3)
+	case 0x15:
+		do_opcode(nes, .ZeroPageX, instr_ora, 4)
+	case 0x0D:
+		do_opcode(nes, .Absolute, instr_ora, 4)
+	case 0x1D:
+		do_opcode(nes, .AbsoluteX, instr_ora, 4)
+	case 0x19:
+		do_opcode(nes, .AbsoluteY, instr_ora, 4)
+	case 0x01:
+		do_opcode(nes, .IndirectX, instr_ora, 6)
+	case 0x11:
+		do_opcode(nes, .IndirectY, instr_ora, 5)
+
+	// PHA
+
+	case 0x48:
+		do_opcode(nes, .Implicit, instr_pha, 3)
+	
+
+	// PHP
+
+	case 0x08:
+		do_opcode(nes, .Implicit, instr_php, 3)
+
+
+	// PLA
+
+	case 0x68:
+		do_opcode(nes, .Implicit, instr_pla, 4)
+
+	// PLP
+	case 0x28:
+		do_opcode(nes, .Implicit, instr_plp, 4)
+
+	// ROL
+
+	case 0x2A:
+		do_opcode(nes, .Accumulator, instr_rol_accumulator, 4)
+	case 0x26:
+		do_opcode(nes, .ZeroPage, instr_rol, 5)
+	case 0x36:
+		do_opcode(nes, .ZeroPageX, instr_rol, 6)
+	case 0x2E:
+		do_opcode(nes, .Absolute, instr_rol, 6)
+	case 0x3E:
+		do_opcode(nes, .AbsoluteX, instr_rol, 7)
+
+	// ROR
+
+	case 0x6A:
+		do_opcode(nes, .Accumulator, instr_ror_accumulator, 2)
+	case 0x66:
+		do_opcode(nes, .ZeroPage, instr_ror, 5)
+	case 0x76:
+		do_opcode(nes, .ZeroPageX, instr_ror, 6)
+	case 0x6E:
+		do_opcode(nes, .Absolute, instr_ror, 6)
+	case 0x7E:
+		do_opcode(nes, .AbsoluteX, instr_ror, 7)
+
+
+	// RTI
+
+	case 0x40:
+		do_opcode(nes, .Implicit, instr_rti, 6)
+
+	// RTS
+
+	case 0x60:
+		do_opcode(nes, .Implicit, instr_rts, 6)
+
+	// SBC
+
+	case 0xE9:
+		do_opcode(nes, .Immediate, instr_sbc_value, 2)
+	case 0xE5:
+		do_opcode(nes, .ZeroPage, instr_sbc, 3)
+	case 0xF5:
+		do_opcode(nes, .ZeroPageX, instr_sbc, 4)
+	case 0xED:
+		do_opcode(nes, .Absolute, instr_sbc, 4)
+	case 0xFD:
+		do_opcode(nes, .AbsoluteX, instr_sbc, 4)
+	case 0xF9:
+		do_opcode(nes, .AbsoluteY, instr_sbc, 4)
+	case 0xE1:
+		do_opcode(nes, .IndirectX, instr_sbc, 6)
+	case 0xF1:
+		do_opcode(nes, .IndirectY, instr_sbc, 5)
+
+
+
+	// SEC
+
+	case 0x38:
+		do_opcode(nes, .Implicit, instr_sec, 2)
+
+	// SED
+
+	case 0xF8:
+		do_opcode(nes, .Implicit, instr_sed, 2)
+
+	// SEI
+
+	case 0x78:
+		do_opcode(nes, .Implicit, instr_sei, 2)
+
+	// STA
+
 	case 0x85:
-		// STA, ZP, 2, 3
-		fmt.println("STA zp instruction")
-		mem := do_addrmode_zp(nes)
-		cycles += 3
+		do_opcode(nes, .ZeroPage, instr_sta, 3)
+	case 0x95:
+		do_opcode(nes, .ZeroPageX, instr_sta, 4)
+	case 0x8D:
+		do_opcode(nes, .Absolute, instr_sta, 4)
+	case 0x9D:
+		do_opcode(nes, .AbsoluteX, instr_sta, 5)
+	case 0x99:
+		do_opcode(nes, .AbsoluteY, instr_sta, 5)
+	case 0x81:
+		do_opcode(nes, .IndirectX, instr_sta, 6)
+	case 0x91:
+		do_opcode(nes, .IndirectY, instr_sta, 6)
+
+	// STX
+
+	case 0x86:
+		do_opcode(nes, .ZeroPage, instr_stx, 3)
+	case 0x96:
+		do_opcode(nes, .ZeroPageY, instr_stx, 4)
+	case 0x8E:
+		do_opcode(nes, .Absolute, instr_stx, 4)
+
+	// STY
+
+	case 0x84:
+		do_opcode(nes, .ZeroPage, instr_sty, 3)
+	case 0x94:
+		do_opcode(nes, .ZeroPageX, instr_sty, 4)
+	case 0x8C:
+		do_opcode(nes, .Absolute, instr_sty, 4)
+
+
+	// TAX
+
+	case 0xAA:
+		do_opcode(nes, .Implicit, instr_tax, 2)
+
+	// TAY
+	case 0xA8:
+		do_opcode(nes, .Implicit, instr_tay, 2)
+
+	// TSX
+	case 0xBA:
+		do_opcode(nes, .Implicit, instr_tsx, 2)
+
+	// TXA
+	case 0x8A:
+		do_opcode(nes, .Implicit, instr_txa, 2)
+
+	// TXS
+	case 0x9A:
+		do_opcode(nes, .Implicit, instr_txs, 2)
+
+	// TYA
+	case 0x98:
+		do_opcode(nes, .Implicit, instr_tya, 2)
 	}
 }
 
