@@ -9,20 +9,20 @@ x BEQ
 x BIT
 xBMI
 xBNE
- BPL
- BRK
- BVC
- BVS
- CLC
- CLD
- CLI
- CLV
- CMP
- CPX
- CPY
- DEC
- DEX
- DEY
+xBPL
+?BRK
+xBVC
+xBVS
+xCLC
+xCLD
+xCLI
+xCLV
+xCMP
+xCPX
+xCPY
+xDEC
+xDEX
+xDEY
  EOR
  INC
  INX
