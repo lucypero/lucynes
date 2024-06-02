@@ -33,39 +33,44 @@ get_mem :: proc(nes: ^NES, addr_mode: AddressMode) -> (u16, uint) {
 	extra_cycles: uint
 
 	switch addr_mode {
-		case .Implicit:
-			return 0, 0
-		case .Accumulator:
-			mem = u16(nes.accumulator)
-		case .Immediate:
-			mem = u16(do_addrmode_immediate(nes))
-		case .ZeroPage:
-			mem = do_addrmode_zp(nes)
-		case .ZeroPageX:
-			mem = do_addrmode_zpx(nes)
-		case .ZeroPageY:
-			mem = do_addrmode_zpy(nes)
-		case .Relative:
-			mem = do_addrmode_relative(nes)
-		case .Absolute:
-			mem = do_addrmode_absolute(nes)
-		case .AbsoluteX:
-			mem, extra_cycles = do_addrmode_absolute_x(nes)
-		case .AbsoluteY:
-			mem, extra_cycles = do_addrmode_absolute_y(nes)
-		case .Indirect:
-			mem = do_addrmode_indirect(nes)
-		case .IndirectX:
-			mem = do_addrmode_ind_x(nes)
-		case .IndirectY:
-			mem, extra_cycles = do_addrmode_ind_y(nes)
+	case .Implicit:
+		return 0, 0
+	case .Accumulator:
+		mem = u16(nes.accumulator)
+	case .Immediate:
+		mem = u16(do_addrmode_immediate(nes))
+	case .ZeroPage:
+		mem = do_addrmode_zp(nes)
+	case .ZeroPageX:
+		mem = do_addrmode_zpx(nes)
+	case .ZeroPageY:
+		mem = do_addrmode_zpy(nes)
+	case .Relative:
+		mem = do_addrmode_relative(nes)
+	case .Absolute:
+		mem = do_addrmode_absolute(nes)
+	case .AbsoluteX:
+		mem, extra_cycles = do_addrmode_absolute_x(nes)
+	case .AbsoluteY:
+		mem, extra_cycles = do_addrmode_absolute_y(nes)
+	case .Indirect:
+		mem = do_addrmode_indirect(nes)
+	case .IndirectX:
+		mem = do_addrmode_ind_x(nes)
+	case .IndirectY:
+		mem, extra_cycles = do_addrmode_ind_y(nes)
 	}
 
 	return mem, extra_cycles
 }
 
 // do not use this (yet)
-do_opcode :: proc(nes: ^NES, addr_mode: AddressMode, instruction: proc(^NES, u16), cycles: uint) {
+do_opcode :: proc(
+	nes: ^NES,
+	addr_mode: AddressMode,
+	instruction: proc(_: ^NES, _: u16),
+	cycles: uint,
+) {
 	mem, extra_cycles := get_mem(nes, addr_mode)
 	instruction(nes, mem)
 	nes.cycles += cycles + extra_cycles
@@ -124,26 +129,15 @@ do_addrmode_relative :: proc(using nes: ^NES) -> u16 {
 }
 
 do_addrmode_absolute :: proc(using nes: ^NES) -> u16 {
-
-	// TODO: this might be backwards. NES is little endian.
-	res_msb: u8 = ram[program_counter]
-	res_lsb: u8 = ram[program_counter + 1]
-
-	res: u16 = u16(res_msb << 2) + u16(res_lsb)
-
+	res := read_u16_le(ram[:], program_counter)
 	program_counter += 2
-
 	return res
 }
 
 do_addrmode_absolute_index :: proc(using nes: ^NES, index_register: u8) -> u16 {
-	res_msb: u8 = ram[program_counter]
-	res_lsb: u8 = ram[program_counter + 1]
-
-	res: u16 = u16(res_msb << 2) + u16(res_lsb) + u16(index_register)
-
+	res := read_u16_le(ram[:], program_counter)
+	res += u16(index_register)
 	program_counter += 2
-
 	return res
 }
 

@@ -1,61 +1,28 @@
-instructions
+# instructions todo
 
-x ADC
-x AND
-x ASL
-x BCC
-x BCS
-x BEQ
-x BIT
-xBMI
-xBNE
-xBPL
+- did you do the wrapping right?
+
 ?BRK
-xBVC
-xBVS
-xCLC
-xCLD
-xCLI
-xCLV
-xCMP
-xCPX
-xCPY
-xDEC
-xDEX
-xDEY
- EOR
- INC
- INX
- INY
- JMP
- JSR
- x LDA
- LDX
- LDY
- LSR
- NOP
- ORA
- PHA
- PHP
- PLA
- PLP
- ROL
- ROR
- RTI
- RTS
- SBC
- SEC
- SED
- SEI
- STA
- STX
- STY
- TAX
- TAY
- TSX
- TXA
- TXS
- TYA
 
+# Testing
+
+- just do mapper_000 since it will work for the test rom and donkey kong
+
+how to use these tests
+
+http://www.qmtpro.com/~nes/misc/
+
+- load the binary into 8000 and c000
+- set the pc to c000
+- set the cpu status to the first line in the log
+
+here they explain it
+
+https://github.com/PyAndy/Py3NES/issues/1#issuecomment-224071286
+
+
+## Todo
+
+- 
 
 

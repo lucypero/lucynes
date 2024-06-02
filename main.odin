@@ -1,6 +1,9 @@
 package main
 
 import "core:fmt"
+import "core:os"
+import "core:strconv"
+import "core:strings"
 
 // Emulator authors may wish to emulate the NTSC NES/Famicom CPU at 21441960 Hz ((341×262−0.5)×4×60) to ensure a synchronised/stable 60 frames per second.[2]
 
@@ -85,19 +88,117 @@ set_flag :: proc(flags: ^RegisterFlags, flag: RegisterFlagEnum, predicate: bool)
 	}
 }
 
+parse_log_file :: proc(log_file: string) -> (res: [dynamic]Registers, ok: bool) {
+
+	ok = false
+
+	log_bytes, ok_f := os.read_entire_file(log_file)
+
+	if !ok_f {
+		fmt.eprintln("could not read log file")
+		return
+	}
+
+	log_string := string(log_bytes)
+
+	for line in strings.split_lines_iterator(&log_string) {
+
+		pc_str := strings.cut(line, 0, 4)
+
+		n, ok := strconv.parse_int(pc_str, 16)
+
+		if !ok {
+			return
+		}
+
+		reg: Registers
+		reg.program_counter = u16(n)
+
+		append(&res, reg)
+	}
+
+	ok = true
+
+	return
+}
+
+// register_logs: [dynamic]Registers
+
+run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> bool {
+	// processing log file
+	register_logs, ok := parse_log_file(log_file)
+
+	if !ok {
+		fmt.eprintln("could not parse log file")
+		return false
+	}
+
+	nes.registers = register_logs[0]
+
+	test_rom, ok_2 := os.read_entire_file(program_file)
+
+	if !ok_2 {
+		fmt.eprintln("could not read program file")
+		return false
+	}
+
+	// read it from 0x10 because that's how the ROM format works.
+	copy(ram[0x8000:], test_rom[0x10:])
+	copy(ram[0xC000:], test_rom[0x10:])
+
+	program_counter = 0xC000
+
+	instructions_ran := 0
+
+	for ram[program_counter] != 0x00 {
+
+		state_before_instr := registers
+
+		run_instruction(nes)
+		instructions_ran += 1
+
+		if program_counter != register_logs[instructions_ran].program_counter {
+			// test fail
+			fmt.printfln(
+				"Test failed after instruction: %v (starts at 1), PC is %X, should have been %X",
+				instructions_ran,
+				program_counter,
+				register_logs[instructions_ran].program_counter,
+			)
+
+			fmt.println("state before instruction:")
+			print_cpu_state(state_before_instr)
+
+			fmt.println("state after instruction:")
+			print_cpu_state(registers)
+			return false
+		}
+	}
+
+	return true
+}
+
+print_cpu_state :: proc(regs: Registers) {
+	fmt.printfln(
+		"PC: %X A: %X X: %X Y: %X P: %X SP: %X",
+		regs.program_counter,
+		regs.accumulator,
+		regs.index_x,
+		regs.index_y,
+		regs.flags,
+		regs.stack_pointer,
+	)
+}
+
 run_program :: proc(using nes: ^NES, rom: []u8) {
 
 	fmt.println("Running program...")
 
-	// copy rom code to $8000
 	copy(ram[0x8000:], rom)
-	// equal to 
-	// copy(ram[0x8000:0x8000 + len(rom)], rom)
+	copy(ram[0xC000:], rom)
 
-	// set pc to $8000
-	program_counter = 0x8000
+	program_counter = 0xC000
 
-	// run clocks
 	for ram[program_counter] != 0x00 {
 		run_instruction(nes)
 	}
@@ -115,11 +216,13 @@ read_u16_be :: proc(buffer: []u8, index: u16) -> u16 {
 	return u16(buffer[index + 1]) + (u16(buffer[index]) << 8)
 }
 
-
 run_instruction :: proc(using nes: ^NES) {
 	// get first byte of instruction
 	instr := ram[program_counter]
+
+	fmt.printfln("running opcode %X, PC: %X", instr, program_counter)
 	program_counter += 1
+
 
 	switch instr {
 
@@ -595,9 +698,16 @@ main :: proc() {
 	//   STA $62
 	//   .END
 
-	program := [?]u8{0xA5, 0x60, 0x65, 0x61, 0x85, 0x62}
+	// program := [?]u8{0xA5, 0x60, 0x65, 0x61, 0x85, 0x62}
 
-	run_program(&nes, program[:])
+	// run_program(&nes, program[:])
+	ok := run_nestest(&nes, "../qmtpro-nes-tests/nestest.nes", "../qmtpro-nes-tests/nestest.log")
+
+	if ok {
+		fmt.println("nes test ran fine. No errors in your CPU! Congrats.")
+	} else {
+		fmt.println("nes test failed somewhere. look into it!")
+	}
 }
 
 // address modes?
