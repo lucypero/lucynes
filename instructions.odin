@@ -70,23 +70,19 @@ instr_adc :: proc(using nes: ^NES, mem: u16) {
 
 instr_adc_inner :: proc(using nes: ^NES, value: u8) {
 	val: u16 = u16(value)
-
 	temp: u16 = u16(nes.accumulator) + val
 
 	if .Carry in nes.flags {
 		temp += 1
 	}
 
-	set_flag(&flags, .Carry, temp > 255)
-	set_flag(&flags, .Zero, (temp & 0x00FF) == 0)
-	set_flag(&flags, .Negative, (temp & 0x0080) != 0)
-	set_flag(
-		&flags,
-		.Overflow,
-		((~(u16(accumulator) ~ val) & (u16(accumulator) ~ u16(temp))) & 0x0080) != 0,
-	)
-
+	did_overflow := ((~(u16(accumulator) ~ val) & (u16(accumulator) ~ u16(temp))) & 0x0080) != 0
 	accumulator = u8(temp & 0x00FF)
+
+	set_flag(&flags, .Carry, temp > 255)
+	set_flag(&flags, .Overflow, did_overflow)
+	set_z(&flags, accumulator)
+	set_n(&flags, accumulator)
 }
 
 instr_bcc :: proc(using nes: ^NES, mem: u16) {
@@ -289,7 +285,7 @@ instr_jmp :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_jsr :: proc(using nes: ^NES, mem: u16) {
-	program_counter -= 3
+	program_counter -= 1
 
 	byte: u8 = u8((program_counter >> 8) & 0x00FF)
 	stack_push(nes, byte)
@@ -483,26 +479,13 @@ instr_rts :: proc(using nes: ^NES, mem: u16) {
 	pc_high := stack_pop(nes)
 
 	program_counter = u16(pc_high) << 8 | u16(pc_low)
-	program_counter += 3
+	program_counter += 1
 
 	fmt.printfln("pc low: %X pc high: %X after rts: pc is %X", pc_low, pc_high, program_counter)
 }
 
 instr_sbc_inner :: proc(using nes: ^NES, mem: u8) {
-	val: u16 = u16(mem) ~ 0x00FF
-	temp: u16 = u16(nes.accumulator) + val
-
-	if .Carry in nes.flags {
-		temp += 1
-	}
-
-	did_overflow := ((~(u16(accumulator) ~ val) & (u16(accumulator) ~ u16(temp))) & 0x0080) != 0
-	accumulator = u8(temp & 0x00FF)
-
-	set_flag(&flags, .Carry, temp > 255)
-	set_flag(&flags, .Overflow, did_overflow)
-	set_z(&flags, accumulator)
-	set_n(&flags, accumulator)
+	instr_adc_inner(nes, ~mem)
 }
 
 instr_sbc :: proc(using nes: ^NES, mem: u16) {
