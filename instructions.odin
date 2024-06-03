@@ -43,13 +43,13 @@ instr_and :: proc(using nes: ^NES, mem: u16) {
 instr_asl_inner :: proc(using nes: ^NES, value: ^u8) {
 	// A,Z,C,N = M*2 or M,Z,C,N = M*2
 
-	temp := value^ << 1
+	temp := u16(value^) << 1
 
-	set_flag(&flags, .Carry, (value^ & 0x80) == 1)
-	set_flag(&flags, .Zero, temp == 0)
+	set_flag(&flags, .Carry, (value^ & 0x80) != 0)
+	set_flag(&flags, .Zero, (temp & 0xFF) == 0)
 	set_flag(&flags, .Negative, (temp & 0x80) != 0)
 
-	value^ = temp
+	value^ = u8(temp & 0x00FF)
 }
 
 instr_asl_accum :: proc(using nes: ^NES, _mem: u16) {
@@ -464,7 +464,7 @@ instr_rti :: proc(using nes: ^NES, mem: u16) {
 	pc_low := stack_pop(nes)
 	pc_high := stack_pop(nes)
 
-	program_counter = u16(pc_high << 8) + u16(pc_low)
+	program_counter = u16(pc_high) << 8 + u16(pc_low)
 }
 
 instr_rts :: proc(using nes: ^NES, mem: u16) {
