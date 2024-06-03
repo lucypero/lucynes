@@ -419,7 +419,7 @@ instr_rol_inner :: proc(using nes: ^NES, val: ^u8) {
 		val^ += 1
 	}
 
-	set_flag(&flags, .Carry, (temp & 0x80) == 1)
+	set_flag(&flags, .Carry, (temp & 0x80) != 0)
 
 	set_z(&flags, val^)
 	set_n(&flags, val^)
