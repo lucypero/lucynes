@@ -69,7 +69,6 @@ instr_adc :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_adc_inner :: proc(using nes: ^NES, value: u8) {
-
 	val: u16 = u16(value)
 
 	temp: u16 = u16(nes.accumulator) + val
@@ -490,17 +489,17 @@ instr_rts :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_sbc_inner :: proc(using nes: ^NES, mem: u8) {
-	val: u16 = u16(mem)
-	temp: u16 = u16(nes.accumulator) - val
+	val: u16 = u16(mem) ~ 0x00FF
+	temp: u16 = u16(nes.accumulator) + val
 
-	if .Carry not_in nes.flags {
+	if .Carry in nes.flags {
 		temp += 1
 	}
 
 	did_overflow := ((~(u16(accumulator) ~ val) & (u16(accumulator) ~ u16(temp))) & 0x0080) != 0
 	accumulator = u8(temp & 0x00FF)
 
-	set_flag(&flags, .Carry, !did_overflow)
+	set_flag(&flags, .Carry, temp > 255)
 	set_flag(&flags, .Overflow, did_overflow)
 	set_z(&flags, accumulator)
 	set_n(&flags, accumulator)
