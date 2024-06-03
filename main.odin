@@ -92,27 +92,19 @@ parse_log_file :: proc(log_file: string) -> (res: [dynamic]Registers, ok: bool) 
 
 	ok = false
 
-	log_bytes, ok_f := os.read_entire_file(log_file)
-
-	if !ok_f {
-		fmt.eprintln("could not read log file")
-		return
-	}
+	log_bytes := os.read_entire_file(log_file) or_return
 
 	log_string := string(log_bytes)
 
 	for line in strings.split_lines_iterator(&log_string) {
-
-		pc_str := strings.cut(line, 0, 4)
-
-		n, ok := strconv.parse_int(pc_str, 16)
-
-		if !ok {
-			return
-		}
-
 		reg: Registers
-		reg.program_counter = u16(n)
+		reg.program_counter = u16(strconv.parse_int(strings.cut(line, 0, 4), 16) or_return)
+		reg.accumulator = u8(strconv.parse_int(strings.cut(line, 50, 2), 16) or_return)
+		reg.index_x = u8(strconv.parse_int(strings.cut(line, 55, 2), 16) or_return)
+		reg.index_y = u8(strconv.parse_int(strings.cut(line, 60, 2), 16) or_return)
+		reg.flags =
+		transmute(RegisterFlags)u8(strconv.parse_int(strings.cut(line, 65, 2), 16) or_return)
+		reg.stack_pointer = u8(strconv.parse_int(strings.cut(line, 71, 2), 16) or_return)
 
 		append(&res, reg)
 	}
@@ -147,6 +139,8 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 	copy(ram[0xC000:], test_rom[0x10:])
 
 	program_counter = 0xC000
+	stack_pointer = 0xFD
+	flags = transmute(RegisterFlags)u8(0x24)
 
 	instructions_ran := 0
 
@@ -154,28 +148,72 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 
 		state_before_instr := registers
 
+		print_cpu_state(state_before_instr)
+
 		run_instruction(nes)
 		instructions_ran += 1
 
-		if program_counter != register_logs[instructions_ran].program_counter {
+		if res := compare_reg(nes.registers, register_logs[instructions_ran]); res != 0 {
 			// test fail
-			fmt.printfln(
-				"Test failed after instruction: %v (starts at 1), PC is %X, should have been %X",
-				instructions_ran,
-				program_counter,
-				register_logs[instructions_ran].program_counter,
-			)
 
-			fmt.println("state before instruction:")
-			print_cpu_state(state_before_instr)
+			logs_reg := register_logs[instructions_ran]
 
-			fmt.println("state after instruction:")
-			print_cpu_state(registers)
+			fmt.printfln("------------------")
+
+			fmt.printfln("Test failed after instruction: %v (starts at 1)", instructions_ran)
+
+			switch res {
+			case 1:
+				fmt.printfln("PC: %X, TEST PC: %X", program_counter, logs_reg.program_counter)
+			case 2:
+				fmt.printfln("A: %X, TEST A: %X", accumulator, logs_reg.accumulator)
+			case 3:
+				fmt.printfln("X: %X, TEST X: %X", index_x, logs_reg.index_x)
+			case 4:
+				fmt.printfln("Y: %X, TEST Y: %X", index_y, logs_reg.index_y)
+			case 5:
+				fmt.printfln("P: %X, TEST P: %X", flags, logs_reg.flags)
+			case 6:
+				fmt.printfln("SP: %X, TEST SP: %X", stack_pointer, logs_reg.stack_pointer)
+			}
+
+			// fmt.println("state after instruction:")
+			// print_cpu_state(registers)
 			return false
 		}
 	}
 
 	return true
+}
+
+compare_reg :: proc(current_register: Registers, log_register: Registers) -> int {
+
+	if current_register.program_counter != log_register.program_counter {
+		return 1
+	}
+
+	if current_register.accumulator != log_register.accumulator {
+		return 2
+	}
+
+	if current_register.index_x != log_register.index_x {
+		return 3
+	}
+
+	if current_register.index_y != log_register.index_y {
+		return 4
+	}
+
+	if current_register.flags != log_register.flags {
+		return 5
+	}
+
+	if current_register.stack_pointer != log_register.stack_pointer {
+		return 6
+	}
+
+
+	return 0
 }
 
 print_cpu_state :: proc(regs: Registers) {
@@ -185,7 +223,7 @@ print_cpu_state :: proc(regs: Registers) {
 		regs.accumulator,
 		regs.index_x,
 		regs.index_y,
-		regs.flags,
+		transmute(u8)regs.flags,
 		regs.stack_pointer,
 	)
 }
@@ -260,7 +298,7 @@ run_instruction :: proc(using nes: ^NES) {
 
 	// ADC
 	case 0x69:
-		do_opcode(nes, .Immediate, instr_adc, 2)
+		do_opcode(nes, .Immediate, instr_adc_value, 2)
 	case 0x65:
 		do_opcode(nes, .ZeroPage, instr_adc, 3)
 	case 0x75:
@@ -683,24 +721,14 @@ run_instruction :: proc(using nes: ^NES) {
 	case 0x98:
 		do_opcode(nes, .Implicit, instr_tya, 2)
 	}
+
+	flags += {.NoEffect1}
 }
 
 main :: proc() {
 	// flags_test()
 	nes: NES
 
-
-	// load a program and run it
-
-	//   * = $0000
-	//   LDA $60
-	//   ADC $61
-	//   STA $62
-	//   .END
-
-	// program := [?]u8{0xA5, 0x60, 0x65, 0x61, 0x85, 0x62}
-
-	// run_program(&nes, program[:])
 	ok := run_nestest(&nes, "../qmtpro-nes-tests/nestest.nes", "../qmtpro-nes-tests/nestest.log")
 
 	if ok {
@@ -729,4 +757,11 @@ flags_test :: proc() {
 	// how to flip the bits?
 	flags = ~flags
 	fmt.printf("flipped: %v, %#b\n", flags, transmute(u8)flags)
+
+	flags = {.NoEffect1}
+	fmt.printf("noeffect1: %v, %#b\n", flags, transmute(u8)flags)
+
+	flags = {.NoEffectB}
+	fmt.printf("noeffectb: %v, %#b\n", flags, transmute(u8)flags)
+
 }

@@ -1,13 +1,18 @@
 package main
 
+import "core:fmt"
+
 stack_push :: proc(using nes: ^NES, value: u8) {
+	fmt.printfln("pushing to stack: %X", value)
 	ram[0x0100 + u16(stack_pointer)] = value
 	stack_pointer -= 1
 }
 
 stack_pop :: proc(using nes: ^NES) -> u8 {
 	stack_pointer += 1
-	return ram[0x0100 + u16(stack_pointer)]
+	popped_val := ram[0x0100 + u16(stack_pointer)]
+	fmt.printfln("popping to stack: %X", popped_val)
+	return popped_val
 }
 
 // sets the N flag given a value.
@@ -55,10 +60,17 @@ instr_asl :: proc(using nes: ^NES, mem: u16) {
 	instr_asl_inner(nes, &ram[mem])
 }
 
+instr_adc_value :: proc(using nes: ^NES, mem: u16) {
+	instr_adc_inner(nes, u8(mem))
+}
+
 instr_adc :: proc(using nes: ^NES, mem: u16) {
+	instr_adc_inner(nes, ram[mem])
+}
 
-	val: u16 = u16(ram[mem])
+instr_adc_inner :: proc(using nes: ^NES, value: u8) {
 
+	val: u16 = u16(value)
 
 	temp: u16 = u16(nes.accumulator) + val
 
@@ -278,24 +290,14 @@ instr_jmp :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_jsr :: proc(using nes: ^NES, mem: u16) {
+	program_counter -= 3
 
-	// push current pc minus one on stack
-
-	program_counter -= 1
-
-	//  stack pointer from stack base 0x0100 to 0x01FF
-
-	// push current PC to the stack
-
-	// first the high byte
-	byte: u8 = u8(program_counter >> 8)
+	byte: u8 = u8((program_counter >> 8) & 0x00FF)
 	stack_push(nes, byte)
 
-	// then the low byte
 	byte = u8(program_counter & 0x00FF)
 	stack_push(nes, byte)
 
-	// finally set the PC
 	program_counter = mem
 }
 
@@ -387,9 +389,13 @@ instr_pha :: proc(using nes: ^NES, mem: u16) {
 	stack_push(nes, accumulator)
 }
 
-
 instr_php :: proc(using nes: ^NES, mem: u16) {
-	stack_push(nes, transmute(u8)flags)
+	// you set B to the flags you push to the stack
+	//  but you do not modify the flags themselves.
+	//  this is odd...
+	pushed_flags := flags
+	pushed_flags += {.NoEffectB}
+	stack_push(nes, transmute(u8)pushed_flags)
 }
 
 instr_pla :: proc(using nes: ^NES, mem: u16) {
@@ -402,8 +408,11 @@ instr_pla :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_plp :: proc(using nes: ^NES, mem: u16) {
+	// void PLP(arg_t& src) { flags = cpu_pop8() | D5; }
+	// why are u ORing with D5...
 	new_flags := stack_pop(nes)
 	flags = transmute(RegisterFlags)new_flags
+	flags -= {.NoEffectB}
 }
 
 instr_rol_inner :: proc(using nes: ^NES, val: ^u8) {
@@ -464,10 +473,20 @@ instr_rti :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_rts :: proc(using nes: ^NES, mem: u16) {
+
+	fmt.printfln(
+		"about to call rts: stack + 1: %X stack + 2: %X",
+		ram[0x0100 + u16(stack_pointer + 1)],
+		ram[0x0100 + u16(stack_pointer + 2)],
+	)
+
 	pc_low := stack_pop(nes)
 	pc_high := stack_pop(nes)
 
-	program_counter = u16(pc_high << 8) + u16(pc_low)
+	program_counter = u16(pc_high) << 8 | u16(pc_low)
+	program_counter += 3
+
+	fmt.printfln("pc low: %X pc high: %X after rts: pc is %X", pc_low, pc_high, program_counter)
 }
 
 instr_sbc_inner :: proc(using nes: ^NES, mem: u8) {
