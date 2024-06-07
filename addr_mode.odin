@@ -1,5 +1,7 @@
 package main
 
+import "core:fmt"
+
 // TODO: make sure these addr functions return
 //  the address of the things. never just the value.
 //  so the caller can either write or read to these addresses.
@@ -100,17 +102,9 @@ do_addrmode_zp :: proc(using nes: ^NES) -> u16 {
 
 // does ZPX and ZPY depending which index value u pass
 do_addrmode_zp_index :: proc(using nes: ^NES, index: u8) -> u16 {
-	addr_offset := u16(ram[program_counter]) + u16(index)
-	if addr_offset > 0xFF {
-		addr_offset -= 0xFF
-	}
-
+	addr_offset := (u16(ram[program_counter]) + u16(index)) % 0x100
 	program_counter += 1
-
-	res: u16 = 0x00
-	res += u16(addr_offset)
-
-	return res
+	return addr_offset
 }
 
 do_addrmode_zpx :: proc(using nes: ^NES) -> u16 {
@@ -158,10 +152,22 @@ do_addrmode_indirect :: proc(using nes: ^NES) -> u16 {
 	// read u16 value at address given. just return the value but the bytes flipped (little endian)
 
 	// read the address in the argument:
+
 	res_addr := read_u16_le(ram[:], program_counter)
 
-	// read the value at the address
-	res := read_u16_le(ram[:], res_addr)
+
+	low_byte := u16(ram[res_addr])
+
+	// JMP BUG: if the arg is $XXFF, then it fetches the high byte at $XX00 instead of $XXFF + 1
+
+	high_byte_addr: u16 = res_addr + 1
+	if res_addr & 0x00FF == 0xFF {
+		high_byte_addr = res_addr & 0xFF00
+	}
+
+	high_byte := u16(ram[high_byte_addr])
+
+	res := high_byte << 8 | low_byte
 
 	program_counter += 2
 
@@ -174,21 +180,27 @@ do_addrmode_indirect :: proc(using nes: ^NES) -> u16 {
 do_addrmode_ind_x :: proc(using nes: ^NES) -> u16 {
 	// get 16 bit value in arg + x (wrap around)
 
-	addr_1 := u16(ram[program_counter]) + u16(index_x)
-
-	if addr_1 > 0xFF {
-		addr_1 -= 0xFF
-	}
+	addr_1 := (u16(ram[program_counter]) + u16(index_x)) % 0x100
 
 	// treat it as an address
 
-	addr_2 := read_u16_le(ram[:], addr_1)
+	low_byte := u16(ram[addr_1])
+
+	// wrap around the high byte
+
+	addr_2 := (addr_1 + 1) % 0x100
+
+	high_byte := u16(ram[addr_2])
 
 	// increment pc
 	program_counter += 1
 
+	res := high_byte << 8 | low_byte
+
+	fmt.printfln("indx: addresses are: %X %X addr stored is %X", addr_1, addr_2, res)
+
 	// return the address
-	return addr_2
+	return res
 }
 
 // indexed indirect address mode
@@ -199,15 +211,20 @@ do_addrmode_ind_y :: proc(using nes: ^NES) -> (u16, uint) {
 	// get 16 bit value in arg
 	addr_1 := u16(ram[program_counter])
 
-	// treat it as an address
-	addr_2 := read_u16_le(ram[:], addr_1)
+	low_byte := u16(ram[addr_1])
 
-	// add y register
-	addr_2 += u16(index_y)
+	addr_2 := (addr_1 + 1) % 0x100
+
+	high_byte := u16(ram[addr_2])
+
+	val := high_byte << 8 | low_byte
+	val += u16(index_y)
 
 	// increment pc
 	program_counter += 1
 
+	// fmt.printfln("indx: addresses are: %X %X addr stored is %X", addr_1, addr_2, val)
+
 	// return the address
-	return addr_2, 0
+	return val, 0
 }
