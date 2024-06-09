@@ -3,7 +3,6 @@ package main
 import "core:fmt"
 
 stack_push :: proc(using nes: ^NES, value: u8) {
-	fmt.printfln("pushing to stack: %X", value)
 	ram[0x0100 + u16(stack_pointer)] = value
 	stack_pointer -= 1
 }
@@ -11,7 +10,6 @@ stack_push :: proc(using nes: ^NES, value: u8) {
 stack_pop :: proc(using nes: ^NES) -> u8 {
 	stack_pointer += 1
 	popped_val := ram[0x0100 + u16(stack_pointer)]
-	fmt.printfln("popping to stack: %X", popped_val)
 	return popped_val
 }
 
@@ -469,19 +467,11 @@ instr_rti :: proc(using nes: ^NES, mem: u16) {
 
 instr_rts :: proc(using nes: ^NES, mem: u16) {
 
-	fmt.printfln(
-		"about to call rts: stack + 1: %X stack + 2: %X",
-		ram[0x0100 + u16(stack_pointer + 1)],
-		ram[0x0100 + u16(stack_pointer + 2)],
-	)
-
 	pc_low := stack_pop(nes)
 	pc_high := stack_pop(nes)
 
 	program_counter = u16(pc_high) << 8 | u16(pc_low)
 	program_counter += 1
-
-	fmt.printfln("pc low: %X pc high: %X after rts: pc is %X", pc_low, pc_high, program_counter)
 }
 
 instr_sbc_inner :: proc(using nes: ^NES, mem: u8) {
@@ -555,4 +545,100 @@ instr_tya :: proc(using nes: ^NES, mem: u16) {
 	accumulator = index_y
 	set_z(&flags, accumulator)
 	set_n(&flags, accumulator)
+}
+
+
+// undocumented instructions
+
+instr_aso :: proc(using nes: ^NES, mem: u16) {
+	fmt.println("running aso")
+	instr_asl(nes, mem)
+	instr_ora(nes, mem)
+}
+
+instr_rla :: proc(using nes: ^NES, mem: u16) {
+	fmt.println("running rla")
+	instr_rol(nes, mem)
+	instr_and(nes, mem)
+}
+instr_lse :: proc(using nes: ^NES, mem: u16) {
+	fmt.println("running lse")
+	instr_lsr(nes, mem)
+	instr_eor(nes, mem)
+}
+instr_rra :: proc(using nes: ^NES, mem: u16) {
+	fmt.println("running rra")
+	instr_ror(nes, mem)
+	instr_adc(nes, mem)
+}
+instr_axs :: proc(using nes: ^NES, mem: u16) {
+	fmt.println("running axs")
+	ram[mem] = accumulator & index_x
+}
+instr_lax :: proc(using nes: ^NES, mem: u16) {
+	fmt.println("running lax")
+	instr_lda(nes, mem)
+	instr_ldx(nes, mem)
+}
+instr_dcm :: proc(using nes: ^NES, mem: u16) {
+	fmt.println("running dcm")
+	instr_dec(nes, mem)
+	instr_cmp(nes, mem)
+}
+instr_ins :: proc(using nes: ^NES, mem: u16) {
+	fmt.println("running ins")
+	instr_inc(nes, mem)
+	instr_sbc(nes, mem)
+}
+
+instr_alr :: proc(using nes: ^NES, mem: u16) {
+	fmt.println("running alr")
+	// and + lsr
+	instr_and_value(nes, mem)
+	instr_lsr_accumulator(nes, mem)
+}
+
+instr_arr :: proc(using nes: ^NES, mem: u16) {
+
+	fmt.println("running arr")
+}
+instr_xaa :: proc(using nes: ^NES, mem: u16) {
+
+	fmt.println("running xaa")
+}
+instr_oal :: proc(using nes: ^NES, mem: u16) {
+
+	fmt.println("running oal")
+}
+instr_sax :: proc(using nes: ^NES, mem: u16) {
+
+	fmt.println("running sax")
+}
+instr_hlt :: proc(using nes: ^NES, mem: u16) {
+
+	fmt.println("running hlt")
+}
+instr_tas :: proc(using nes: ^NES, mem: u16) {
+
+	fmt.println("running tas")
+}
+instr_say :: proc(using nes: ^NES, mem: u16) {
+
+	fmt.println("running say")
+}
+instr_xas :: proc(using nes: ^NES, mem: u16) {
+
+	fmt.println("running xas")
+}
+instr_axa :: proc(using nes: ^NES, mem: u16) {
+
+	fmt.println("running axa")
+}
+instr_anc :: proc(using nes: ^NES, mem: u16) {
+
+	fmt.println("running anc")
+}
+instr_las :: proc(using nes: ^NES, mem: u16) {
+
+	fmt.println("running las")
 }

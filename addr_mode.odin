@@ -66,7 +66,6 @@ get_mem :: proc(nes: ^NES, addr_mode: AddressMode) -> (u16, uint) {
 	return mem, extra_cycles
 }
 
-// do not use this (yet)
 do_opcode :: proc(
 	nes: ^NES,
 	addr_mode: AddressMode,
@@ -117,9 +116,10 @@ do_addrmode_zpy :: proc(using nes: ^NES) -> u16 {
 
 // it returns the absolute address that the instruction will jump to.
 do_addrmode_relative :: proc(using nes: ^NES) -> u16 {
-	res := ram[program_counter]
+	offset := i8(ram[program_counter])
 	program_counter += 1
-	return program_counter + u16(res)
+	res := program_counter + u16(offset)
+	return res
 }
 
 do_addrmode_absolute :: proc(using nes: ^NES) -> u16 {
@@ -196,8 +196,6 @@ do_addrmode_ind_x :: proc(using nes: ^NES) -> u16 {
 	program_counter += 1
 
 	res := high_byte << 8 | low_byte
-
-	fmt.printfln("indx: addresses are: %X %X addr stored is %X", addr_1, addr_2, res)
 
 	// return the address
 	return res

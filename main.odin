@@ -148,10 +148,15 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 
 		state_before_instr := registers
 
-		print_cpu_state(state_before_instr)
+		// fmt.printfln("running line %v", instructions_ran + 1)
+		// print_cpu_state(state_before_instr)
 
 		run_instruction(nes)
 		instructions_ran += 1
+
+		if instructions_ran >= len(register_logs) {
+			return true
+		}
 
 		if res := compare_reg(nes.registers, register_logs[instructions_ran]); res != 0 {
 			// test fail
@@ -177,8 +182,12 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 				fmt.printfln("SP: %X, TEST SP: %X", stack_pointer, logs_reg.stack_pointer)
 			}
 
-			// fmt.println("state after instruction:")
-			// print_cpu_state(registers)
+			fmt.println("state before instr:")
+			print_cpu_state(state_before_instr)
+
+
+			fmt.println("state after instruction:")
+			print_cpu_state(registers)
 			return false
 		}
 	}
@@ -257,11 +266,7 @@ read_u16_be :: proc(buffer: []u8, index: u16) -> u16 {
 run_instruction :: proc(using nes: ^NES) {
 	// get first byte of instruction
 	instr := ram[program_counter]
-
-	fmt.printfln("running opcode %X, PC: %X", instr, program_counter)
 	program_counter += 1
-
-
 	switch instr {
 
 	// AND
@@ -720,6 +725,307 @@ run_instruction :: proc(using nes: ^NES) {
 	// TYA
 	case 0x98:
 		do_opcode(nes, .Implicit, instr_tya, 2)
+
+
+	/// Unofficial opcodes
+
+	/*
+
+	// reference for addr mode and the asterisk
+
+	abcd        // absolute
+	abcd,X      // absolute x
+	abcd,Y      // absolute y
+	ab          // ZP
+	ab,X        // ZP x
+	(ab,X)      // indexed indirect, indirect x
+	(ab),Y      // indirect indexed, indirect y
+	// * means +1 cycle if page crossed
+
+	*/
+
+	// ASO (ASL + ORA)
+	case 0x0F:
+		do_opcode(nes, .Absolute, instr_aso, 6)
+	case 0x1F:
+		do_opcode(nes, .AbsoluteX, instr_aso, 7)
+	case 0x1B:
+		do_opcode(nes, .AbsoluteY, instr_aso, 7)
+	case 0x07:
+		do_opcode(nes, .ZeroPage, instr_aso, 5)
+	case 0x17:
+		do_opcode(nes, .ZeroPageX, instr_aso, 6)
+	case 0x03:
+		do_opcode(nes, .IndirectX, instr_aso, 8)
+	case 0x13:
+		do_opcode(nes, .IndirectY, instr_aso, 8)
+
+	// RLA
+
+	case 0x2F:
+		do_opcode(nes, .Absolute, instr_rla, 6)
+	case 0x3F:
+		do_opcode(nes, .AbsoluteX, instr_rla, 7)
+	case 0x3B:
+		do_opcode(nes, .AbsoluteY, instr_rla, 7)
+	case 0x27:
+		do_opcode(nes, .ZeroPage, instr_rla, 5)
+	case 0x37:
+		do_opcode(nes, .ZeroPageX, instr_rla, 6)
+	case 0x23:
+		do_opcode(nes, .IndirectX, instr_rla, 8)
+	case 0x33:
+		do_opcode(nes, .IndirectY, instr_rla, 8)
+
+	// LSE
+	case 0x4F:
+		do_opcode(nes, .Absolute, instr_lse, 6)
+	case 0x5F:
+		do_opcode(nes, .AbsoluteX, instr_lse, 7)
+	case 0x5B:
+		do_opcode(nes, .AbsoluteY, instr_lse, 7)
+	case 0x47:
+		do_opcode(nes, .ZeroPage, instr_lse, 5)
+	case 0x57:
+		do_opcode(nes, .ZeroPageX, instr_lse, 6)
+	case 0x43:
+		do_opcode(nes, .IndirectX, instr_lse, 8)
+	case 0x53:
+		do_opcode(nes, .IndirectY, instr_lse, 8)
+
+	// RRA
+
+	case 0x6F:
+		do_opcode(nes, .Absolute, instr_rra, 6)
+	case 0x7F:
+		do_opcode(nes, .AbsoluteX, instr_rra, 7)
+	case 0x7B:
+		do_opcode(nes, .AbsoluteY, instr_rra, 7)
+	case 0x67:
+		do_opcode(nes, .ZeroPage, instr_rra, 5)
+	case 0x77:
+		do_opcode(nes, .ZeroPageX, instr_rra, 6)
+	case 0x63:
+		do_opcode(nes, .IndirectX, instr_rra, 8)
+	case 0x73:
+		do_opcode(nes, .IndirectY, instr_rra, 8)
+
+	// AXS
+
+	case 0x8F:
+		do_opcode(nes, .Absolute, instr_axs, 4)
+	case 0x87:
+		do_opcode(nes, .ZeroPage, instr_axs, 3)
+	case 0x97:
+		do_opcode(nes, .ZeroPageY, instr_axs, 4)
+	case 0x83:
+		do_opcode(nes, .IndirectX, instr_axs, 6)
+
+
+	// LAX
+
+	case 0xAF:
+		do_opcode(nes, .Absolute, instr_lax, 4)
+	case 0xBF:
+		do_opcode(nes, .AbsoluteY, instr_lax, 4)
+	case 0xA7:
+		do_opcode(nes, .ZeroPage, instr_lax, 3)
+	case 0xB7:
+		do_opcode(nes, .ZeroPageY, instr_lax, 4)
+	case 0xA3:
+		do_opcode(nes, .IndirectX, instr_lax, 6)
+	case 0xB3:
+		do_opcode(nes, .IndirectY, instr_lax, 5)
+
+	// DCM
+
+	case 0xCF:
+		do_opcode(nes, .Absolute, instr_dcm, 6)
+	case 0xDF:
+		do_opcode(nes, .AbsoluteX, instr_dcm, 7)
+	case 0xDB:
+		do_opcode(nes, .AbsoluteY, instr_dcm, 7)
+	case 0xC7:
+		do_opcode(nes, .ZeroPage, instr_dcm, 5)
+	case 0xD7:
+		do_opcode(nes, .ZeroPageX, instr_dcm, 6)
+	case 0xC3:
+		do_opcode(nes, .IndirectX, instr_dcm, 8)
+	case 0xD3:
+		do_opcode(nes, .IndirectY, instr_dcm, 8)
+
+	// INS
+
+	case 0xEF:
+		do_opcode(nes, .Absolute, instr_ins, 6)
+	case 0xFF:
+		do_opcode(nes, .AbsoluteX, instr_ins, 7)
+	case 0xFB:
+		do_opcode(nes, .AbsoluteY, instr_ins, 7)
+	case 0xE7:
+		do_opcode(nes, .ZeroPage, instr_ins, 5)
+	case 0xF7:
+		do_opcode(nes, .ZeroPageX, instr_ins, 6)
+	case 0xE3:
+		do_opcode(nes, .IndirectX, instr_ins, 8)
+	case 0xF3:
+		do_opcode(nes, .IndirectY, instr_ins, 8)
+
+	// ALR
+
+	case 0x4B:
+		do_opcode(nes, .Immediate, instr_alr, 2)
+
+	// ARR
+
+	case 0x6B:
+		do_opcode(nes, .Immediate, instr_arr, 2)
+
+	// XAA
+
+	case 0x8B:
+		do_opcode(nes, .Immediate, instr_xaa, 2)
+
+	// OAL
+
+	case 0xAB:
+		do_opcode(nes, .Immediate, instr_oal, 2)
+
+	// SAX
+	case 0xCB:
+		do_opcode(nes, .Immediate, instr_sax, 2)
+
+	// NOP
+
+	case 0x1A:
+		fallthrough
+	case 0x3A:
+		fallthrough
+	case 0x5A:
+		fallthrough
+	case 0x7A:
+		fallthrough
+	case 0xDA:
+		fallthrough
+	case 0xFA:
+		do_opcode(nes, .Implicit, instr_nop, 2)
+
+	case 0x80:
+		fallthrough
+	case 0x82:
+		fallthrough
+	case 0x89:
+		fallthrough
+	case 0xC2:
+		fallthrough
+	case 0xE2:
+		do_opcode(nes, .Immediate, instr_nop, 2)
+
+	case 0x04:
+		fallthrough
+	case 0x44:
+		fallthrough
+	case 0x64:
+		do_opcode(nes, .ZeroPage, instr_nop, 3)
+
+	case 0x14:
+		fallthrough
+	case 0x34:
+		fallthrough
+	case 0x54:
+		fallthrough
+	case 0x74:
+		fallthrough
+	case 0xD4:
+		fallthrough
+	case 0xF4:
+		do_opcode(nes, .ZeroPageX, instr_nop, 4)
+
+	case 0x0C:
+		do_opcode(nes, .Absolute, instr_nop, 4)
+
+	case 0x1C:
+		fallthrough
+	case 0x3C:
+		fallthrough
+	case 0x5C:
+		fallthrough
+	case 0x7C:
+		fallthrough
+	case 0xDC:
+		fallthrough
+	case 0xFC:
+		do_opcode(nes, .AbsoluteX, instr_nop, 4)
+
+	/// The really weird undocumented opcodes
+
+	// HLT
+
+	case 0x02:
+		fallthrough
+	case 0x12:
+		fallthrough
+	case 0x22:
+		fallthrough
+	case 0x32:
+		fallthrough
+	case 0x42:
+		fallthrough
+	case 0x52:
+		fallthrough
+	case 0x62:
+		fallthrough
+	case 0x72:
+		fallthrough
+	case 0x92:
+		fallthrough
+	case 0xB2:
+		fallthrough
+	case 0xD2:
+		fallthrough
+	case 0xF2:
+		do_opcode(nes, .Implicit, instr_hlt, 1)
+
+	// TAS
+
+	case 0x9B:
+		do_opcode(nes, .AbsoluteY, instr_tas, 5)
+
+	// SAY
+
+	case 0x9C:
+		do_opcode(nes, .AbsoluteX, instr_say, 5)
+
+	// XAS
+
+	case 0x9E:
+		do_opcode(nes, .AbsoluteY, instr_xas, 5)
+
+	// AXA
+
+	case 0x9F:
+		do_opcode(nes, .AbsoluteY, instr_axa, 5)
+	case 0x93:
+		do_opcode(nes, .IndirectY, instr_axa, 6)
+
+	// ANC
+	case 0x2B:
+		fallthrough
+	case 0x0B:
+		do_opcode(nes, .Immediate, instr_anc, 2)
+
+
+	// LAS
+	case 0xBB:
+		do_opcode(nes, .IndirectY, instr_las, 4)
+
+	// OPCODE EB
+	case 0xEB:
+		do_opcode(nes, .Immediate, instr_sbc_value, 2)
+
+	case:
+		fmt.eprintfln("opcode not covered!!! warning!: %X", instr)
+
 	}
 
 	flags += {.NoEffect1}
@@ -727,6 +1033,19 @@ run_instruction :: proc(using nes: ^NES) {
 
 main :: proc() {
 	// flags_test()
+	// strong_type_test()
+	run_nestest_test()
+	// casting_test()
+}
+
+casting_test :: proc() {
+	hello: i8 = -4
+	res: u16 = 50
+	res = res + u16(hello)
+	fmt.printfln("res is %v", res) // 46
+}
+
+run_nestest_test :: proc() {
 	nes: NES
 
 	ok := run_nestest(&nes, "../qmtpro-nes-tests/nestest.nes", "../qmtpro-nes-tests/nestest.log")
@@ -736,6 +1055,14 @@ main :: proc() {
 	} else {
 		fmt.println("nes test failed somewhere. look into it!")
 	}
+}
+
+strong_type_test :: proc() {
+	a: u8 = 0xFF
+	b: u8 = 0x01
+
+	res: u16 = u16(a << 8 | b)
+	fmt.printfln("res is %X", res)
 }
 
 // address modes?
