@@ -612,7 +612,7 @@ instr_oal :: proc(using nes: ^NES, mem: u16) {
 
 instr_sax :: proc(using nes: ^NES, mem: u16) {
 	// TODO
-	fmt.eprintln("running SAC. not implemented!")
+	fmt.eprintln("running SAX. not implemented!")
 }
 
 instr_hlt :: proc(using nes: ^NES, mem: u16) {
