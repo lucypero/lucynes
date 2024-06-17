@@ -1,42 +1,38 @@
-# instructions todo
-
-- did you do the wrapping right?
-
-?BRK
-
 # Testing
 
 - just do mapper_000 since it will work for the test rom and donkey kong
 
-how to use these tests
+## odin stuff
 
-http://www.qmtpro.com/~nes/misc/
+default_allocator :: heap_allocator
+default_allocator_proc :: heap_allocator_proc
 
-- load the binary into 8000 and c000
-- set the pc to c000
-- set the cpu status to the first line in the log
+heap allocator has no data of what is storing so u can't know what was allocated, and how many bytes were allocated
 
-here they explain it
 
-https://github.com/PyAndy/Py3NES/issues/1#issuecomment-224071286
+	Default_Temp_Allocator :: struct {
+		arena: Arena,
+	}
+
+temp allocator is an arena
+core/mem/allocators.odin
+
+
+- figure out how to figure out how much allocators are allocating
+- does the temp allocator even exist if u don't init it?
 
 
 ## Todo
 
-- 
+- mappers
+- do mapper 000	 (nrom)
+- programming nrom
+https://www.nesdev.org/wiki/Programming_NROM
+
+prg rom: program rom. probably the cpu code
+chr rom: "character" rom. it's the graphics. for the PPU. sprites and backgrounds
 
 
-	/*
+- is it nes 2.0 or ines?
+    it's ines.
 
-	// reference for addr mode and the asterisk
-
-	abcd        // absolute
-	abcd,X      // absolute x
-	abcd,Y      // absolute y
-	ab          // ZP
-	ab,X        // ZP x
-	(ab,X)      // indexed indirect, indirect x
-	(ab),Y      // indirect indexed, indirect y
-	// * means +1 cycle if page crossed
-
-	*/

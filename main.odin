@@ -1,7 +1,9 @@
 package main
 
 import "core:fmt"
+import "core:mem"
 import "core:os"
+import "core:runtime"
 import "core:strconv"
 import "core:strings"
 
@@ -98,14 +100,12 @@ parse_log_file :: proc(log_file: string) -> (res: [dynamic]Registers, ok: bool) 
 
 	for line in strings.split_lines_iterator(&log_string) {
 		reg: Registers
-		reg.program_counter = u16(strconv.parse_int(strings.cut(line, 0, 4), 16) or_return)
-		reg.accumulator = u8(strconv.parse_int(strings.cut(line, 50, 2), 16) or_return)
-		reg.index_x = u8(strconv.parse_int(strings.cut(line, 55, 2), 16) or_return)
-		reg.index_y = u8(strconv.parse_int(strings.cut(line, 60, 2), 16) or_return)
-		reg.flags =
-		transmute(RegisterFlags)u8(strconv.parse_int(strings.cut(line, 65, 2), 16) or_return)
-		reg.stack_pointer = u8(strconv.parse_int(strings.cut(line, 71, 2), 16) or_return)
-
+		reg.program_counter = u16(strconv.parse_int(line[:4], 16) or_return)
+		reg.accumulator = u8(strconv.parse_int(line[50:][:2], 16) or_return)
+		reg.index_x = u8(strconv.parse_int(line[55:][:2], 16) or_return)
+		reg.index_y = u8(strconv.parse_int(line[60:][:2], 16) or_return)
+		reg.flags = transmute(RegisterFlags)u8(strconv.parse_int(line[65:][:2], 16) or_return)
+		reg.stack_pointer = u8(strconv.parse_int(line[71:][:2], 16) or_return)
 		append(&res, reg)
 	}
 
@@ -118,6 +118,7 @@ parse_log_file :: proc(log_file: string) -> (res: [dynamic]Registers, ok: bool) 
 
 run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> bool {
 	// processing log file
+
 	register_logs, ok := parse_log_file(log_file)
 
 	if !ok {
@@ -1031,29 +1032,136 @@ run_instruction :: proc(using nes: ^NES) {
 	flags += {.NoEffect1}
 }
 
+
 main :: proc() {
+
+	track: mem.Tracking_Allocator
+	mem.tracking_allocator_init(&track, context.allocator)
+	context.allocator = mem.tracking_allocator(&track)
+
+	defer {
+		if len(track.allocation_map) > 0 {
+			fmt.eprintf("=== %v allocations not freed: ===\n", len(track.allocation_map))
+			for _, entry in track.allocation_map {
+				fmt.eprintf("- %v bytes @ %v\n", entry.size, entry.location)
+			}
+		}
+		if len(track.bad_free_array) > 0 {
+			fmt.eprintf("=== %v incorrect frees: ===\n", len(track.bad_free_array))
+			for entry in track.bad_free_array {
+				fmt.eprintf("- %p @ %v\n", entry.memory, entry.location)
+			}
+		}
+		mem.tracking_allocator_destroy(&track)
+	}
+
 	// flags_test()
 	// strong_type_test()
 	run_nestest_test()
+	parse_rom_file("donkey-kong.nes")
 	// casting_test()
 }
 
+parse_rom_file :: proc(filename: string) {
+
+	test_rom, ok := os.read_entire_file(filename)
+
+	if !ok {
+		fmt.eprintln("could not read rom file")
+		return
+	}
+
+	defer {
+		delete(test_rom)
+	}
+
+	rom_string := string(test_rom)
+
+	nes_str := rom_string[0:3]
+
+	// checking if it's a nes rom
+
+	if nes_str != "NES" {
+		fmt.eprintln("this is not a nes rom file.")
+		return
+	}
+
+	// checking if it's nes 2.0 or ines
+
+	if (rom_string[7] & 0x0C) == 0x08 {
+		fmt.println("this is NES 2.0 format")
+	} else {
+		fmt.println("this is iNES format.")
+	}
+
+	// size of prg ROM
+
+	prg_rom_size := rom_string[4] * 16
+	chr_rom_size := rom_string[5] * 8
+
+	fmt.printfln("prg rom size: %v KB", prg_rom_size)
+	fmt.printfln("chr rom size: %v KB", chr_rom_size)
+
+	// Flags 6
+
+	flags_6 := rom_string[6]
+
+	if flags_6 & 0x01 != 0 {
+		fmt.printfln("horizontal arrangement")
+	} else {
+		fmt.printfln("vertical arrangement")
+	}
+
+	if flags_6 & 0x02 != 0 {
+		fmt.printfln("contains battery")
+	} else {
+		fmt.printfln("does not contain battery")
+	}
+
+	if flags_6 & 0x04 != 0 {
+		fmt.printfln("contains trainer")
+	} else {
+		fmt.printfln("does not contain trainer")
+	}
+
+	if flags_6 & 0x08 != 0 {
+		fmt.printfln("alternative nametable layout")
+	} else {
+		fmt.printfln("no alt nametable layout")
+	}
+
+	mapper_lower := (flags_6 & 0xF0) >> 4
+
+	flags_7 := rom_string[7]
+
+	mapper_higher := (flags_7 & 0xF0) >> 4
+
+	mapper_number := mapper_higher << 4 | mapper_lower
+
+	fmt.printfln("mapper: %v", mapper_number)
+}
+
+
 casting_test :: proc() {
 	hello: i8 = -4
-	res: u16 = 50
-	res = res + u16(hello)
-	fmt.printfln("res is %v", res) // 46
+	positive: i8 = 4
+	fmt.printfln(
+		"-4 is %8b. -4 in u16 is %16b, 4 as i8 in u16 is %16b",
+		hello,
+		u16(hello),
+		u16(positive),
+	) // 46
 }
 
 run_nestest_test :: proc() {
 	nes: NES
 
+	context.allocator = context.temp_allocator
 	ok := run_nestest(&nes, "../qmtpro-nes-tests/nestest.nes", "../qmtpro-nes-tests/nestest.log")
+	free_all(context.temp_allocator)
 
-	if ok {
-		fmt.println("nes test ran fine. No errors in your CPU! Congrats.")
-	} else {
-		fmt.println("nes test failed somewhere. look into it!")
+	if !ok {
+		fmt.eprintln("nes test failed somewhere. look into it!")
 	}
 }
 
@@ -1091,4 +1199,33 @@ flags_test :: proc() {
 	flags = {.NoEffectB}
 	fmt.printf("noeffectb: %v, %#b\n", flags, transmute(u8)flags)
 
+}
+
+
+///  memory / allocator / context things
+
+get_total_allocated :: proc() -> int {
+	alloc := (^mem.Tracking_Allocator)(context.allocator.data)
+
+	total_used := 0
+
+	for _, entry in alloc.allocation_map {
+		total_used += entry.size
+	}
+
+	return total_used
+}
+
+print_allocated :: proc() {
+	fmt.printfln("total allocated in tracking allocator: %v bytes", get_total_allocated())
+}
+
+print_allocated_temp :: proc() {
+	alloc := (^runtime.Arena)(context.temp_allocator.data)
+	fmt.printfln("total allocated on temp allocator: %v bytes", alloc.total_used)
+}
+
+print_allocator_features :: proc() {
+	fmt.printfln("context.allocator features: %v", mem.query_features(context.allocator))
+	fmt.printfln("context.temp_allocator features: %v", mem.query_features(context.temp_allocator))
 }
