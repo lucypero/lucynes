@@ -346,23 +346,27 @@ instr_ldy :: proc(using nes: ^NES, mem: u16) {
 	set_n(&flags, index_y)
 }
 
-instr_lsr_inner :: proc(using nes: ^NES, val: ^u8) {
-	temp := val^
+instr_lsr_accumulator :: proc(using nes: ^NES, mem: u16) {
+	temp := accumulator
 
-	val^ = val^ >> 1
+	accumulator = accumulator >> 1
 
 	set_flag(&flags, .Carry, (temp & 0x1) == 1)
 
-	set_z(&flags, val^)
-	set_n(&flags, val^)
-}
-
-instr_lsr_accumulator :: proc(using nes: ^NES, mem: u16) {
-	instr_lsr_inner(nes, &accumulator)
+	set_z(&flags, accumulator)
+	set_n(&flags, accumulator)
 }
 
 instr_lsr :: proc(using nes: ^NES, mem: u16) {
-	instr_lsr_inner(nes, &ram[mem])
+	val := read(nes, mem)
+
+	res := val >> 1
+	write(nes, mem, res)
+
+	set_flag(&flags, .Carry, (val & 0x1) == 1)
+
+	set_z(&flags, res)
+	set_n(&flags, res)
 }
 
 instr_nop :: proc(using nes: ^NES, mem: u16) {
@@ -412,50 +416,71 @@ instr_plp :: proc(using nes: ^NES, mem: u16) {
 	flags -= {.NoEffectB}
 }
 
-instr_rol_inner :: proc(using nes: ^NES, val: ^u8) {
-	temp := val^
+instr_rol_accumulator :: proc(using nes: ^NES, mem: u16) {
+	temp := accumulator
 
-	val^ = val^ << 1
+	accumulator = accumulator << 1
 
 	if (.Carry in flags) {
-		val^ += 1
+		accumulator += 1
 	}
 
 	set_flag(&flags, .Carry, (temp & 0x80) != 0)
 
-	set_z(&flags, val^)
-	set_n(&flags, val^)
-}
-
-instr_rol_accumulator :: proc(using nes: ^NES, mem: u16) {
-	instr_rol_inner(nes, &accumulator)
+	set_z(&flags, accumulator)
+	set_n(&flags, accumulator)
 }
 
 instr_rol :: proc(using nes: ^NES, mem: u16) {
-	instr_rol_inner(nes, &ram[mem])
+	temp := read(nes, mem)
+
+	res := temp << 1
+
+	if (.Carry in flags) {
+		res += 1
+	}
+
+	write(nes, mem, res)
+
+	set_flag(&flags, .Carry, (temp & 0x80) != 0)
+
+	set_z(&flags, res)
+	set_n(&flags, res)
 }
 
 instr_ror_inner :: proc(using nes: ^NES, val: ^u8) {
-	temp := val^
+}
 
-	val^ = val^ >> 1
+instr_ror_accumulator :: proc(using nes: ^NES, mem: u16) {
+	temp := accumulator
+
+	accumulator = accumulator >> 1
 
 	if (.Carry in flags) {
-		val^ = val^ | 0x80
+		accumulator = accumulator | 0x80
 	}
 
 	set_flag(&flags, .Carry, (temp & 0x01) == 1)
 
-	set_z(&flags, val^)
-	set_n(&flags, val^)
-}
-
-instr_ror_accumulator :: proc(using nes: ^NES, mem: u16) {
-	instr_ror_inner(nes, &accumulator)
+	set_z(&flags, accumulator)
+	set_n(&flags, accumulator)
 }
 
 instr_ror :: proc(using nes: ^NES, mem: u16) {
-	instr_ror_inner(nes, &ram[mem])
+	temp := read(nes, mem)
+
+	res := temp >> 1
+
+	if (.Carry in flags) {
+		res = res | 0x80
+	}
+
+	write(nes, mem, res)
+
+	set_flag(&flags, .Carry, (temp & 0x01) == 1)
+
+	set_z(&flags, res)
+	set_n(&flags, res)
 }
 
 instr_rti :: proc(using nes: ^NES, mem: u16) {
