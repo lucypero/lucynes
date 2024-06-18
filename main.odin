@@ -14,6 +14,28 @@ import "core:strings"
 
 // flags
 
+Mapper :: enum {
+	NROM128, // 00
+	NROM256, // 00 
+}
+
+RomFormat :: enum {
+	NES20,
+	iNES,
+}
+
+RomInfo :: struct {
+	// TODO: u can group a lot of this into a bitset
+	rom_format:                RomFormat,
+	prg_rom_size:              int,
+	chr_rom_size:              int,
+	is_horizontal_arrangement: bool, // true for horizontal, false for vertical
+	contains_battery:          bool,
+	contains_trainer:          bool,
+	alt_nametable_layout:      bool,
+	mapper:                    Mapper,
+}
+
 RegisterFlagEnum :: enum {
 	Carry, // C 
 	Zero, // Z
@@ -80,6 +102,9 @@ NES :: struct {
 	using registers: Registers, // CPU Registers
 	ram:             [64 * 1024]u8, // 64 KB of memory
 	cycles:          uint,
+	rom_info:        RomInfo,
+	prg_rom:         []u8,
+	chr_rom:         []u8,
 }
 
 read :: proc(using nes: ^NES, addr: u16) -> u8 {
@@ -1050,30 +1075,36 @@ main :: proc() {
 	mem.tracking_allocator_init(&track, context.allocator)
 	context.allocator = mem.tracking_allocator(&track)
 
-	defer {
-		if len(track.allocation_map) > 0 {
-			fmt.eprintf("=== %v allocations not freed: ===\n", len(track.allocation_map))
-			for _, entry in track.allocation_map {
-				fmt.eprintf("- %v bytes @ %v\n", entry.size, entry.location)
-			}
-		}
-		if len(track.bad_free_array) > 0 {
-			fmt.eprintf("=== %v incorrect frees: ===\n", len(track.bad_free_array))
-			for entry in track.bad_free_array {
-				fmt.eprintf("- %p @ %v\n", entry.memory, entry.location)
-			}
-		}
-		mem.tracking_allocator_destroy(&track)
-	}
+	_main()
 
-	// flags_test()
-	// strong_type_test()
-	run_nestest_test()
-	parse_rom_file("donkey-kong.nes")
-	// casting_test()
+	if len(track.allocation_map) > 0 {
+		fmt.eprintf("=== %v allocations not freed: ===\n", len(track.allocation_map))
+		for _, entry in track.allocation_map {
+			fmt.eprintf("- %v bytes @ %v\n", entry.size, entry.location)
+		}
+	}
+	if len(track.bad_free_array) > 0 {
+		fmt.eprintf("=== %v incorrect frees: ===\n", len(track.bad_free_array))
+		for entry in track.bad_free_array {
+			fmt.eprintf("- %p @ %v\n", entry.memory, entry.location)
+		}
+	}
+	mem.tracking_allocator_destroy(&track)
 }
 
-parse_rom_file :: proc(filename: string) {
+_main :: proc() {
+	// flags_test()
+	// strong_type_test()
+	// casting_test()
+	run_nestest_test()
+
+	nes: NES
+	load_rom_from_file(&nes, "roms/DonkeyKong.nes")
+}
+
+load_rom_from_file :: proc(nes: ^NES, filename: string) {
+
+	rom_info: RomInfo
 
 	test_rom, ok := os.read_entire_file(filename)
 
@@ -1093,52 +1124,57 @@ parse_rom_file :: proc(filename: string) {
 	// checking if it's a nes rom
 
 	if nes_str != "NES" {
-		fmt.eprintln("this is not a nes rom file.")
+		fmt.eprintfln("(filename: %v) this is not a nes rom file.", filename)
 		return
 	}
 
 	// checking if it's nes 2.0 or ines
 
 	if (rom_string[7] & 0x0C) == 0x08 {
-		fmt.println("this is NES 2.0 format")
+		rom_info.rom_format = .NES20
 	} else {
-		fmt.println("this is iNES format.")
+		rom_info.rom_format = .iNES
 	}
 
 	// size of prg ROM
 
-	prg_rom_size := rom_string[4] * 16
-	chr_rom_size := rom_string[5] * 8
+	// PRG ROM data (16384 * x bytes) (but later on it just says 16kb units)
+	// CHR ROM data, if present (8192 * y bytes) (but later on it just says 8kb units)
 
-	fmt.printfln("prg rom size: %v KB", prg_rom_size)
-	fmt.printfln("chr rom size: %v KB", chr_rom_size)
+	fmt.printfln("byte 4 in rom string: %X", rom_string[4])
+
+	rom_info.prg_rom_size = int(rom_string[4]) * 16384
+	rom_info.chr_rom_size = int(rom_string[5]) * 8192
+
+	fmt.printfln("prg rom size: %v bytes", rom_info.prg_rom_size)
+	fmt.printfln("chr rom size: %v bytes", rom_info.chr_rom_size)
 
 	// Flags 6
 
 	flags_6 := rom_string[6]
 
 	if flags_6 & 0x01 != 0 {
-		fmt.printfln("horizontal arrangement")
+		rom_info.is_horizontal_arrangement = true
 	} else {
-		fmt.printfln("vertical arrangement")
+		rom_info.is_horizontal_arrangement = false
 	}
 
 	if flags_6 & 0x02 != 0 {
-		fmt.printfln("contains battery")
+		rom_info.contains_battery = true
 	} else {
-		fmt.printfln("does not contain battery")
+		rom_info.contains_battery = false
 	}
 
 	if flags_6 & 0x04 != 0 {
-		fmt.printfln("contains trainer")
+		rom_info.contains_trainer = true
 	} else {
-		fmt.printfln("does not contain trainer")
+		rom_info.contains_trainer = false
 	}
 
 	if flags_6 & 0x08 != 0 {
-		fmt.printfln("alternative nametable layout")
+		rom_info.alt_nametable_layout = true
 	} else {
-		fmt.printfln("no alt nametable layout")
+		rom_info.alt_nametable_layout = false
 	}
 
 	mapper_lower := (flags_6 & 0xF0) >> 4
@@ -1149,9 +1185,40 @@ parse_rom_file :: proc(filename: string) {
 
 	mapper_number := mapper_higher << 4 | mapper_lower
 
-	fmt.printfln("mapper: %v", mapper_number)
-}
+	switch mapper_number {
+	case 0:
+		if rom_string[4] == 1 {
+			rom_info.mapper = .NROM128
+		} else {
+			rom_info.mapper = .NROM256
+		}
+	}
 
+	// where is all the rom data
+
+	header_size :: 16
+	trainer_size :: 512
+
+	prg_rom_start := header_size
+
+	if rom_info.contains_trainer {
+		prg_rom_start += trainer_size
+	}
+
+	chr_rom_start := prg_rom_start + rom_info.prg_rom_size
+
+	prg_rom := make([]u8, rom_info.prg_rom_size)
+	chr_rom := make([]u8, rom_info.chr_rom_size)
+
+	copy(prg_rom[:], rom_string[prg_rom_start:])
+	copy(chr_rom[:], rom_string[chr_rom_start:])
+
+	fmt.printfln("rom info: %v", rom_info)
+
+	nes.rom_info = rom_info
+	nes.prg_rom = prg_rom
+	nes.chr_rom = chr_rom
+}
 
 casting_test :: proc() {
 	hello: i8 = -4
