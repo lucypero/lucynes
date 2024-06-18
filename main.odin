@@ -1,9 +1,9 @@
 package main
 
+import "base:runtime"
 import "core:fmt"
 import "core:mem"
 import "core:os"
-import "core:runtime"
 import "core:strconv"
 import "core:strings"
 
@@ -1157,7 +1157,7 @@ run_nestest_test :: proc() {
 	nes: NES
 
 	context.allocator = context.temp_allocator
-	ok := run_nestest(&nes, "../qmtpro-nes-tests/nestest.nes", "../qmtpro-nes-tests/nestest.log")
+	ok := run_nestest(&nes, "nestest/nestest.nes", "nestest/nestest.log")
 	free_all(context.temp_allocator)
 
 	if !ok {
