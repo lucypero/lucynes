@@ -38,24 +38,26 @@ instr_and :: proc(using nes: ^NES, mem: u16) {
 	instr_and_value(nes, u16(read(nes, mem)))
 }
 
-instr_asl_inner :: proc(using nes: ^NES, value: ^u8) {
-	// A,Z,C,N = M*2 or M,Z,C,N = M*2
+instr_asl_accum :: proc(using nes: ^NES, _mem: u16) {
+	temp := u16(accumulator) << 1
 
-	temp := u16(value^) << 1
-
-	set_flag(&flags, .Carry, (value^ & 0x80) != 0)
+	set_flag(&flags, .Carry, (accumulator & 0x80) != 0)
 	set_flag(&flags, .Zero, (temp & 0xFF) == 0)
 	set_flag(&flags, .Negative, (temp & 0x80) != 0)
 
-	value^ = u8(temp & 0x00FF)
-}
-
-instr_asl_accum :: proc(using nes: ^NES, _mem: u16) {
-	instr_asl_inner(nes, &accumulator)
+	accumulator = u8(temp & 0x00FF)
 }
 
 instr_asl :: proc(using nes: ^NES, mem: u16) {
-	instr_asl_inner(nes, &ram[mem])
+	val := read(nes, mem)
+
+	temp := u16(val) << 1
+
+	set_flag(&flags, .Carry, (val & 0x80) != 0)
+	set_flag(&flags, .Zero, (temp & 0xFF) == 0)
+	set_flag(&flags, .Negative, (temp & 0x80) != 0)
+
+	write(nes, mem, u8(temp & 0x00FF))
 }
 
 instr_adc_value :: proc(using nes: ^NES, mem: u16) {

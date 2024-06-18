@@ -269,13 +269,10 @@ run_program :: proc(using nes: ^NES, rom: []u8) {
 }
 
 // reads from byte slice a u16 in little endian mode
-read_u16_le :: proc(buffer: []u8, index: u16) -> u16 {
-	return u16(buffer[index]) + (u16(buffer[index + 1]) << 8)
-}
-
-// reads from byte slice a u16 in big endian mode
-read_u16_be :: proc(buffer: []u8, index: u16) -> u16 {
-	return u16(buffer[index + 1]) + (u16(buffer[index]) << 8)
+read_u16_le :: proc(nes: ^NES, addr: u16) -> u16 {
+	low_b := read(nes, addr)
+	high_b := read(nes, addr + 1)
+	return u16(high_b) << 8 | u16(low_b)
 }
 
 run_instruction :: proc(using nes: ^NES) {

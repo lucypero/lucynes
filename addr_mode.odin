@@ -123,13 +123,13 @@ do_addrmode_relative :: proc(using nes: ^NES) -> u16 {
 }
 
 do_addrmode_absolute :: proc(using nes: ^NES) -> u16 {
-	res := read_u16_le(ram[:], program_counter)
+	res := read_u16_le(nes, program_counter)
 	program_counter += 2
 	return res
 }
 
 do_addrmode_absolute_index :: proc(using nes: ^NES, index_register: u8) -> u16 {
-	res := read_u16_le(ram[:], program_counter)
+	res := read_u16_le(nes, program_counter)
 	res += u16(index_register)
 	program_counter += 2
 	return res
@@ -153,7 +153,7 @@ do_addrmode_indirect :: proc(using nes: ^NES) -> u16 {
 
 	// read the address in the argument:
 
-	res_addr := read_u16_le(ram[:], program_counter)
+	res_addr := read_u16_le(nes, program_counter)
 
 
 	low_byte := u16(read(nes, res_addr))
