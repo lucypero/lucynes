@@ -3,13 +3,13 @@ package main
 import "core:fmt"
 
 stack_push :: proc(using nes: ^NES, value: u8) {
-	ram[0x0100 + u16(stack_pointer)] = value
+	write(nes, 0x0100 + u16(stack_pointer), value)
 	stack_pointer -= 1
 }
 
 stack_pop :: proc(using nes: ^NES) -> u8 {
 	stack_pointer += 1
-	popped_val := ram[0x0100 + u16(stack_pointer)]
+	popped_val := read(nes, 0x0100 + u16(stack_pointer))
 	return popped_val
 }
 
@@ -35,7 +35,7 @@ instr_and_value :: proc(using nes: ^NES, value: u16) {
 }
 
 instr_and :: proc(using nes: ^NES, mem: u16) {
-	instr_and_value(nes, u16(ram[mem]))
+	instr_and_value(nes, u16(read(nes, mem)))
 }
 
 instr_asl_inner :: proc(using nes: ^NES, value: ^u8) {
@@ -63,7 +63,7 @@ instr_adc_value :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_adc :: proc(using nes: ^NES, mem: u16) {
-	instr_adc_inner(nes, ram[mem])
+	instr_adc_inner(nes, read(nes, mem))
 }
 
 instr_adc_inner :: proc(using nes: ^NES, value: u8) {
@@ -105,9 +105,9 @@ instr_bit :: proc(using nes: ^NES, mem: u16) {
 
 	// A & M, N = M7, V = M6
 
-	set_flag(&flags, .Zero, (accumulator & ram[mem]) == 0)
-	set_flag(&flags, .Overflow, (ram[mem] & 0x40) != 0)
-	set_flag(&flags, .Negative, (ram[mem] & 0x80) != 0)
+	set_flag(&flags, .Zero, (accumulator & read(nes, mem)) == 0)
+	set_flag(&flags, .Overflow, (read(nes, mem) & 0x40) != 0)
+	set_flag(&flags, .Negative, (read(nes, mem) & 0x80) != 0)
 }
 
 instr_bmi :: proc(using nes: ^NES, mem: u16) {
@@ -163,7 +163,7 @@ instr_clv :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_compare_helper :: proc(using nes: ^NES, register: u8, mem: u16) {
-	val := ram[mem]
+	val := read(nes, mem)
 
 	if register >= val {
 		flags += {.Carry}
@@ -224,10 +224,11 @@ instr_cpy :: proc(using nes: ^NES, mem: u16) {
 
 // TODO maybe do a decrement helper
 instr_dec :: proc(using nes: ^NES, mem: u16) {
-	ram[mem] -= 1
+	val := read(nes, mem)
+	write(nes, mem, val - 1)
 
-	set_flag(&flags, .Zero, ram[mem] == 0)
-	set_flag(&flags, .Negative, (ram[mem] & 0x80) != 0)
+	set_flag(&flags, .Zero, read(nes, mem) == 0)
+	set_flag(&flags, .Negative, (read(nes, mem) & 0x80) != 0)
 }
 
 instr_dex :: proc(using nes: ^NES, mem: u16) {
@@ -251,15 +252,16 @@ instr_eor_value :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_eor :: proc(using nes: ^NES, mem: u16) {
-	accumulator = accumulator ~ ram[mem]
+	accumulator = accumulator ~ read(nes, mem)
 	set_flag(&flags, .Zero, accumulator == 0)
 	set_n(&flags, accumulator)
 }
 
 instr_inc :: proc(using nes: ^NES, mem: u16) {
-	ram[mem] += 1
-	set_z(&flags, ram[mem])
-	set_n(&flags, ram[mem])
+	val := read(nes, mem)
+	write(nes, mem, val + 1)
+	set_z(&flags, read(nes, mem))
+	set_n(&flags, read(nes, mem))
 }
 
 instr_inx :: proc(using nes: ^NES, mem: u16) {
@@ -303,7 +305,7 @@ instr_lda_value :: proc(using nes: ^NES, val: u16) {
 }
 
 instr_lda :: proc(using nes: ^NES, mem: u16) {
-	accumulator = ram[mem]
+	accumulator = read(nes, mem)
 
 	// flags
 	set_z(&flags, accumulator)
@@ -319,7 +321,7 @@ instr_ldx_value :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_ldx :: proc(using nes: ^NES, mem: u16) {
-	index_x = ram[mem]
+	index_x = read(nes, mem)
 
 	// flags
 	set_z(&flags, index_x)
@@ -335,7 +337,7 @@ instr_ldy_value :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_ldy :: proc(using nes: ^NES, mem: u16) {
-	index_y = ram[mem]
+	index_y = read(nes, mem)
 
 	// flags
 	set_z(&flags, index_y)
@@ -372,7 +374,7 @@ instr_ora_value :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_ora :: proc(using nes: ^NES, mem: u16) {
-	accumulator |= ram[mem]
+	accumulator |= read(nes, mem)
 
 	set_z(&flags, accumulator)
 	set_n(&flags, accumulator)
@@ -479,7 +481,7 @@ instr_sbc_inner :: proc(using nes: ^NES, mem: u8) {
 }
 
 instr_sbc :: proc(using nes: ^NES, mem: u16) {
-	instr_sbc_inner(nes, ram[mem])
+	instr_sbc_inner(nes, read(nes, mem))
 }
 
 instr_sbc_value :: proc(using nes: ^NES, mem: u16) {
@@ -499,15 +501,15 @@ instr_sei :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_sta :: proc(using nes: ^NES, mem: u16) {
-	ram[mem] = accumulator
+	write(nes, mem, accumulator)
 }
 
 instr_stx :: proc(using nes: ^NES, mem: u16) {
-	ram[mem] = index_x
+	write(nes, mem, index_x)
 }
 
 instr_sty :: proc(using nes: ^NES, mem: u16) {
-	ram[mem] = index_y
+	write(nes, mem, index_y)
 }
 
 instr_tax :: proc(using nes: ^NES, mem: u16) {
@@ -571,7 +573,7 @@ instr_rra :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_axs :: proc(using nes: ^NES, mem: u16) {
-	ram[mem] = accumulator & index_x
+	write(nes, mem, accumulator & index_x)
 }
 
 instr_lax :: proc(using nes: ^NES, mem: u16) {

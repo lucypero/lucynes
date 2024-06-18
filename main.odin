@@ -82,6 +82,20 @@ NES :: struct {
 	cycles:          uint,
 }
 
+read :: proc(using nes: ^NES, addr: u16) -> u8 {
+
+	// TODO: use mapper here to map memory
+
+	return ram[addr]
+}
+
+write :: proc(using nes: ^NES, addr: u16, val: u8) {
+
+	// TODO: use mapper here to map memory
+
+	ram[addr] = val
+}
+
 set_flag :: proc(flags: ^RegisterFlags, flag: RegisterFlagEnum, predicate: bool) {
 	if predicate {
 		flags^ += {flag}
@@ -145,7 +159,7 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 
 	instructions_ran := 0
 
-	for ram[program_counter] != 0x00 {
+	for read(nes, program_counter) != 0x00 {
 
 		state_before_instr := registers
 
@@ -247,7 +261,7 @@ run_program :: proc(using nes: ^NES, rom: []u8) {
 
 	program_counter = 0xC000
 
-	for ram[program_counter] != 0x00 {
+	for read(nes, program_counter) != 0x00 {
 		run_instruction(nes)
 	}
 
@@ -266,7 +280,7 @@ read_u16_be :: proc(buffer: []u8, index: u16) -> u16 {
 
 run_instruction :: proc(using nes: ^NES) {
 	// get first byte of instruction
-	instr := ram[program_counter]
+	instr := read(nes, program_counter)
 	program_counter += 1
 	switch instr {
 

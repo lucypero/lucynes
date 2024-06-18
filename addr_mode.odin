@@ -81,7 +81,7 @@ do_opcode :: proc(
 
 // there is no address involved here so it just returns the value.
 do_addrmode_immediate :: proc(using nes: ^NES) -> u8 {
-	res := ram[program_counter]
+	res := read(nes, program_counter)
 	program_counter += 1
 	return res
 }
@@ -89,7 +89,7 @@ do_addrmode_immediate :: proc(using nes: ^NES) -> u8 {
 // offset from the first page of ram ($0000 to $00FF)
 do_addrmode_zp :: proc(using nes: ^NES) -> u16 {
 
-	addr_offset := ram[program_counter]
+	addr_offset := read(nes, program_counter)
 
 	res: u16 = 0x00
 	res += u16(addr_offset)
@@ -101,7 +101,7 @@ do_addrmode_zp :: proc(using nes: ^NES) -> u16 {
 
 // does ZPX and ZPY depending which index value u pass
 do_addrmode_zp_index :: proc(using nes: ^NES, index: u8) -> u16 {
-	addr_offset := (u16(ram[program_counter]) + u16(index)) % 0x100
+	addr_offset := (u16(read(nes, program_counter)) + u16(index)) % 0x100
 	program_counter += 1
 	return addr_offset
 }
@@ -116,7 +116,7 @@ do_addrmode_zpy :: proc(using nes: ^NES) -> u16 {
 
 // it returns the absolute address that the instruction will jump to.
 do_addrmode_relative :: proc(using nes: ^NES) -> u16 {
-	offset := i8(ram[program_counter])
+	offset := i8(read(nes, program_counter))
 	program_counter += 1
 	res := program_counter + u16(offset)
 	return res
@@ -156,7 +156,7 @@ do_addrmode_indirect :: proc(using nes: ^NES) -> u16 {
 	res_addr := read_u16_le(ram[:], program_counter)
 
 
-	low_byte := u16(ram[res_addr])
+	low_byte := u16(read(nes, res_addr))
 
 	// JMP BUG: if the arg is $XXFF, then it fetches the high byte at $XX00 instead of $XXFF + 1
 
@@ -165,7 +165,7 @@ do_addrmode_indirect :: proc(using nes: ^NES) -> u16 {
 		high_byte_addr = res_addr & 0xFF00
 	}
 
-	high_byte := u16(ram[high_byte_addr])
+	high_byte := u16(read(nes, high_byte_addr))
 
 	res := high_byte << 8 | low_byte
 
@@ -180,17 +180,17 @@ do_addrmode_indirect :: proc(using nes: ^NES) -> u16 {
 do_addrmode_ind_x :: proc(using nes: ^NES) -> u16 {
 	// get 16 bit value in arg + x (wrap around)
 
-	addr_1 := (u16(ram[program_counter]) + u16(index_x)) % 0x100
+	addr_1 := (u16(read(nes, program_counter)) + u16(index_x)) % 0x100
 
 	// treat it as an address
 
-	low_byte := u16(ram[addr_1])
+	low_byte := u16(read(nes, addr_1))
 
 	// wrap around the high byte
 
 	addr_2 := (addr_1 + 1) % 0x100
 
-	high_byte := u16(ram[addr_2])
+	high_byte := u16(read(nes, addr_2))
 
 	// increment pc
 	program_counter += 1
@@ -207,13 +207,13 @@ do_addrmode_ind_x :: proc(using nes: ^NES) -> u16 {
 // returns the address
 do_addrmode_ind_y :: proc(using nes: ^NES) -> (u16, uint) {
 	// get 16 bit value in arg
-	addr_1 := u16(ram[program_counter])
+	addr_1 := u16(read(nes, program_counter))
 
-	low_byte := u16(ram[addr_1])
+	low_byte := u16(read(nes, addr_1))
 
 	addr_2 := (addr_1 + 1) % 0x100
 
-	high_byte := u16(ram[addr_2])
+	high_byte := u16(read(nes, addr_2))
 
 	val := high_byte << 8 | low_byte
 	val += u16(index_y)
