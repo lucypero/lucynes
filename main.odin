@@ -26,11 +26,12 @@ RomFormat :: enum {
 
 RomInfo :: struct {
 	// TODO: u can group a lot of this into a bitset
+	rom_loaded:                bool,
 	rom_format:                RomFormat,
 	prg_rom_size:              int,
 	chr_rom_size:              int,
 	is_horizontal_arrangement: bool, // true for horizontal, false for vertical
-	contains_battery:          bool,
+	contains_ram:              bool, // bit 2 in flags 6. true if it contains battery packed PRG RAM
 	contains_trainer:          bool,
 	alt_nametable_layout:      bool,
 	mapper:                    Mapper,
@@ -105,20 +106,88 @@ NES :: struct {
 	rom_info:        RomInfo,
 	prg_rom:         []u8,
 	chr_rom:         []u8,
+	prg_ram:         []u8,
 }
 
 read :: proc(using nes: ^NES, addr: u16) -> u8 {
+	if !rom_info.rom_loaded {
+		return ram[addr]
+	}
 
-	// TODO: use mapper here to map memory
+	switch rom_info.mapper {
+	case .NROM128:
+		switch addr {
+		case 0x8000 ..= 0xBFFF:
+			return prg_rom[addr - 0x8000]
+		case 0xC000 ..= 0xFFFF:
+			return prg_rom[addr - 0xC000]
+		}
+	case .NROM256:
+		switch addr {
+		case 0x8000 ..= 0xFFFF:
+			return prg_rom[addr - 0x8000]
+		}
+	}
+
+	if rom_info.contains_ram {
+		switch addr {
+		case 0x6000 ..= 0x7FFF:
+			return prg_ram[addr - 0x6000]
+		}
+	}
+
+	// CPU $6000-$7FFF: Family Basic only: PRG RAM, mirrored as necessary to fill entire 8 KiB window, write protectable with an external switch
+	// CPU $8000-$BFFF: First 16 KB of ROM.
+	// CPU $C000-$FFFF: Last 16 KB of ROM (NROM-256) or mirror of $8000-$BFFF (NROM-128).
 
 	return ram[addr]
 }
 
 write :: proc(using nes: ^NES, addr: u16, val: u8) {
 
-	// TODO: use mapper here to map memory
+	wrote_to_rom := false
 
-	ram[addr] = val
+	defer {
+		if wrote_to_rom {
+			fmt.eprintfln("tried to write to read only memory!! that is bad i think: %v", addr)
+		}
+	}
+
+	if !rom_info.rom_loaded {
+		ram[addr] = val
+		return
+	}
+
+	switch rom_info.mapper {
+	case .NROM128:
+		switch addr {
+		case 0x8000 ..= 0xBFFF:
+			wrote_to_rom = true
+			// prg_rom[addr - 0x8000] = val
+			return
+		case 0xC000 ..= 0xFFFF:
+			wrote_to_rom = true
+			// prg_rom[addr - 0xC000] = val
+			return
+		}
+	case .NROM256:
+		switch addr {
+		case 0x8000 ..= 0xFFFF:
+			wrote_to_rom = true
+			// prg_rom[addr - 0x8000] = val
+			return
+		}
+	}
+
+	if rom_info.contains_ram {
+		switch addr {
+		case 0x6000 ..= 0x7FFF:
+			// wrote to prg ram! it's ok i think
+			fmt.println("wrote to prg ram! probably ok")
+			prg_ram[addr - 0x6000] = val
+			return
+		}
+	}
 }
 
 set_flag :: proc(flags: ^RegisterFlags, flag: RegisterFlagEnum, predicate: bool) {
@@ -1160,9 +1229,9 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) {
 	}
 
 	if flags_6 & 0x02 != 0 {
-		rom_info.contains_battery = true
+		rom_info.contains_ram = true
 	} else {
-		rom_info.contains_battery = false
+		rom_info.contains_ram = false
 	}
 
 	if flags_6 & 0x04 != 0 {
@@ -1179,6 +1248,8 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) {
 
 	mapper_lower := (flags_6 & 0xF0) >> 4
 
+	// flags 7
+
 	flags_7 := rom_string[7]
 
 	mapper_higher := (flags_7 & 0xF0) >> 4
@@ -1194,8 +1265,13 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) {
 		}
 	}
 
-	// where is all the rom data
+	// flags 8
 
+	prg_ram_size: u8 = rom_string[8]
+
+	fmt.printfln("prg ram size according to flags 8: %v", prg_ram_size)
+
+	// where is all the rom data
 	header_size :: 16
 	trainer_size :: 512
 
@@ -1215,9 +1291,16 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) {
 
 	fmt.printfln("rom info: %v", rom_info)
 
+	rom_info.rom_loaded = true
+
+
 	nes.rom_info = rom_info
 	nes.prg_rom = prg_rom
 	nes.chr_rom = chr_rom
+
+	// allocating prg ram
+	// assuming it is always 8kib
+	nes.prg_ram = make([]u8, 1024 * 8)
 }
 
 casting_test :: proc() {
