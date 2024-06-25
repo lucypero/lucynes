@@ -1169,6 +1169,9 @@ _main :: proc() {
 
 	nes: NES
 	load_rom_from_file(&nes, "roms/DonkeyKong.nes")
+
+
+	raylib_test()
 }
 
 load_rom_from_file :: proc(nes: ^NES, filename: string) {
