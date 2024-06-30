@@ -110,9 +110,56 @@ NES :: struct {
 }
 
 read :: proc(using nes: ^NES, addr: u16) -> u8 {
+
+
+	switch addr {
+
+	// PPU registers
+	case 0x2000 ..= 0x3FFF:
+		ppu_reg := get_mirrored(int(addr), 0x2000, 0x2007)
+		switch ppu_reg {
+
+		// PPUCTRL
+		case 0x2000:
+			fmt.eprintfln("should not read to ppuctrl. it's write only")
+			return ram[ppu_reg]
+
+		// PPUMASK
+		case 0x2001:
+			fmt.eprintfln("should not read to ppumask. it's write only")
+			return ram[ppu_reg]
+
+		// PPUSTATUS
+		case 0x2002:
+			//TODO
+
+			// clear bit 7
+
+			// clear address latch
+
+
+			return ram[ppu_reg]
+
+		// OAMADDR
+		case 0x2003:
+			fmt.eprintfln("should not read to oamaddr. it's write only")
+			return ram[ppu_reg]
+
+		// OAMDATA
+		case 0x2004:
+
+
+		}
+	}
+
+
+	// CPU memory
+
 	if !rom_info.rom_loaded {
 		return ram[addr]
 	}
+
+	// ROM mapped memory
 
 	switch rom_info.mapper {
 	case .NROM128:
@@ -1170,8 +1217,89 @@ _main :: proc() {
 	nes: NES
 	load_rom_from_file(&nes, "roms/DonkeyKong.nes")
 
+	// print_patterntable(nes)
 
-	raylib_test()
+
+	// mirror_test()
+	raylib_test(nes)
+}
+
+print_patterntable :: proc(nes: NES) {
+
+	// pattern tables:
+	// 1: $0000 - $0FFF
+	// 2: $1000 - $1FFF
+
+	// each tile is 16 bytes made of 2 bit planes
+	// tile is 8x8 pixels (pixels being 2 bits long)
+
+	// pattern table is divided into two 256 tile sections (left and right pattern tables)
+
+
+	// it is stored tiled by tile
+
+	// how each tile is stored:
+
+	// bit plane 0 - then - bitplane 1
+
+
+	// tiles
+
+
+	// looping tile
+	for i in 0 ..< 256 {
+
+		tile: [8 * 8]int // pixels of tiles (contains [0-3])
+
+		// first bit plane
+		for t in 0 ..< 16 {
+
+			row := nes.chr_rom[(i * 16) + t]
+
+			// looping row of pixels
+			for p in 0 ..< 8 {
+				is_on := (row >> uint(p)) & 0b00000001
+
+				if is_on != 0 {
+
+					// if we're on first bit plane, add one
+					if (t < 8) {
+						tile[(t * 8) + p] += 1
+					} else {
+						// if we're on second bit plane, add two
+						tile[((t - 8) * 8) + p] += 2
+					}
+				}
+			}
+		}
+
+
+		// print tile
+
+		for p, p_i in tile {
+			fmt.printf("%v", p)
+
+			if (p_i % 8) == 7 {
+				fmt.printf("\n")
+			}
+		}
+
+		fmt.printf("\n")
+	}
+}
+
+get_mirrored :: proc(val, from, to: int) -> int {
+	range := to - from + 1
+	return ((val - from) % range) + from
+}
+
+mirror_test :: proc() {
+
+	// PPU I/O registers at $2000-$2007 are mirrored at $2008-$200F, $2010-$2017, $2018-$201F, and so forth, all the way up to $3FF8-$3FFF.
+	// For example, a write to $3456 is the same as a write to $2006. 
+
+	assert(get_mirrored(0x3456, 0x2000, 0x2007) == 0x2006) // returns $2006
+
 }
 
 load_rom_from_file :: proc(nes: ^NES, filename: string) {

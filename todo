@@ -24,15 +24,15 @@ core/mem/allocators.odin
 
 ## Todo
 
-- mappers
-- do mapper 000	 (nrom)
-- programming nrom
-https://www.nesdev.org/wiki/Programming_NROM
 
-prg rom: program rom. probably the cpu code
-chr rom: "character" rom. it's the graphics. for the PPU. sprites and backgrounds
+# PPU
+
+status register:
+
+See: PPU rendering for more information on the timing of setting and clearing the flags.
 
 
-- is it nes 2.0 or ines?
-    it's ines.
+- how do i set all the flags? or like how do i make sure that the flags are set correctly when read?
 
+
+- what is nmi?
