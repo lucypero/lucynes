@@ -107,10 +107,22 @@ NES :: struct {
 	prg_rom:         []u8,
 	chr_rom:         []u8,
 	prg_ram:         []u8,
+
+	// PPU stuff
+	ppu_bus:         [16 * 1024]u8, // PPU bus (separate from cpu bus/ram)
+	ppu_v:           uint, // current vram address (15 bits)
+	ppu_t:           uint, // Temporary VRAM address (15 bits)
+	ppu_x:           uint, // fine x scroll (3 bits)
+	ppu_w:           bool, // First or second write toggle (1 bit)
+
+
+	// testing stuff
+
+	ppustatus_access : uint
 }
 
+// cpu bus read
 read :: proc(using nes: ^NES, addr: u16) -> u8 {
-
 
 	switch addr {
 
@@ -121,6 +133,9 @@ read :: proc(using nes: ^NES, addr: u16) -> u8 {
 
 		// PPUCTRL
 		case 0x2000:
+			// return garbage if they try to read this. "open bus"
+			// https://forums.nesdev.org/viewtopic.php?t=6426
+
 			fmt.eprintfln("should not read to ppuctrl. it's write only")
 			return ram[ppu_reg]
 
@@ -133,11 +148,29 @@ read :: proc(using nes: ^NES, addr: u16) -> u8 {
 		case 0x2002:
 			//TODO
 
+			// return v blank as 1, rest 0
+
 			// clear bit 7
 
 			// clear address latch
+			ppu_status: u8
+			ppu_status = 0x80
 
+			if ppustatus_access % 10 == 0 {
+				return 0x80
+			} else {
+				return 0
+			}
 
+			ppustatus_access += 1
+
+			fmt.printfln("reading ppu status. clearing latch")
+			ppu_w = false
+			return ppu_status
+
+		// PPUDATA
+		case 0x2007:
+			fmt.printfln("reading PPUDATA")
 			return ram[ppu_reg]
 
 		// OAMADDR
@@ -147,8 +180,8 @@ read :: proc(using nes: ^NES, addr: u16) -> u8 {
 
 		// OAMDATA
 		case 0x2004:
-
-
+			fmt.printfln("reading oamdata")
+			return ram[ppu_reg]
 		}
 	}
 
@@ -198,6 +231,63 @@ write :: proc(using nes: ^NES, addr: u16, val: u8) {
 		if wrote_to_rom {
 			fmt.eprintfln("tried to write to read only memory!! that is bad i think: %v", addr)
 		}
+	}
+
+
+	switch addr {
+	// PPU registers
+	case 0x2000 ..= 0x3FFF:
+		ppu_reg := get_mirrored(int(addr), 0x2000, 0x2007)
+		switch ppu_reg {
+
+		// PPUCTRL
+		case 0x2000:
+			// writing to ppuctrl
+			fmt.printfln("writing to ppuctrl: %X", val)
+			ram[ppu_reg] = val
+
+		//PPUADDR
+		case 0x2006:
+			// writes a 16 bit VRAM address, 1 bytes at a time(games have to call this twice)
+
+			// writes to upper byte first
+
+			// TODO write to ppu_v based on ppu_w
+			if ppu_w {
+				ppu_v = uint(val) | ppu_v
+			} else {
+				ppu_v = uint(val) << 8 | ppu_v
+			}
+
+			ppu_w = !ppu_w
+
+			fmt.printfln(
+				"-- PPU interaction! call to PPUADDR!! writing: %X. ppu_v is now %X",
+				val,
+				ppu_v,
+			)
+			return
+
+		//PPUDATA
+		case 0x2007:
+			// this is what you use to read/write to PPU memory (VRAM)
+			// this is what games use to fill nametables, change palettes, and more.
+
+			// it will write to the set 16 bit VRAM address set by PPUADDR (u need to store this address somewhere)
+			fmt.printfln(
+				"-- PPU interaction! call to PPUDATA!! writing: %X to PPU ADDRESS: %X",
+				val,
+				ppu_v,
+			)
+			return
+		}
+	}
+
+	//OAMDMA
+	if addr == 0x4014 {
+		// todo
+		fmt.printfln("writing to OAMDMA")
+		ram[addr] = val;
 	}
 
 	if !rom_info.rom_loaded {
@@ -418,8 +508,10 @@ read_u16_le :: proc(nes: ^NES, addr: u16) -> u16 {
 
 run_instruction :: proc(using nes: ^NES) {
 	// get first byte of instruction
+	// fmt.printfln("PC: %X", program_counter)
 	instr := read(nes, program_counter)
 	program_counter += 1
+	// fmt.printfln("running op %X", instr)
 	switch instr {
 
 	// AND
@@ -1215,14 +1307,32 @@ _main :: proc() {
 	run_nestest_test()
 
 	nes: NES
-	load_rom_from_file(&nes, "roms/DonkeyKong.nes")
+	res := load_rom_from_file(&nes, "roms/DonkeyKong.nes")
+
+	if !res {
+		return
+	}
 
 	// print_patterntable(nes)
-
-
 	// mirror_test()
-	raylib_test(nes)
+	// raylib_test(nes)
+
+	run_rom(&nes)
 }
+
+run_rom :: proc(using nes: ^NES) {
+
+	// initializing nes
+	program_counter = 0x8000
+	stack_pointer = 0xFD
+	flags = transmute(RegisterFlags)u8(0x24)
+
+	// running instructions forever
+	for true {
+		run_instruction(nes)
+	}
+}
+
 
 print_patterntable :: proc(nes: NES) {
 
@@ -1302,7 +1412,7 @@ mirror_test :: proc() {
 
 }
 
-load_rom_from_file :: proc(nes: ^NES, filename: string) {
+load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 
 	rom_info: RomInfo
 
@@ -1310,7 +1420,7 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) {
 
 	if !ok {
 		fmt.eprintln("could not read rom file")
-		return
+		return false
 	}
 
 	defer {
@@ -1325,7 +1435,7 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) {
 
 	if nes_str != "NES" {
 		fmt.eprintfln("(filename: %v) this is not a nes rom file.", filename)
-		return
+		return false
 	}
 
 	// checking if it's nes 2.0 or ines
@@ -1432,6 +1542,8 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) {
 	// allocating prg ram
 	// assuming it is always 8kib
 	nes.prg_ram = make([]u8, 1024 * 8)
+
+	return true
 }
 
 casting_test :: proc() {

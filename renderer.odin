@@ -81,7 +81,9 @@ clear_pixels :: proc(pixels: []rl.Color, color: rl.Color) {
 	}
 }
 
-draw_frame :: proc(nes: NES, pixel_grid: ^PixelGrid) {
+
+// debug thing. it just displays the 2 pattern tables on the screen
+draw_patterntables :: proc(nes: NES, pixel_grid: ^PixelGrid) {
 
 	// draw some pattern table tiles
 
@@ -150,6 +152,24 @@ draw_frame :: proc(nes: NES, pixel_grid: ^PixelGrid) {
 		// we gonna draw
 		draw_tile(pixel_grid, tile, x_pos, y_pos)
 	}
+}
+
+draw_nametable :: proc(nes: NES, pixel_grid: ^PixelGrid) {
+
+	// nametables:
+
+	// 1024 byte area of memory
+	// each byte controls a 8x8 pixel tile
+	// contains 30 rows of 32 tiles (32 x 30)
+	// the 64 remaining bytes are used by each nametable's attribute table
+
+
+}
+
+draw_frame :: proc(nes: NES, pixel_grid: ^PixelGrid) {
+	// draw_patterntables(nes, pixel_grid)
+
+	draw_nametable(nes, pixel_grid)
 }
 
 draw_tile :: proc(pixel_grid: ^PixelGrid, tile: [8 * 8]int, x_pos, y_pos: int) {

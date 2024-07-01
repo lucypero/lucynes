@@ -27,6 +27,9 @@ core/mem/allocators.odin
 
 # PPU
 
+- do a test run of donkey kong to see how it uses the registers.
+- implement enough PPU stuff so that donkey kong can draw its own backgrounds.
+
 status register:
 
 See: PPU rendering for more information on the timing of setting and clearing the flags.
