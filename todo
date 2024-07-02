@@ -24,6 +24,12 @@ core/mem/allocators.odin
 
 ## Todo
 
+- run some nes test roms to see what is going on.
+ donkey kong is getting stuck somewhere. never writes to PPUADDR
+
+- don't allocate memory for the whole bus.
+ the bus is a fake thing. it's not ram
+ put actual ram in separate fields. it's easier.
 
 # PPU
 
@@ -39,3 +45,12 @@ See: PPU rendering for more information on the timing of setting and clearing th
 
 
 - what is nmi?
+
+
+- what calls the nmi?
+
+- the ppu calls the nmi when:
+	- you write to ppuctrl on some conditions (if vblank is set, and you change nmi flag from 0 to 1, trigger nmi now)
+	- when vblank starts and bit 7 of ppuctrl is on
+
+

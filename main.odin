@@ -114,11 +114,140 @@ NES :: struct {
 	ppu_t:           uint, // Temporary VRAM address (15 bits)
 	ppu_x:           uint, // fine x scroll (3 bits)
 	ppu_w:           bool, // First or second write toggle (1 bit)
+	ppu_on_vblank:   bool,
+	ppu_cycles:      int,
+}
 
+nmi :: proc(using nes: ^NES) {
 
-	// testing stuff
+	fmt.println("nmi triggered!")
 
-	ppustatus_access : uint
+	stack_push_u16(nes, program_counter)
+	pushed_flags := flags
+	pushed_flags -= {.NoEffectB}
+	pushed_flags += {.NoEffect1}
+	stack_push(nes, transmute(u8)pushed_flags)
+	flags += {.InterruptDisable}
+
+	// read u16 memmory value at 0xFFFA
+	nmi_mem: u16
+
+	low_byte := u16(read(nes, 0xFFFA))
+	high_byte := u16(read(nes, 0xFFFA + 1))
+
+	nmi_mem = high_byte << 8 | low_byte
+
+	program_counter = nmi_mem
+}
+
+write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
+	switch ppu_reg {
+
+	// PPUCTRL
+	case 0x2000:
+		// writing to ppuctrl
+
+		// if vblank is set, and you change nmi flag from 0 to 1, trigger nmi now
+		if ppu_on_vblank && val & 0x80 != 0 && ram[ppu_reg] & 0x80 == 0 {
+			// trigger NMI immediately
+			nmi(nes)
+		}
+
+		ram[ppu_reg] = val
+
+	//PPUADDR
+	case 0x2006:
+		// writes a 16 bit VRAM address, 1 bytes at a time(games have to call this twice)
+
+		// writes to upper byte first
+
+		// TODO write to ppu_v based on ppu_w
+		if ppu_w {
+			ppu_v = uint(val) | ppu_v
+		} else {
+			ppu_v = uint(val) << 8 | ppu_v
+		}
+
+		ppu_w = !ppu_w
+
+		fmt.printfln(
+			"-- PPU interaction! call to PPUADDR!! writing: %X. ppu_v is now %X",
+			val,
+			ppu_v,
+		)
+		return
+
+	//PPUDATA
+	case 0x2007:
+		// this is what you use to read/write to PPU memory (VRAM)
+		// this is what games use to fill nametables, change palettes, and more.
+
+		// it will write to the set 16 bit VRAM address set by PPUADDR (u need to store this address somewhere)
+		fmt.printfln(
+			"-- PPU interaction! call to PPUDATA!! writing: %X to PPU ADDRESS: %X",
+			val,
+			ppu_v,
+		)
+		return
+	}
+
+}
+
+read_ppu_register :: proc(using nes: ^NES, ppu_reg: u16) -> u8 {
+	switch ppu_reg {
+
+	// PPUCTRL
+	case 0x2000:
+		// return garbage if they try to read this. "open bus"
+		// https://forums.nesdev.org/viewtopic.php?t=6426
+
+		// fmt.eprintfln("should not read to ppuctrl. it's write only")
+		return ram[ppu_reg]
+
+	// PPUMASK
+	case 0x2001:
+		// fmt.eprintfln("should not read to ppumask. it's write only")
+		return ram[ppu_reg]
+
+	// PPUSTATUS
+	case 0x2002:
+		//TODO
+
+		// return v blank as 1, rest 0
+
+		// clear bit 7
+
+		// clear address latch
+		ppu_status: u8
+
+		if ppu_on_vblank {
+			ppu_status |= 0x80
+		}
+
+		ppu_on_vblank = false
+
+		// fmt.printfln("reading ppu status. clearing latch")
+		ppu_w = false
+		return ppu_status
+
+	// PPUDATA
+	case 0x2007:
+		// fmt.printfln("reading PPUDATA")
+		return ram[ppu_reg]
+
+	// OAMADDR
+	case 0x2003:
+		// fmt.eprintfln("should not read to oamaddr. it's write only")
+		return ram[ppu_reg]
+
+	// OAMDATA
+	case 0x2004:
+		// fmt.printfln("reading oamdata")
+		return ram[ppu_reg]
+
+	case:
+		return ram[ppu_reg]
+	}
 }
 
 // cpu bus read
@@ -129,62 +258,8 @@ read :: proc(using nes: ^NES, addr: u16) -> u8 {
 	// PPU registers
 	case 0x2000 ..= 0x3FFF:
 		ppu_reg := get_mirrored(int(addr), 0x2000, 0x2007)
-		switch ppu_reg {
-
-		// PPUCTRL
-		case 0x2000:
-			// return garbage if they try to read this. "open bus"
-			// https://forums.nesdev.org/viewtopic.php?t=6426
-
-			fmt.eprintfln("should not read to ppuctrl. it's write only")
-			return ram[ppu_reg]
-
-		// PPUMASK
-		case 0x2001:
-			fmt.eprintfln("should not read to ppumask. it's write only")
-			return ram[ppu_reg]
-
-		// PPUSTATUS
-		case 0x2002:
-			//TODO
-
-			// return v blank as 1, rest 0
-
-			// clear bit 7
-
-			// clear address latch
-			ppu_status: u8
-			ppu_status = 0x80
-
-			if ppustatus_access % 10 == 0 {
-				return 0x80
-			} else {
-				return 0
-			}
-
-			ppustatus_access += 1
-
-			fmt.printfln("reading ppu status. clearing latch")
-			ppu_w = false
-			return ppu_status
-
-		// PPUDATA
-		case 0x2007:
-			fmt.printfln("reading PPUDATA")
-			return ram[ppu_reg]
-
-		// OAMADDR
-		case 0x2003:
-			fmt.eprintfln("should not read to oamaddr. it's write only")
-			return ram[ppu_reg]
-
-		// OAMDATA
-		case 0x2004:
-			fmt.printfln("reading oamdata")
-			return ram[ppu_reg]
-		}
+		return read_ppu_register(nes, u16(ppu_reg))
 	}
-
 
 	// CPU memory
 
@@ -238,56 +313,15 @@ write :: proc(using nes: ^NES, addr: u16, val: u8) {
 	// PPU registers
 	case 0x2000 ..= 0x3FFF:
 		ppu_reg := get_mirrored(int(addr), 0x2000, 0x2007)
-		switch ppu_reg {
-
-		// PPUCTRL
-		case 0x2000:
-			// writing to ppuctrl
-			fmt.printfln("writing to ppuctrl: %X", val)
-			ram[ppu_reg] = val
-
-		//PPUADDR
-		case 0x2006:
-			// writes a 16 bit VRAM address, 1 bytes at a time(games have to call this twice)
-
-			// writes to upper byte first
-
-			// TODO write to ppu_v based on ppu_w
-			if ppu_w {
-				ppu_v = uint(val) | ppu_v
-			} else {
-				ppu_v = uint(val) << 8 | ppu_v
-			}
-
-			ppu_w = !ppu_w
-
-			fmt.printfln(
-				"-- PPU interaction! call to PPUADDR!! writing: %X. ppu_v is now %X",
-				val,
-				ppu_v,
-			)
-			return
-
-		//PPUDATA
-		case 0x2007:
-			// this is what you use to read/write to PPU memory (VRAM)
-			// this is what games use to fill nametables, change palettes, and more.
-
-			// it will write to the set 16 bit VRAM address set by PPUADDR (u need to store this address somewhere)
-			fmt.printfln(
-				"-- PPU interaction! call to PPUDATA!! writing: %X to PPU ADDRESS: %X",
-				val,
-				ppu_v,
-			)
-			return
-		}
+		write_ppu_register(nes, u16(ppu_reg), val)
+		return
 	}
 
 	//OAMDMA
 	if addr == 0x4014 {
 		// todo
 		fmt.printfln("writing to OAMDMA")
-		ram[addr] = val;
+		ram[addr] = val
 	}
 
 	if !rom_info.rom_loaded {
@@ -508,7 +542,7 @@ read_u16_le :: proc(nes: ^NES, addr: u16) -> u16 {
 
 run_instruction :: proc(using nes: ^NES) {
 	// get first byte of instruction
-	// fmt.printfln("PC: %X", program_counter)
+	fmt.printfln("PC: %X", program_counter)
 	instr := read(nes, program_counter)
 	program_counter += 1
 	// fmt.printfln("running op %X", instr)
@@ -1317,10 +1351,55 @@ _main :: proc() {
 	// mirror_test()
 	// raylib_test(nes)
 
-	run_rom(&nes)
+	run_nes(&nes)
 }
 
-run_rom :: proc(using nes: ^NES) {
+ppu_tick :: proc(using nes: ^NES) {
+
+	// 262 scanlines
+
+	scanline := ppu_cycles / 341
+
+	// pretend that u do some scanlines here
+	// and set vblank as appropriate
+	// and call nmi when appropriate
+
+	// Vertical blanking lines (241-260)
+	// The VBlank flag of the PPU is set at tick 1 (the second tick) of scanline 241, where the VBlank NMI also occurs. The PPU makes no memory accesses during these scanlines, so PPU memory can be freely accessed by the program. 
+
+	// cycle 0
+	switch scanline {
+	case 0:
+	// ?
+
+	case 1 ..= 240:
+	// ???
+	// visible scanlines
+	case 241:
+		// setting vblank and nmi
+		if ppu_cycles % 341 == 1 {
+			ppu_on_vblank = true
+			if ram[0x2000] & 0x80 != 0 {
+				nmi(nes)
+			}
+		}
+	case 261:
+		if ppu_cycles % 341 == 1 {
+			ppu_on_vblank = false
+		}
+
+	case:
+	// vblank scanlines
+	}
+
+	ppu_cycles += 1
+
+	if ppu_cycles > 341 * 262 {
+		ppu_cycles = 0
+	}
+}
+
+run_nes :: proc(using nes: ^NES) {
 
 	// initializing nes
 	program_counter = 0x8000
@@ -1329,7 +1408,16 @@ run_rom :: proc(using nes: ^NES) {
 
 	// running instructions forever
 	for true {
+		// main NES loop
+		// catchup method
+		past_cycles := cycles
 		run_instruction(nes)
+		cpu_cycles_dt := cycles - past_cycles
+
+		fmt.println("ticking ppu for cycles", cpu_cycles_dt * 3)
+		for i in 0 ..< cpu_cycles_dt * 3 {
+			ppu_tick(nes)
+		}
 	}
 }
 

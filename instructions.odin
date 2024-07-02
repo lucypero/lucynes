@@ -13,6 +13,22 @@ stack_pop :: proc(using nes: ^NES) -> u8 {
 	return popped_val
 }
 
+// TODO: use this instead of the manual way in the instructions
+stack_push_u16 :: proc(using nes: ^NES, value: u16) {
+
+	byte: u8 = u8((value >> 8) & 0x00FF)
+	stack_push(nes, byte)
+
+	byte = u8(value & 0x00FF)
+	stack_push(nes, byte)
+}
+
+stack_pop_u16 :: proc(using nes: ^NES) -> u16 {
+	low := stack_pop(nes)
+	high := stack_pop(nes)
+	return u16(high) << 8 | u16(low)
+}
+
 // sets the N flag given a value.
 // it is set to 1 if bit 7 of value is set
 set_n :: proc(flags: ^RegisterFlags, value: u8) {
