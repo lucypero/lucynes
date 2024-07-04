@@ -4,17 +4,21 @@ import "core:fmt"
 
 stack_push :: proc(using nes: ^NES, value: u8) {
 	write(nes, 0x0100 + u16(stack_pointer), value)
+	// fmt.printfln("pushing to stack %X, SP is %X", value, stack_pointer)
 	stack_pointer -= 1
 }
 
 stack_pop :: proc(using nes: ^NES) -> u8 {
 	stack_pointer += 1
 	popped_val := read(nes, 0x0100 + u16(stack_pointer))
+	// fmt.printfln("pulling from stack %X, SP is now %X", popped_val, stack_pointer)
 	return popped_val
 }
 
 // TODO: use this instead of the manual way in the instructions
 stack_push_u16 :: proc(using nes: ^NES, value: u16) {
+
+	// fmt.println("pushing u16")
 
 	byte: u8 = u8((value >> 8) & 0x00FF)
 	stack_push(nes, byte)
@@ -148,6 +152,7 @@ instr_bpl :: proc(using nes: ^NES, mem: u16) {
 
 // TODO it does an interrupt. idk how to do this yet
 instr_brk :: proc(using nes: ^NES, mem: u16) {
+	fmt.printfln("calling BRK. pc is %X", program_counter)
 	flags += {.NoEffectB}
 }
 
@@ -507,7 +512,7 @@ instr_rti :: proc(using nes: ^NES, mem: u16) {
 	pc_low := stack_pop(nes)
 	pc_high := stack_pop(nes)
 
-	program_counter = u16(pc_high) << 8 + u16(pc_low)
+	program_counter = u16(pc_high) << 8 | u16(pc_low)
 }
 
 instr_rts :: proc(using nes: ^NES, mem: u16) {

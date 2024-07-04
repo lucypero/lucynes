@@ -24,12 +24,20 @@ core/mem/allocators.odin
 
 ## Todo
 
+- you are writing to the cpu stack. prob in the ppu registers. fix that.
+
+
+
+
 - run some nes test roms to see what is going on.
  donkey kong is getting stuck somewhere. never writes to PPUADDR
 
 - don't allocate memory for the whole bus.
  the bus is a fake thing. it's not ram
  put actual ram in separate fields. it's easier.
+
+
+- it doesn't write to PPUCTRL. donkey kong. it never does. figure out why
 
 # PPU
 

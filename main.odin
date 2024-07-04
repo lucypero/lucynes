@@ -123,11 +123,9 @@ nmi :: proc(using nes: ^NES) {
 	fmt.println("nmi triggered!")
 
 	stack_push_u16(nes, program_counter)
-	pushed_flags := flags
-	pushed_flags -= {.NoEffectB}
-	pushed_flags += {.NoEffect1}
-	stack_push(nes, transmute(u8)pushed_flags)
-	flags += {.InterruptDisable}
+	flags += {.InterruptDisable, .NoEffect1}
+	flags -= {.NoEffectB}
+	stack_push(nes, transmute(u8)flags)
 
 	// read u16 memmory value at 0xFFFA
 	nmi_mem: u16
@@ -137,7 +135,10 @@ nmi :: proc(using nes: ^NES) {
 
 	nmi_mem = high_byte << 8 | low_byte
 
+	fmt.printfln("setting pc to %X, from low byte %X, high byte %X", nmi_mem, low_byte, high_byte)
 	program_counter = nmi_mem
+
+	cycles += 7
 }
 
 write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
@@ -146,6 +147,7 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 	// PPUCTRL
 	case 0x2000:
 		// writing to ppuctrl
+		fmt.printfln("writing to PPUCTRL %X", val)
 
 		// if vblank is set, and you change nmi flag from 0 to 1, trigger nmi now
 		if ppu_on_vblank && val & 0x80 != 0 && ram[ppu_reg] & 0x80 == 0 {
@@ -153,19 +155,29 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 			nmi(nes)
 		}
 
+		fmt.printfln("unsafe write to ram: %X", ppu_reg)
 		ram[ppu_reg] = val
 
-	//PPUADDR
+
+	// PPUSCROLL
+	case 0x2005:
+		fmt.println("writing to ppuscroll")
+	//
+
+	// PPUADDR
 	case 0x2006:
+		fmt.println("writing to ppuaddr")
+
+
 		// writes a 16 bit VRAM address, 1 bytes at a time(games have to call this twice)
 
 		// writes to upper byte first
 
 		// TODO write to ppu_v based on ppu_w
 		if ppu_w {
-			ppu_v = uint(val) | ppu_v
+			ppu_v = (ppu_v & 0xFF00) | uint(val)
 		} else {
-			ppu_v = uint(val) << 8 | ppu_v
+			ppu_v = uint(val) << 8 | (ppu_v & 0x00FF)
 		}
 
 		ppu_w = !ppu_w
@@ -188,6 +200,18 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 			val,
 			ppu_v,
 		)
+
+		// (after writing, increment)
+
+		// go down or go across?
+		goDown: bool = ram[0x2000] & 0x04 != 0
+
+		if goDown {
+			ppu_v += 32
+		} else {
+			ppu_v += 1
+		}
+
 		return
 	}
 
@@ -233,6 +257,15 @@ read_ppu_register :: proc(using nes: ^NES, ppu_reg: u16) -> u8 {
 	// PPUDATA
 	case 0x2007:
 		// fmt.printfln("reading PPUDATA")
+
+		goDown: bool = ram[0x2000] & 0x04 != 0
+
+		if goDown {
+			ppu_v += 32
+		} else {
+			ppu_v += 1
+		}
+
 		return ram[ppu_reg]
 
 	// OAMADDR
@@ -258,6 +291,7 @@ read :: proc(using nes: ^NES, addr: u16) -> u8 {
 	// PPU registers
 	case 0x2000 ..= 0x3FFF:
 		ppu_reg := get_mirrored(int(addr), 0x2000, 0x2007)
+		// fmt.printfln("reading to a ppu register %X", ppu_reg)
 		return read_ppu_register(nes, u16(ppu_reg))
 	}
 
@@ -308,11 +342,11 @@ write :: proc(using nes: ^NES, addr: u16, val: u8) {
 		}
 	}
 
-
 	switch addr {
 	// PPU registers
 	case 0x2000 ..= 0x3FFF:
 		ppu_reg := get_mirrored(int(addr), 0x2000, 0x2007)
+		fmt.printfln("writing to a ppu register %X", ppu_reg)
 		write_ppu_register(nes, u16(ppu_reg), val)
 		return
 	}
@@ -321,10 +355,12 @@ write :: proc(using nes: ^NES, addr: u16, val: u8) {
 	if addr == 0x4014 {
 		// todo
 		fmt.printfln("writing to OAMDMA")
+		fmt.printfln("unsafe write to ram: %X", addr)
 		ram[addr] = val
 	}
 
 	if !rom_info.rom_loaded {
+		fmt.printfln("unsafe write to ram: %X", addr)
 		ram[addr] = val
 		return
 	}
@@ -359,6 +395,9 @@ write :: proc(using nes: ^NES, addr: u16, val: u8) {
 			return
 		}
 	}
+
+	// if it didn't return by now, just write to addr.
+	ram[addr] = val
 }
 
 set_flag :: proc(flags: ^RegisterFlags, flag: RegisterFlagEnum, predicate: bool) {
@@ -542,8 +581,8 @@ read_u16_le :: proc(nes: ^NES, addr: u16) -> u16 {
 
 run_instruction :: proc(using nes: ^NES) {
 	// get first byte of instruction
-	fmt.printfln("PC: %X", program_counter)
 	instr := read(nes, program_counter)
+	// fmt.printfln("PC: %X OPCODE: %X", program_counter, instr)
 	program_counter += 1
 	// fmt.printfln("running op %X", instr)
 	switch instr {
@@ -1342,6 +1381,7 @@ _main :: proc() {
 
 	nes: NES
 	res := load_rom_from_file(&nes, "roms/DonkeyKong.nes")
+	// res := load_rom_from_file(&nes, "nestest/nestest.nes")
 
 	if !res {
 		return
@@ -1402,7 +1442,12 @@ ppu_tick :: proc(using nes: ^NES) {
 run_nes :: proc(using nes: ^NES) {
 
 	// initializing nes
-	program_counter = 0x8000
+
+	// do this in a reset too
+	low_byte := u16(read(nes, 0xFFFC))
+	high_byte := u16(read(nes, 0xFFFC + 1))
+	program_counter = high_byte << 8 | low_byte
+
 	stack_pointer = 0xFD
 	flags = transmute(RegisterFlags)u8(0x24)
 
@@ -1414,7 +1459,6 @@ run_nes :: proc(using nes: ^NES) {
 		run_instruction(nes)
 		cpu_cycles_dt := cycles - past_cycles
 
-		fmt.println("ticking ppu for cycles", cpu_cycles_dt * 3)
 		for i in 0 ..< cpu_cycles_dt * 3 {
 			ppu_tick(nes)
 		}
@@ -1654,6 +1698,7 @@ run_nestest_test :: proc() {
 
 	if !ok {
 		fmt.eprintln("nes test failed somewhere. look into it!")
+		os.exit(1)
 	}
 }
 
