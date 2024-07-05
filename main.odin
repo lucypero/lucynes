@@ -201,6 +201,8 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 			ppu_v,
 		)
 
+		ppu_bus[ppu_v] = val
+
 		// (after writing, increment)
 
 		// go down or go across?
@@ -258,6 +260,8 @@ read_ppu_register :: proc(using nes: ^NES, ppu_reg: u16) -> u8 {
 	case 0x2007:
 		// fmt.printfln("reading PPUDATA")
 
+		val := ppu_bus[ppu_v]
+
 		goDown: bool = ram[0x2000] & 0x04 != 0
 
 		if goDown {
@@ -266,7 +270,7 @@ read_ppu_register :: proc(using nes: ^NES, ppu_reg: u16) -> u8 {
 			ppu_v += 1
 		}
 
-		return ram[ppu_reg]
+		return val
 
 	// OAMADDR
 	case 0x2003:
@@ -1377,6 +1381,41 @@ _main :: proc() {
 	// flags_test()
 	// strong_type_test()
 	// casting_test()
+
+	// print_patterntable(nes)
+	// mirror_test()
+	// nes_test_without_render()
+	// union_test()
+	raylib_test()
+}
+
+union_test :: proc() {
+
+	// TODO: do this for storing things like registers
+
+	ppu_ctrl: struct #raw_union {
+		// VPHB SINN
+		using flags: bit_field u8 {
+			n: u8 | 2,
+			i: u8 | 1,
+			s: u8 | 1,
+			b: u8 | 1,
+			h: u8 | 1,
+			p: u8 | 1,
+			v: u8 | 1,
+		},
+		reg:         u8,
+	}
+
+	ppu_ctrl.v = 1
+	ppu_ctrl.b = 1
+	ppu_ctrl.reg = 0x20
+
+	fmt.printfln("%b", transmute(u8)ppu_ctrl)
+
+}
+
+nes_test_without_render :: proc() {
 	run_nestest_test()
 
 	nes: NES
@@ -1387,16 +1426,16 @@ _main :: proc() {
 		return
 	}
 
-	// print_patterntable(nes)
-	// mirror_test()
-	// raylib_test(nes)
-
 	run_nes(&nes)
 }
 
-ppu_tick :: proc(using nes: ^NES) {
+
+// returns true if it hit a vblank
+ppu_tick :: proc(using nes: ^NES) -> bool {
 
 	// 262 scanlines
+
+	hit_vblank := false
 
 	scanline := ppu_cycles / 341
 
@@ -1406,6 +1445,7 @@ ppu_tick :: proc(using nes: ^NES) {
 
 	// Vertical blanking lines (241-260)
 	// The VBlank flag of the PPU is set at tick 1 (the second tick) of scanline 241, where the VBlank NMI also occurs. The PPU makes no memory accesses during these scanlines, so PPU memory can be freely accessed by the program. 
+
 
 	// cycle 0
 	switch scanline {
@@ -1419,6 +1459,7 @@ ppu_tick :: proc(using nes: ^NES) {
 		// setting vblank and nmi
 		if ppu_cycles % 341 == 1 {
 			ppu_on_vblank = true
+			hit_vblank = true
 			if ram[0x2000] & 0x80 != 0 {
 				nmi(nes)
 			}
@@ -1437,6 +1478,8 @@ ppu_tick :: proc(using nes: ^NES) {
 	if ppu_cycles > 341 * 262 {
 		ppu_cycles = 0
 	}
+
+	return hit_vblank
 }
 
 run_nes :: proc(using nes: ^NES) {
@@ -1465,6 +1508,38 @@ run_nes :: proc(using nes: ^NES) {
 	}
 }
 
+tick_nes_till_vblank :: proc(using nes: ^NES) {
+
+	vblank_hit := false
+
+	// running instructions forever
+	for true {
+		// main NES loop
+		// catchup method
+		past_cycles := cycles
+		run_instruction(nes)
+		cpu_cycles_dt := cycles - past_cycles
+
+		for i in 0 ..< cpu_cycles_dt * 3 {
+			if ppu_tick(nes) == true {
+				vblank_hit = true
+			}
+		}
+
+		if vblank_hit {
+			return
+		}
+	}
+}
+
+nes_init :: proc(using nes: ^NES) {
+	low_byte := u16(read(nes, 0xFFFC))
+	high_byte := u16(read(nes, 0xFFFC + 1))
+	program_counter = high_byte << 8 | low_byte
+
+	stack_pointer = 0xFD
+	flags = transmute(RegisterFlags)u8(0x24)
+}
 
 print_patterntable :: proc(nes: NES) {
 

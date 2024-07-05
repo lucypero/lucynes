@@ -1,6 +1,7 @@
 package main
 
 import "core:fmt"
+import "core:os"
 import rl "vendor:raylib"
 
 // u might need this one
@@ -26,7 +27,7 @@ PixelGrid :: struct {
 	height: int,
 }
 
-raylib_test :: proc(nes: NES) {
+raylib_test :: proc() {
 
 	rl.InitWindow(screen_width, screen_height, "lucynes")
 	rl.SetWindowPosition(20, 50)
@@ -55,6 +56,23 @@ raylib_test :: proc(nes: NES) {
 
 	// rl.UnloadImage(checkedIm) // Unload CPU (RAM) image data (pixels)
 
+	run_nestest_test()
+
+	// initializing nes
+	nes: NES
+	res := load_rom_from_file(&nes, "roms/DonkeyKong.nes")
+	// res := load_rom_from_file(&nes, "nestest/nestest.nes")
+
+	if !res {
+		fmt.eprintln("could not load rom")
+		os.exit(1)
+	}
+
+	// initializing nes
+
+	// do this in a reset too
+
+	nes_init(&nes)
 
 	for !rl.WindowShouldClose() {
 
@@ -63,6 +81,9 @@ raylib_test :: proc(nes: NES) {
 		// rl.ClearBackground(rl.RAYWHITE)
 
 		clear_pixels(pixels, rl.YELLOW)
+
+		// run nes till vblank
+		tick_nes_till_vblank(&nes)
 
 		// here you modify the pixels (draw the frame)
 		draw_frame(nes, &pixel_grid)
@@ -158,12 +179,72 @@ draw_nametable :: proc(nes: NES, pixel_grid: ^PixelGrid) {
 
 	// nametables:
 
+
 	// 1024 byte area of memory
 	// each byte controls a 8x8 pixel tile
 	// contains 30 rows of 32 tiles (32 x 30)
 	// the 64 remaining bytes are used by each nametable's attribute table
 
 
+	// nametable 1
+
+	// $2000 - $2000 + 1 KiB
+	// $2000 - $23C0 (rest is 64 bytes of attribute table)
+
+
+	for row in 0 ..< 30 {
+		for tile_i in 0 ..< 32 {
+			// get byte
+
+			the_index := 0x2000 + (row * 32) + tile_i
+
+			nametable_byte := int(nes.ppu_bus[the_index])
+
+			// if B in PPU ctrl is on, add one
+			if nes.ram[0x2000] & 0x10 != 0 {
+				nametable_byte += 0x100
+			}
+
+			// the pattern table it queries depends on B in PPUCTRL
+			tile := get_pattern_tile(nes, int(nametable_byte))
+			draw_tile(pixel_grid, tile, tile_i * 8, row * 8)
+		}
+	}
+}
+
+Tile :: [8 * 8]int
+
+get_pattern_tile :: proc(nes: NES, location: int) -> Tile {
+
+	// 
+
+	i := location
+
+	tile: Tile // pixels of tiles (contains [0-3])
+
+	// first bit plane
+	for t in 0 ..< 16 {
+
+		row := nes.chr_rom[(i * 16) + t]
+
+		// looping row of pixels
+		for p in 0 ..< 8 {
+			is_on := (row >> uint(p)) & 0b00000001
+
+			if is_on != 0 {
+
+				// if we're on first bit plane, add one
+				if (t < 8) {
+					tile[(t * 8) + (7 - p)] += 1
+				} else {
+					// if we're on second bit plane, add two
+					tile[((t - 8) * 8) + (7 - p)] += 2
+				}
+			}
+		}
+	}
+
+	return tile
 }
 
 draw_frame :: proc(nes: NES, pixel_grid: ^PixelGrid) {
