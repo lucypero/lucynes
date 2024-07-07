@@ -101,6 +101,8 @@ Registers :: struct {
 
 NES :: struct {
 	using registers: Registers, // CPU Registers
+	// TODO: this isn't ram, so it shouldn't even be memory. don't store this. it's a bus, it's not real ram.
+	//  have fields only for when it's actual hardware ram.
 	ram:             [64 * 1024]u8, // 64 KB of memory
 	cycles:          uint,
 	rom_info:        RomInfo,
@@ -109,18 +111,39 @@ NES :: struct {
 	prg_ram:         []u8,
 
 	// PPU stuff
-	ppu_bus:         [16 * 1024]u8, // PPU bus (separate from cpu bus/ram)
+
+	// TODO: this isn't ram, so it shouldn't even be memory. don't store this.
+	//  have fields only for when it's actual hardware ram.
+	// ppu_bus:         [16 * 1024]u8, // PPU bus (separate from cpu bus/ram)
+
+	// i make it 16 kib otherwise it crashes but ppu only has 2kib. so idk what's going on.
+	// maybe there's some mirroring going on idk...
+	ppu_memory: [16 * 1024]u8, 
 	ppu_v:           uint, // current vram address (15 bits)
 	ppu_t:           uint, // Temporary VRAM address (15 bits)
 	ppu_x:           uint, // fine x scroll (3 bits)
 	ppu_w:           bool, // First or second write toggle (1 bit)
 	ppu_on_vblank:   bool,
 	ppu_cycles:      int,
+
+	ppu_ctrl: struct #raw_union {
+		// VPHB SINN
+		using flags: bit_field u8 {
+			n: u8 | 2,
+			i: u8 | 1,
+			s: u8 | 1,
+			b: u8 | 1,
+			h: u8 | 1,
+			p: u8 | 1,
+			v: u8 | 1,
+		},
+		reg:         u8,
+	}
 }
 
 nmi :: proc(using nes: ^NES) {
 
-	fmt.println("nmi triggered!")
+	// fmt.println("nmi triggered!")
 
 	stack_push_u16(nes, program_counter)
 	flags += {.InterruptDisable, .NoEffect1}
@@ -135,156 +158,9 @@ nmi :: proc(using nes: ^NES) {
 
 	nmi_mem = high_byte << 8 | low_byte
 
-	fmt.printfln("setting pc to %X, from low byte %X, high byte %X", nmi_mem, low_byte, high_byte)
 	program_counter = nmi_mem
 
 	cycles += 7
-}
-
-write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
-	switch ppu_reg {
-
-	// PPUCTRL
-	case 0x2000:
-		// writing to ppuctrl
-		fmt.printfln("writing to PPUCTRL %X", val)
-
-		// if vblank is set, and you change nmi flag from 0 to 1, trigger nmi now
-		if ppu_on_vblank && val & 0x80 != 0 && ram[ppu_reg] & 0x80 == 0 {
-			// trigger NMI immediately
-			nmi(nes)
-		}
-
-		fmt.printfln("unsafe write to ram: %X", ppu_reg)
-		ram[ppu_reg] = val
-
-
-	// PPUSCROLL
-	case 0x2005:
-		fmt.println("writing to ppuscroll")
-	//
-
-	// PPUADDR
-	case 0x2006:
-		fmt.println("writing to ppuaddr")
-
-
-		// writes a 16 bit VRAM address, 1 bytes at a time(games have to call this twice)
-
-		// writes to upper byte first
-
-		// TODO write to ppu_v based on ppu_w
-		if ppu_w {
-			ppu_v = (ppu_v & 0xFF00) | uint(val)
-		} else {
-			ppu_v = uint(val) << 8 | (ppu_v & 0x00FF)
-		}
-
-		ppu_w = !ppu_w
-
-		fmt.printfln(
-			"-- PPU interaction! call to PPUADDR!! writing: %X. ppu_v is now %X",
-			val,
-			ppu_v,
-		)
-		return
-
-	//PPUDATA
-	case 0x2007:
-		// this is what you use to read/write to PPU memory (VRAM)
-		// this is what games use to fill nametables, change palettes, and more.
-
-		// it will write to the set 16 bit VRAM address set by PPUADDR (u need to store this address somewhere)
-		fmt.printfln(
-			"-- PPU interaction! call to PPUDATA!! writing: %X to PPU ADDRESS: %X",
-			val,
-			ppu_v,
-		)
-
-		ppu_bus[ppu_v] = val
-
-		// (after writing, increment)
-
-		// go down or go across?
-		goDown: bool = ram[0x2000] & 0x04 != 0
-
-		if goDown {
-			ppu_v += 32
-		} else {
-			ppu_v += 1
-		}
-
-		return
-	}
-
-}
-
-read_ppu_register :: proc(using nes: ^NES, ppu_reg: u16) -> u8 {
-	switch ppu_reg {
-
-	// PPUCTRL
-	case 0x2000:
-		// return garbage if they try to read this. "open bus"
-		// https://forums.nesdev.org/viewtopic.php?t=6426
-
-		// fmt.eprintfln("should not read to ppuctrl. it's write only")
-		return ram[ppu_reg]
-
-	// PPUMASK
-	case 0x2001:
-		// fmt.eprintfln("should not read to ppumask. it's write only")
-		return ram[ppu_reg]
-
-	// PPUSTATUS
-	case 0x2002:
-		//TODO
-
-		// return v blank as 1, rest 0
-
-		// clear bit 7
-
-		// clear address latch
-		ppu_status: u8
-
-		if ppu_on_vblank {
-			ppu_status |= 0x80
-		}
-
-		ppu_on_vblank = false
-
-		// fmt.printfln("reading ppu status. clearing latch")
-		ppu_w = false
-		return ppu_status
-
-	// PPUDATA
-	case 0x2007:
-		// fmt.printfln("reading PPUDATA")
-
-		val := ppu_bus[ppu_v]
-
-		goDown: bool = ram[0x2000] & 0x04 != 0
-
-		if goDown {
-			ppu_v += 32
-		} else {
-			ppu_v += 1
-		}
-
-		return val
-
-	// OAMADDR
-	case 0x2003:
-		// fmt.eprintfln("should not read to oamaddr. it's write only")
-		return ram[ppu_reg]
-
-	// OAMDATA
-	case 0x2004:
-		// fmt.printfln("reading oamdata")
-		return ram[ppu_reg]
-
-	case:
-		return ram[ppu_reg]
-	}
 }
 
 // cpu bus read
@@ -350,7 +226,7 @@ write :: proc(using nes: ^NES, addr: u16, val: u8) {
 	// PPU registers
 	case 0x2000 ..= 0x3FFF:
 		ppu_reg := get_mirrored(int(addr), 0x2000, 0x2007)
-		fmt.printfln("writing to a ppu register %X", ppu_reg)
+		// fmt.printfln("writing to a ppu register %X", ppu_reg)
 		write_ppu_register(nes, u16(ppu_reg), val)
 		return
 	}
@@ -358,13 +234,13 @@ write :: proc(using nes: ^NES, addr: u16, val: u8) {
 	//OAMDMA
 	if addr == 0x4014 {
 		// todo
-		fmt.printfln("writing to OAMDMA")
-		fmt.printfln("unsafe write to ram: %X", addr)
+		// fmt.printfln("writing to OAMDMA")
+		// fmt.printfln("unsafe write to ram: %X", addr)
 		ram[addr] = val
 	}
 
 	if !rom_info.rom_loaded {
-		fmt.printfln("unsafe write to ram: %X", addr)
+		// fmt.printfln("unsafe write to ram: %X", addr)
 		ram[addr] = val
 		return
 	}
@@ -1412,7 +1288,6 @@ union_test :: proc() {
 	ppu_ctrl.reg = 0x20
 
 	fmt.printfln("%b", transmute(u8)ppu_ctrl)
-
 }
 
 nes_test_without_render :: proc() {
@@ -1460,7 +1335,7 @@ ppu_tick :: proc(using nes: ^NES) -> bool {
 		if ppu_cycles % 341 == 1 {
 			ppu_on_vblank = true
 			hit_vblank = true
-			if ram[0x2000] & 0x80 != 0 {
+			if ppu_ctrl.v != 0 {
 				nmi(nes)
 			}
 		}
