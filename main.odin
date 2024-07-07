@@ -192,8 +192,6 @@ read :: proc(using nes: ^NES, addr: u16) -> u8 {
 		val := (port_0_register & 0x80) >> 7
 		port_0_register <<= 1
 
-		fmt.println("reading input port 0 (4016): %X", val)
-
 		return val
 
 	case 0x4017:
@@ -261,7 +259,6 @@ write :: proc(using nes: ^NES, addr: u16, val: u8) {
 
 	// Input
 	case 0x4016:
-		fmt.printfln("writing to 4016: %X", val)
 		poll_input = (val & 0x01) != 0
 		return
 	}

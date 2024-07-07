@@ -78,10 +78,6 @@ raylib_test :: proc() {
 
 		rl.BeginDrawing()
 
-		if rl.IsKeyDown(.A) {
-			fmt.println("hit a key")
-		}
-
 		// rl.ClearBackground(rl.RAYWHITE)
 
 		clear_pixels(pixels, rl.YELLOW)
