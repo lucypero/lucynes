@@ -110,6 +110,11 @@ NES :: struct {
 	chr_rom:         []u8,
 	prg_ram:         []u8,
 
+	// input
+	port_0_register: u8,
+	port_1_register: u8,
+	poll_input:      bool,
+
 	// PPU stuff
 
 	// TODO: this isn't ram, so it shouldn't even be memory. don't store this.
@@ -122,17 +127,15 @@ NES :: struct {
 	// it is because of PPU Memory map.
 	// you gotta implement ppu memory map.
 	// read PPU memory map in nesdev wiki
-
-	ppu_memory: [2 * 1024]u8, // stores 2 nametables
-	ppu_palette: [32]u8,   // internal memory inside the PPU, stores palette data
+	ppu_memory:      [2 * 1024]u8, // stores 2 nametables
+	ppu_palette:     [32]u8, // internal memory inside the PPU, stores palette data
 	ppu_v:           uint, // current vram address (15 bits)
 	ppu_t:           uint, // Temporary VRAM address (15 bits)
 	ppu_x:           uint, // fine x scroll (3 bits)
 	ppu_w:           bool, // First or second write toggle (1 bit)
 	ppu_on_vblank:   bool,
 	ppu_cycles:      int,
-
-	ppu_ctrl: struct #raw_union {
+	ppu_ctrl:        struct #raw_union {
 		// VPHB SINN
 		using flags: bit_field u8 {
 			n: u8 | 2,
@@ -144,7 +147,7 @@ NES :: struct {
 			v: u8 | 1,
 		},
 		reg:         u8,
-	}
+	},
 }
 
 nmi :: proc(using nes: ^NES) {
@@ -178,11 +181,31 @@ read :: proc(using nes: ^NES, addr: u16) -> u8 {
 	case 0x2000 ..= 0x3FFF:
 		ppu_reg := get_mirrored(int(addr), 0x2000, 0x2007)
 		// fmt.printfln("reading to a ppu register %X", ppu_reg)
+
 		return read_ppu_register(nes, u16(ppu_reg))
+
+
+	// Input
+	case 0x4016:
+		// read input from port 0
+		// val := port_0_register & 0x80
+		val := (port_0_register & 0x80) >> 7
+		port_0_register <<= 1
+
+		fmt.println("reading input port 0 (4016): %X", val)
+
+		return val
+
+	case 0x4017:
+		// read input from port 1
+		// read input from port 0
+		val := (port_1_register & 0x80) >> 7
+		port_1_register <<= 1
+
+		return val
 	}
 
 	// CPU memory
-
 	if !rom_info.rom_loaded {
 		return ram[addr]
 	}
@@ -234,6 +257,12 @@ write :: proc(using nes: ^NES, addr: u16, val: u8) {
 		ppu_reg := get_mirrored(int(addr), 0x2000, 0x2007)
 		// fmt.printfln("writing to a ppu register %X", ppu_reg)
 		write_ppu_register(nes, u16(ppu_reg), val)
+		return
+
+	// Input
+	case 0x4016:
+		fmt.printfln("writing to 4016: %X", val)
+		poll_input = (val & 0x01) != 0
 		return
 	}
 
@@ -1389,7 +1418,7 @@ run_nes :: proc(using nes: ^NES) {
 	}
 }
 
-tick_nes_till_vblank :: proc(using nes: ^NES) {
+tick_nes_till_vblank :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8) {
 
 	vblank_hit := false
 
@@ -1399,6 +1428,14 @@ tick_nes_till_vblank :: proc(using nes: ^NES) {
 		// catchup method
 		past_cycles := cycles
 		run_instruction(nes)
+
+		// Input
+		if poll_input {
+			// fill the registers with input
+			port_0_register = port_0_input
+			port_1_register = port_1_input
+		}
+
 		cpu_cycles_dt := cycles - past_cycles
 
 		for i in 0 ..< cpu_cycles_dt * 3 {

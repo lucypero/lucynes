@@ -78,12 +78,22 @@ raylib_test :: proc() {
 
 		rl.BeginDrawing()
 
+		if rl.IsKeyDown(.A) {
+			fmt.println("hit a key")
+		}
+
 		// rl.ClearBackground(rl.RAYWHITE)
 
 		clear_pixels(pixels, rl.YELLOW)
 
+		// doing input
+
+		port_0_input: u8
+		port_1_input: u8
+		fill_input_port(&port_0_input)
+
 		// run nes till vblank
-		tick_nes_till_vblank(&nes)
+		tick_nes_till_vblank(&nes, port_0_input, port_1_input)
 
 		// here you modify the pixels (draw the frame)
 		draw_frame(nes, &pixel_grid)
@@ -99,6 +109,49 @@ raylib_test :: proc() {
 clear_pixels :: proc(pixels: []rl.Color, color: rl.Color) {
 	for p, i in pixels {
 		pixels[i] = color
+	}
+}
+
+fill_input_port :: proc(port_input: ^u8) {
+
+	// A button
+	if rl.IsKeyDown(.H) {
+		port_input^ |= 0b10000000
+	}
+
+	// B button
+	if rl.IsKeyDown(.J) {
+		port_input^ |= 0b01000000
+	}
+
+	// Select button
+	if rl.IsKeyDown(.Y) {
+		port_input^ |= 0b00100000
+	}
+
+	// Start button
+	if rl.IsKeyDown(.U) {
+		port_input^ |= 0b00010000
+	}
+
+	// Up button
+	if rl.IsKeyDown(.W) {
+		port_input^ |= 0b00001000
+	}
+
+	// Down button
+	if rl.IsKeyDown(.S) {
+		port_input^ |= 0b00000100
+	}
+
+	// Left button
+	if rl.IsKeyDown(.A) {
+		port_input^ |= 0b00000010
+	}
+
+	// Right button
+	if rl.IsKeyDown(.D) {
+		port_input^ |= 0b00000001
 	}
 }
 
@@ -204,34 +257,34 @@ draw_nametable :: proc(nes: NES, pixel_grid: ^PixelGrid) {
 			// there's one attribute entry per 4x4 tile blocks
 			attr_x := tile_i / 4
 			attr_y := row / 4
-			attr_indx := (attr_y * 8)+attr_x
+			attr_indx := (attr_y * 8) + attr_x
 
 			attr_entry := nes.ppu_memory[30 * 32 + attr_indx]
 
 			// which quadrant are you? (you are in a tile out of 4x4 tiles)
 
-			quadrant : uint
+			quadrant: uint
 
 			switch tile_i % 4 {
-				case 0,1:
-					// quadrant 0 or 2
-					switch row % 4 {
-						case 0,1:
-							quadrant = 0
-						case 2,3:
-							quadrant = 2
-					}
-				case 2,3:
-					// quadrant 1 or 3
-					switch row % 4 {
-						case 0,1:
-							quadrant = 1
-						case 2,3:
-							quadrant = 3
-					}
+			case 0, 1:
+				// quadrant 0 or 2
+				switch row % 4 {
+				case 0, 1:
+					quadrant = 0
+				case 2, 3:
+					quadrant = 2
+				}
+			case 2, 3:
+				// quadrant 1 or 3
+				switch row % 4 {
+				case 0, 1:
+					quadrant = 1
+				case 2, 3:
+					quadrant = 3
+				}
 			}
 
-			palette_index : u8 = (attr_entry >> (quadrant * 2)) & 0b00000011
+			palette_index: u8 = (attr_entry >> (quadrant * 2)) & 0b00000011
 
 			// if B in PPU ctrl is on, add one
 			if nes.ppu_ctrl.b != 0 {
@@ -287,21 +340,27 @@ draw_frame :: proc(nes: NES, pixel_grid: ^PixelGrid) {
 }
 
 // draws a background tile in the pixel grid given a pattern tile and a palette index
-draw_tile :: proc(nes: NES, pixel_grid: ^PixelGrid, tile: [8 * 8]int, palette_index: u8, x_pos, y_pos: int) {
+draw_tile :: proc(
+	nes: NES,
+	pixel_grid: ^PixelGrid,
+	tile: [8 * 8]int,
+	palette_index: u8,
+	x_pos, y_pos: int,
+) {
 
 	// get palette
 
-	palette_start : u16
+	palette_start: u16
 
 	switch palette_index {
-		case 0:
-			palette_start = 0x3F01
-		case 1:
-			palette_start = 0x3F05
-		case 2:
-			palette_start = 0x3F09
-		case 3:
-			palette_start = 0x3F0D
+	case 0:
+		palette_start = 0x3F01
+	case 1:
+		palette_start = 0x3F05
+	case 2:
+		palette_start = 0x3F09
+	case 3:
+		palette_start = 0x3F0D
 	}
 
 	palette_start -= 0x3F00
@@ -309,18 +368,18 @@ draw_tile :: proc(nes: NES, pixel_grid: ^PixelGrid, tile: [8 * 8]int, palette_in
 	// nes.palette_mem
 
 	for p, i in tile {
-		color_in_nes :u8
+		color_in_nes: u8
 
 		switch p {
 		case 0:
 			color_in_nes = nes.ppu_palette[0]
-		case 1,2,3:
+		case 1, 2, 3:
 			color_in_nes = nes.ppu_palette[palette_start + u16(p) - 1]
 		}
 
 		// fmt.printf("%X, ", color_in_nes)
 
-		col : rl.Color = color_map_from_nes_to_real(color_in_nes)
+		col: rl.Color = color_map_from_nes_to_real(color_in_nes)
 
 		x_add := i % 8
 		y_add := i / 8
@@ -338,41 +397,41 @@ draw_tile :: proc(nes: NES, pixel_grid: ^PixelGrid, tile: [8 * 8]int, palette_in
 
 }
 
-color_map_from_nes_to_real :: proc(color_in_nes:u8) -> rl.Color {
+color_map_from_nes_to_real :: proc(color_in_nes: u8) -> rl.Color {
 
-	col :rl.Color = rl.BLACK
+	col: rl.Color = rl.BLACK
 
 	// this will take a long time
 
 	switch color_in_nes {
 
-		case 0x00:
-			col.xyz = {101, 102, 102}
-		case 0x0F:
-			col.xyz = {0, 0, 0}
-		case 0x12:
-			col.xyz = {64, 81, 208}
-		case 0x2C:
-			col.xyz = {62, 194, 205}
-		case 0x27:
-			col.xyz = {239, 154, 73}
-		case 0x30:
-			col.xyz = {254, 254, 255}
-		case 0x15:
-			col.xyz = {192, 52, 112}
-		case 0x33:
-			col.xyz = {232, 209, 255}
-		case 0x36:
-			col.xyz = {255, 207, 202}
-		case 0x06:
-			col.xyz = {113, 15, 7}
-		case 0x17:
-			col.xyz = {159, 74, 0}
-		case 0x02:
-			col.xyz = {121, 31, 127}
+	case 0x00:
+		col.xyz = {101, 102, 102}
+	case 0x0F:
+		col.xyz = {0, 0, 0}
+	case 0x12:
+		col.xyz = {64, 81, 208}
+	case 0x2C:
+		col.xyz = {62, 194, 205}
+	case 0x27:
+		col.xyz = {239, 154, 73}
+	case 0x30:
+		col.xyz = {254, 254, 255}
+	case 0x15:
+		col.xyz = {192, 52, 112}
+	case 0x33:
+		col.xyz = {232, 209, 255}
+	case 0x36:
+		col.xyz = {255, 207, 202}
+	case 0x06:
+		col.xyz = {113, 15, 7}
+	case 0x17:
+		col.xyz = {159, 74, 0}
+	case 0x02:
+		col.xyz = {121, 31, 127}
 
-		case:
-			fmt.printf("%X, ", color_in_nes)
+	case:
+		fmt.printf("%X, ", color_in_nes)
 
 	}
 

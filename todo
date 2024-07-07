@@ -62,3 +62,19 @@ See: PPU rendering for more information on the timing of setting and clearing th
 	- when vblank starts and bit 7 of ppuctrl is on
 
 
+
+
+## Input
+
+write 1 -> $4016: signal controller to poll its input
+write 0 -> $4016: signal controller to finish its poll
+
+read $4016 or $4017: reads controller input (port 0 or 1), one bit at a time
+	reads highest bit only. then it left shifts by one bit
+	reads right shifts bits by one
+
+order of inputs:
+
+(highest bit) -> lowest bit
+
+A B Select Start Up Down Left Right
