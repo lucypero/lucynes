@@ -171,7 +171,7 @@ draw_patterntables :: proc(nes: NES, pixel_grid: ^PixelGrid) {
 		}
 
 		// we gonna draw
-		draw_tile(pixel_grid, tile, x_pos, y_pos)
+		draw_pattern_tile(pixel_grid, tile, x_pos, y_pos)
 	}
 }
 
@@ -191,22 +191,56 @@ draw_nametable :: proc(nes: NES, pixel_grid: ^PixelGrid) {
 	// $2000 - $2000 + 1 KiB
 	// $2000 - $23C0 (rest is 64 bytes of attribute table)
 
-
 	for row in 0 ..< 30 {
 		for tile_i in 0 ..< 32 {
 			// get byte
 
-			the_index := 0x2000 + (row * 32) + tile_i
-			nametable_byte := int(ppu_read(nes, u16(the_index)))
+			the_index := (row * 32) + tile_i
+			nametable_byte := int(nes.ppu_memory[the_index])
+
+			// what attribute byte is being used for this nametable byte?
+
+			// attribute table of first nametable is at $23C0 - $2423
+			// there's one attribute entry per 4x4 tile blocks
+			attr_x := tile_i / 4
+			attr_y := row / 4
+			attr_indx := (attr_y * 8)+attr_x
+
+			attr_entry := nes.ppu_memory[30 * 32 + attr_indx]
+
+			// which quadrant are you? (you are in a tile out of 4x4 tiles)
+
+			quadrant : uint
+
+			switch tile_i % 4 {
+				case 0,1:
+					// quadrant 0 or 2
+					switch row % 4 {
+						case 0,1:
+							quadrant = 0
+						case 2,3:
+							quadrant = 2
+					}
+				case 2,3:
+					// quadrant 1 or 3
+					switch row % 4 {
+						case 0,1:
+							quadrant = 1
+						case 2,3:
+							quadrant = 3
+					}
+			}
+
+			palette_index : u8 = (attr_entry >> (quadrant * 2)) & 0b00000011
 
 			// if B in PPU ctrl is on, add one
 			if nes.ppu_ctrl.b != 0 {
 				nametable_byte += 0x100
 			}
 
-			// the pattern table it queries depends on B in PPUCTRL
 			tile := get_pattern_tile(nes, int(nametable_byte))
-			draw_tile(pixel_grid, tile, tile_i * 8, row * 8)
+			draw_tile(nes, pixel_grid, tile, palette_index, tile_i * 8, row * 8)
+			// fmt.println("palette data:", nes.ppu_palette)
 		}
 	}
 }
@@ -252,7 +286,103 @@ draw_frame :: proc(nes: NES, pixel_grid: ^PixelGrid) {
 	draw_nametable(nes, pixel_grid)
 }
 
-draw_tile :: proc(pixel_grid: ^PixelGrid, tile: [8 * 8]int, x_pos, y_pos: int) {
+// draws a background tile in the pixel grid given a pattern tile and a palette index
+draw_tile :: proc(nes: NES, pixel_grid: ^PixelGrid, tile: [8 * 8]int, palette_index: u8, x_pos, y_pos: int) {
+
+	// get palette
+
+	palette_start : u16
+
+	switch palette_index {
+		case 0:
+			palette_start = 0x3F01
+		case 1:
+			palette_start = 0x3F05
+		case 2:
+			palette_start = 0x3F09
+		case 3:
+			palette_start = 0x3F0D
+	}
+
+	palette_start -= 0x3F00
+
+	// nes.palette_mem
+
+	for p, i in tile {
+		color_in_nes :u8
+
+		switch p {
+		case 0:
+			color_in_nes = nes.ppu_palette[0]
+		case 1,2,3:
+			color_in_nes = nes.ppu_palette[palette_start + u16(p) - 1]
+		}
+
+		// fmt.printf("%X, ", color_in_nes)
+
+		col : rl.Color = color_map_from_nes_to_real(color_in_nes)
+
+		x_add := i % 8
+		y_add := i / 8
+
+		the_p_i := ((y_pos + y_add) * pixel_grid.width) + x_pos + x_add
+
+		// bounds check
+		if the_p_i >= pixel_grid.width * pixel_grid.height || the_p_i < 0 {
+			fmt.printfln("tried to draw tile out of bounds, x: %v, y: %v", x_pos, y_pos)
+			continue
+		}
+
+		pixel_grid.pixels[the_p_i] = col
+	}
+
+}
+
+color_map_from_nes_to_real :: proc(color_in_nes:u8) -> rl.Color {
+
+	col :rl.Color = rl.BLACK
+
+	// this will take a long time
+
+	switch color_in_nes {
+
+		case 0x00:
+			col.xyz = {101, 102, 102}
+		case 0x0F:
+			col.xyz = {0, 0, 0}
+		case 0x12:
+			col.xyz = {64, 81, 208}
+		case 0x2C:
+			col.xyz = {62, 194, 205}
+		case 0x27:
+			col.xyz = {239, 154, 73}
+		case 0x30:
+			col.xyz = {254, 254, 255}
+		case 0x15:
+			col.xyz = {192, 52, 112}
+
+
+		case 0x36:
+			col.xyz = {255, 207, 202}
+		case 0x06:
+			col.xyz = {113, 15, 7}
+		case 0x17:
+			col.xyz = {159, 74, 0}
+		case 0x02:
+			col.xyz = {121, 31, 127}
+
+		case:
+			fmt.printf("%X, ", color_in_nes)
+
+	}
+
+
+	return col
+
+
+}
+
+draw_pattern_tile :: proc(pixel_grid: ^PixelGrid, tile: [8 * 8]int, x_pos, y_pos: int) {
 
 	for p, i in tile {
 		col: rl.Color

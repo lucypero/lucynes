@@ -116,7 +116,7 @@ read_ppu_register :: proc(using nes: ^NES, ppu_reg: u16) -> u8 {
 	// PPUDATA
 	case 0x2007:
 		// fmt.printfln("reading PPUDATA")
-        val := ppu_read(nes^, u16(ppu_v))
+        val := ppu_read(nes, u16(ppu_v))
         increment_ppu_v(nes)
 		return val
 
@@ -145,35 +145,22 @@ increment_ppu_v :: proc(using nes: ^NES) {
 		}
 }
 
+ppu_read :: proc(using nes: ^NES, mem: u16) -> u8{
+    return ppu_readwrite(nes, mem, 0, false)
+}
 
-// this implements the PPU address space, or bus, or whatever
-// read PPU memory map in nesdev wiki
-ppu_read :: proc(using nes: NES, mem: u16) -> u8 {
-
-    switch mem {
-
-        // Pattern tables
-        // it's in cartridge's CHR ROM
-        case 0x0000..=0x0FFF:
-            return chr_rom[mem]
-
-        // nametable data (it's in ppu memory)
-        // TODO: implement mirroring
-        case 0x2000..=0x2FFF:
-
-            index_in_vram := mem - 0x2000
-            return ppu_memory[index_in_vram]
-
-        case:
-            fmt.eprintfln("idk what u reading here at ppu bus %X", mem)
-            return 0
-
-    }
+ppu_write :: proc(using nes: ^NES, mem: u16, val: u8) {
+    ppu_readwrite(nes, mem, val, true)
 }
 
 // this implements the PPU address space, or bus, or whatever
 // read PPU memory map in nesdev wiki
-ppu_write :: proc(using nes: ^NES, mem: u16, val: u8) {
+// write == true then it will write
+// write == false then it will read
+ppu_readwrite :: proc(using nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
+    temp_val: u8
+    the_val : ^u8 = &temp_val
+
     switch mem {
 
         // Pattern tables
@@ -186,10 +173,35 @@ ppu_write :: proc(using nes: ^NES, mem: u16, val: u8) {
         case 0x2000..=0x2FFF:
 
             index_in_vram := mem - 0x2000
-            ppu_memory[index_in_vram] = val
 
+            the_val = &ppu_memory[index_in_vram]
+        case 0x3000..=0x3EFF:
+            // unused addresses... return bus
+            return 0
+
+        // Palette RAM indexes
+        case 0x3F00..=0x3FFF:
+
+            // this is always the same. the cartridge doesn't have a say in this one.
+		    palette_mem := get_mirrored(int(mem), 0x3F00, 0x3F1F)
+
+            // implementing palette mirrors
+            switch palette_mem {
+                case 0x3F10, 0x3F14, 0x3F18, 0x3F1C:
+                    palette_mem -= 0x10
+            }
+
+            palette_mem -= 0x3F00
+
+            the_val = &ppu_palette[palette_mem]
         case:
             fmt.eprintfln("idk what u writing here at ppu bus %X", mem)
 
     }
+
+    if write {
+        the_val^ = val
+    }
+
+    return the_val^
 }
