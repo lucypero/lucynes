@@ -60,8 +60,8 @@ raylib_test :: proc() {
 
 	// initializing nes
 	nes: NES
-	res := load_rom_from_file(&nes, "roms/DonkeyKong.nes")
-	// res := load_rom_from_file(&nes, "nestest/nestest.nes")
+	// res := load_rom_from_file(&nes, "roms/DonkeyKong.nes")
+	res := load_rom_from_file(&nes, "nestest/nestest.nes")
 
 	if !res {
 		fmt.eprintln("could not load rom")
@@ -360,8 +360,8 @@ color_map_from_nes_to_real :: proc(color_in_nes:u8) -> rl.Color {
 			col.xyz = {254, 254, 255}
 		case 0x15:
 			col.xyz = {192, 52, 112}
-
-
+		case 0x33:
+			col.xyz = {232, 209, 255}
 		case 0x36:
 			col.xyz = {255, 207, 202}
 		case 0x06:

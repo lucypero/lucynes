@@ -174,6 +174,44 @@ ppu_readwrite :: proc(using nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 
             index_in_vram := mem - 0x2000
 
+            // the part of mem into each nametable
+            mem_modulo := index_in_vram % 0x400
+
+            switch mem {
+                case 0x2000..=0x23FF:
+                    if nes.rom_info.is_horizontal_arrangement {
+                        // write to first slot
+                        index_in_vram = mem_modulo
+                    } else {
+                        // write to first slot
+                        index_in_vram = mem_modulo
+                    }
+                case 0x2400..=0x27FF:
+                    if nes.rom_info.is_horizontal_arrangement {
+                        // write to first slot
+                        index_in_vram = mem_modulo
+                    } else {
+                        // write to second slot
+                        index_in_vram = mem_modulo + 0x400
+                    }
+                case 0x2800..=0x2BFF:
+                    if nes.rom_info.is_horizontal_arrangement {
+                        // write to second slot
+                        index_in_vram = mem_modulo + 0x400
+                    } else {
+                        // write to first slot
+                        index_in_vram = mem_modulo
+                    }
+                case 0x2C00..=0x2FFF:
+                    if nes.rom_info.is_horizontal_arrangement {
+                        // write to second slot
+                        index_in_vram = mem_modulo + 0x400
+                    } else {
+                        // write to second slot
+                        index_in_vram = mem_modulo + 0x400
+                    }
+            }
+
             the_val = &ppu_memory[index_in_vram]
         case 0x3000..=0x3EFF:
             // unused addresses... return bus
