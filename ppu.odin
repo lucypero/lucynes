@@ -21,12 +21,12 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 			nmi(nes)
 		}
 
-        ppu_ctrl.reg = val
+		ppu_ctrl.reg = val
 
 
 	// PPUSCROLL
 	case 0x2005:
-		// fmt.println("writing to ppuscroll")
+	// fmt.println("writing to ppuscroll")
 	//
 
 	// PPUADDR
@@ -65,8 +65,8 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 		// 	val,
 		// 	ppu_v,
 		// )
-        ppu_write(nes, u16(ppu_v), val)
-        increment_ppu_v(nes)
+		ppu_write(nes, u16(ppu_v), val)
+		increment_ppu_v(nes)
 		return
 	}
 
@@ -85,8 +85,7 @@ read_ppu_register :: proc(using nes: ^NES, ppu_reg: u16) -> u8 {
 
 	// PPUMASK
 	case 0x2001:
-
-        // TODO
+		// TODO
 
 
 		fmt.eprintfln("should not read to ppumask. it's write only")
@@ -116,8 +115,8 @@ read_ppu_register :: proc(using nes: ^NES, ppu_reg: u16) -> u8 {
 	// PPUDATA
 	case 0x2007:
 		// fmt.printfln("reading PPUDATA")
-        val := ppu_read(nes, u16(ppu_v))
-        increment_ppu_v(nes)
+		val := ppu_read(nes, u16(ppu_v))
+		increment_ppu_v(nes)
 		return val
 
 	// OAMADDR
@@ -136,21 +135,21 @@ read_ppu_register :: proc(using nes: ^NES, ppu_reg: u16) -> u8 {
 }
 
 increment_ppu_v :: proc(using nes: ^NES) {
-		goDown: bool = ppu_ctrl.i != 0
+	goDown: bool = ppu_ctrl.i != 0
 
-		if goDown {
-			ppu_v += 32
-		} else {
-			ppu_v += 1
-		}
+	if goDown {
+		ppu_v += 32
+	} else {
+		ppu_v += 1
+	}
 }
 
-ppu_read :: proc(using nes: ^NES, mem: u16) -> u8{
-    return ppu_readwrite(nes, mem, 0, false)
+ppu_read :: proc(using nes: ^NES, mem: u16) -> u8 {
+	return ppu_readwrite(nes, mem, 0, false)
 }
 
 ppu_write :: proc(using nes: ^NES, mem: u16, val: u8) {
-    ppu_readwrite(nes, mem, val, true)
+	ppu_readwrite(nes, mem, val, true)
 }
 
 // this implements the PPU address space, or bus, or whatever
@@ -158,88 +157,90 @@ ppu_write :: proc(using nes: ^NES, mem: u16, val: u8) {
 // write == true then it will write
 // write == false then it will read
 ppu_readwrite :: proc(using nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
-    temp_val: u8
-    the_val : ^u8 = &temp_val
+	temp_val: u8
+	the_val: ^u8 = &temp_val
 
-    switch mem {
+	switch mem {
 
-        // Pattern tables
-        // it's in cartridge's CHR ROM
-        case 0x0000..=0x0FFF:
-            fmt.eprintln("u are trying to write to cartridge's ROM...")
+	// Pattern tables
+	// it's in cartridge's CHR ROM
+	case 0x0000 ..= 0x0FFF:
+		if write {
+			fmt.eprintln("u are trying to write to cartridge's ROM...")
+		}
 
-        // nametable data (it's in ppu memory)
-        // TODO: implement mirroring
-        case 0x2000..=0x2FFF:
+		the_val = &chr_rom[mem]
 
-            index_in_vram := mem - 0x2000
+	// nametable data (it's in ppu memory)
+	// TODO: implement mirroring
+	case 0x2000 ..= 0x2FFF:
+		index_in_vram := mem - 0x2000
 
-            // the part of mem into each nametable
-            mem_modulo := index_in_vram % 0x400
+		// the part of mem into each nametable
+		mem_modulo := index_in_vram % 0x400
 
-            switch mem {
-                case 0x2000..=0x23FF:
-                    if nes.rom_info.is_horizontal_arrangement {
-                        // write to first slot
-                        index_in_vram = mem_modulo
-                    } else {
-                        // write to first slot
-                        index_in_vram = mem_modulo
-                    }
-                case 0x2400..=0x27FF:
-                    if nes.rom_info.is_horizontal_arrangement {
-                        // write to first slot
-                        index_in_vram = mem_modulo
-                    } else {
-                        // write to second slot
-                        index_in_vram = mem_modulo + 0x400
-                    }
-                case 0x2800..=0x2BFF:
-                    if nes.rom_info.is_horizontal_arrangement {
-                        // write to second slot
-                        index_in_vram = mem_modulo + 0x400
-                    } else {
-                        // write to first slot
-                        index_in_vram = mem_modulo
-                    }
-                case 0x2C00..=0x2FFF:
-                    if nes.rom_info.is_horizontal_arrangement {
-                        // write to second slot
-                        index_in_vram = mem_modulo + 0x400
-                    } else {
-                        // write to second slot
-                        index_in_vram = mem_modulo + 0x400
-                    }
-            }
+		switch mem {
+		case 0x2000 ..= 0x23FF:
+			if nes.rom_info.is_horizontal_arrangement {
+				// write to first slot
+				index_in_vram = mem_modulo
+			} else {
+				// write to first slot
+				index_in_vram = mem_modulo
+			}
+		case 0x2400 ..= 0x27FF:
+			if nes.rom_info.is_horizontal_arrangement {
+				// write to first slot
+				index_in_vram = mem_modulo
+			} else {
+				// write to second slot
+				index_in_vram = mem_modulo + 0x400
+			}
+		case 0x2800 ..= 0x2BFF:
+			if nes.rom_info.is_horizontal_arrangement {
+				// write to second slot
+				index_in_vram = mem_modulo + 0x400
+			} else {
+				// write to first slot
+				index_in_vram = mem_modulo
+			}
+		case 0x2C00 ..= 0x2FFF:
+			if nes.rom_info.is_horizontal_arrangement {
+				// write to second slot
+				index_in_vram = mem_modulo + 0x400
+			} else {
+				// write to second slot
+				index_in_vram = mem_modulo + 0x400
+			}
+		}
 
-            the_val = &ppu_memory[index_in_vram]
-        case 0x3000..=0x3EFF:
-            // unused addresses... return bus
-            return 0
+		the_val = &ppu_memory[index_in_vram]
+	case 0x3000 ..= 0x3EFF:
+		// unused addresses... return bus
+		return 0
 
-        // Palette RAM indexes
-        case 0x3F00..=0x3FFF:
+	// Palette RAM indexes
+	case 0x3F00 ..= 0x3FFF:
+		// this is always the same. the cartridge doesn't have a say in this one.
+		palette_mem := get_mirrored(int(mem), 0x3F00, 0x3F1F)
 
-            // this is always the same. the cartridge doesn't have a say in this one.
-		    palette_mem := get_mirrored(int(mem), 0x3F00, 0x3F1F)
+		// implementing palette mirrors
+		switch palette_mem {
+		case 0x3F10, 0x3F14, 0x3F18, 0x3F1C:
+			palette_mem -= 0x10
+		}
 
-            // implementing palette mirrors
-            switch palette_mem {
-                case 0x3F10, 0x3F14, 0x3F18, 0x3F1C:
-                    palette_mem -= 0x10
-            }
+		palette_mem -= 0x3F00
 
-            palette_mem -= 0x3F00
+		the_val = &ppu_palette[palette_mem]
+	case:
+		fmt.eprintfln("idk what u writing here at ppu bus %X", mem)
 
-            the_val = &ppu_palette[palette_mem]
-        case:
-            fmt.eprintfln("idk what u writing here at ppu bus %X", mem)
+	}
 
-    }
+	if write {
+		the_val^ = val
+	}
 
-    if write {
-        the_val^ = val
-    }
-
-    return the_val^
+	return the_val^
 }
