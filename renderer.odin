@@ -197,8 +197,7 @@ draw_nametable :: proc(nes: NES, pixel_grid: ^PixelGrid) {
 			// get byte
 
 			the_index := 0x2000 + (row * 32) + tile_i
-
-			nametable_byte := int(nes.ppu_memory[the_index])
+			nametable_byte := int(ppu_read(nes, u16(the_index)))
 
 			// if B in PPU ctrl is on, add one
 			if nes.ppu_ctrl.b != 0 {

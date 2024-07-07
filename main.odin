@@ -118,7 +118,12 @@ NES :: struct {
 
 	// i make it 16 kib otherwise it crashes but ppu only has 2kib. so idk what's going on.
 	// maybe there's some mirroring going on idk...
-	ppu_memory: [16 * 1024]u8, 
+
+	// it is because of PPU Memory map.
+	// you gotta implement ppu memory map.
+	// read PPU memory map in nesdev wiki
+
+	ppu_memory: [2 * 1024]u8, 
 	ppu_v:           uint, // current vram address (15 bits)
 	ppu_t:           uint, // Temporary VRAM address (15 bits)
 	ppu_x:           uint, // fine x scroll (3 bits)

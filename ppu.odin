@@ -65,9 +65,7 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 		// 	val,
 		// 	ppu_v,
 		// )
-
-		ppu_memory[ppu_v] = val
-
+        ppu_write(nes, u16(ppu_v), val)
         increment_ppu_v(nes)
 		return
 	}
@@ -118,8 +116,7 @@ read_ppu_register :: proc(using nes: ^NES, ppu_reg: u16) -> u8 {
 	// PPUDATA
 	case 0x2007:
 		// fmt.printfln("reading PPUDATA")
-
-		val := ppu_memory[ppu_v]
+        val := ppu_read(nes^, u16(ppu_v))
         increment_ppu_v(nes)
 		return val
 
@@ -146,4 +143,53 @@ increment_ppu_v :: proc(using nes: ^NES) {
 		} else {
 			ppu_v += 1
 		}
+}
+
+
+// this implements the PPU address space, or bus, or whatever
+// read PPU memory map in nesdev wiki
+ppu_read :: proc(using nes: NES, mem: u16) -> u8 {
+
+    switch mem {
+
+        // Pattern tables
+        // it's in cartridge's CHR ROM
+        case 0x0000..=0x0FFF:
+            return chr_rom[mem]
+
+        // nametable data (it's in ppu memory)
+        // TODO: implement mirroring
+        case 0x2000..=0x2FFF:
+
+            index_in_vram := mem - 0x2000
+            return ppu_memory[index_in_vram]
+
+        case:
+            fmt.eprintfln("idk what u reading here at ppu bus %X", mem)
+            return 0
+
+    }
+}
+
+// this implements the PPU address space, or bus, or whatever
+// read PPU memory map in nesdev wiki
+ppu_write :: proc(using nes: ^NES, mem: u16, val: u8) {
+    switch mem {
+
+        // Pattern tables
+        // it's in cartridge's CHR ROM
+        case 0x0000..=0x0FFF:
+            fmt.eprintln("u are trying to write to cartridge's ROM...")
+
+        // nametable data (it's in ppu memory)
+        // TODO: implement mirroring
+        case 0x2000..=0x2FFF:
+
+            index_in_vram := mem - 0x2000
+            ppu_memory[index_in_vram] = val
+
+        case:
+            fmt.eprintfln("idk what u writing here at ppu bus %X", mem)
+
+    }
 }
