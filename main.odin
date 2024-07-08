@@ -129,6 +129,8 @@ NES :: struct {
 	// read PPU memory map in nesdev wiki
 	ppu_memory:      [2 * 1024]u8, // stores 2 nametables
 	ppu_palette:     [32]u8, // internal memory inside the PPU, stores palette data
+	ppu_oam:         [256]u8, // OAM data, inside the PPU
+	ppu_oam_address: u8,
 	ppu_v:           uint, // current vram address (15 bits)
 	ppu_t:           uint, // Temporary VRAM address (15 bits)
 	ppu_x:           uint, // fine x scroll (3 bits)
@@ -261,14 +263,19 @@ write :: proc(using nes: ^NES, addr: u16, val: u8) {
 	case 0x4016:
 		poll_input = (val & 0x01) != 0
 		return
-	}
 
 	//OAMDMA
-	if addr == 0x4014 {
-		// todo
+	case 0x4014:
 		// fmt.printfln("writing to OAMDMA")
-		// fmt.printfln("unsafe write to ram: %X", addr)
-		ram[addr] = val
+
+		start_addr: u16 = u16(val) << 8
+
+		for i in 0x0000 ..= 0x00FF {
+			v := read(nes, u16(i) + start_addr)
+			ppu_oam[i] = v
+		}
+
+		return
 	}
 
 	if !rom_info.rom_loaded {

@@ -24,6 +24,18 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 		ppu_ctrl.reg = val
 
 
+	// OAMADDR
+	case 0x2003:
+		ppu_oam_address = val
+
+	// OAMDATA
+	case 0x2004:
+		// TODO:  For emulation purposes, it is probably best to completely ignore writes during rendering.
+
+		// TODO: what do i do against possible out of bounds writes?
+		ppu_oam[ppu_oam_address] = val
+		ppu_oam_address += 1
+
 	// PPUSCROLL
 	case 0x2005:
 	// fmt.println("writing to ppuscroll")
@@ -69,7 +81,6 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 		increment_ppu_v(nes)
 		return
 	}
-
 }
 
 read_ppu_register :: proc(using nes: ^NES, ppu_reg: u16) -> u8 {
@@ -83,11 +94,14 @@ read_ppu_register :: proc(using nes: ^NES, ppu_reg: u16) -> u8 {
 		fmt.eprintfln("should not read to ppuctrl. it's write only")
 		return ppu_ctrl.reg
 
+	// OAMDATA
+	case 0x2004:
+		// TODO: what do i do against possible out of bounds writes?
+		return ppu_oam[ppu_oam_address]
+
 	// PPUMASK
 	case 0x2001:
 		// TODO
-
-
 		fmt.eprintfln("should not read to ppumask. it's write only")
 		return ram[ppu_reg]
 
@@ -118,16 +132,6 @@ read_ppu_register :: proc(using nes: ^NES, ppu_reg: u16) -> u8 {
 		val := ppu_read(nes, u16(ppu_v))
 		increment_ppu_v(nes)
 		return val
-
-	// OAMADDR
-	case 0x2003:
-		// fmt.eprintfln("should not read to oamaddr. it's write only")
-		return ram[ppu_reg]
-
-	// OAMDATA
-	case 0x2004:
-		// fmt.printfln("reading oamdata")
-		return ram[ppu_reg]
 
 	case:
 		return ram[ppu_reg]
