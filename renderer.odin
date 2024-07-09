@@ -336,6 +336,115 @@ draw_frame :: proc(nes: NES, pixel_grid: ^PixelGrid) {
 	// draw_patterntables(nes, pixel_grid)
 
 	draw_nametable(nes, pixel_grid)
+	// draw sprites
+	draw_sprites(nes, pixel_grid)
+}
+
+
+draw_sprites :: proc(using nes: NES, pixel_grid: ^PixelGrid) {
+
+	OAMAddress :: struct {
+		y:          u8,
+		index:      u8,
+		attributes: u8,
+		x:          u8,
+	}
+
+	for i in 0 ..< 64 {
+
+		sprite_start := i * 4
+
+
+		sprite_0: OAMAddress
+		sprite_0.y = ppu_oam[sprite_start]
+		sprite_0.index = ppu_oam[sprite_start + 1]
+		sprite_0.attributes = ppu_oam[sprite_start + 2]
+		sprite_0.x = ppu_oam[sprite_start + 3]
+
+		nametable_byte := int(sprite_0.index)
+
+		if nes.ppu_ctrl.s != 0 {
+			nametable_byte += 0x100
+		}
+
+		// get palette
+		palette_offset := sprite_0.attributes & 0x03
+		tile := get_pattern_tile(nes, nametable_byte)
+		flip_x := sprite_0.attributes & 0x40
+		flip_y := sprite_0.attributes & 0x80
+
+		draw_sprite_tile(
+			nes,
+			pixel_grid,
+			tile,
+			palette_offset,
+			flip_x != 0,
+			flip_y != 0,
+			int(sprite_0.x),
+			int(sprite_0.y + 1),
+		)
+	}
+
+
+}
+
+// draws a sprite tile in the pixel grid given a pattern tile and a palette index
+draw_sprite_tile :: proc(
+	nes: NES,
+	pixel_grid: ^PixelGrid,
+	tile: [8 * 8]int,
+	palette_offset: u8,
+	flip_x, flip_y: bool,
+	x_pos, y_pos: int,
+) {
+
+	// get palette
+
+	palette_start: u16
+
+	switch palette_offset {
+	case 0:
+		palette_start = 0x3F11
+	case 1:
+		palette_start = 0x3F15
+	case 2:
+		palette_start = 0x3F19
+	case 3:
+		palette_start = 0x3F1D
+	}
+
+	palette_start -= 0x3F00
+
+	// nes.palette_mem
+
+	for p, i in tile {
+		color_in_nes: u8
+
+		switch p {
+		case 0:
+			continue
+		case 1, 2, 3:
+			color_in_nes = nes.ppu_palette[palette_start + u16(p) - 1]
+		}
+
+		// fmt.printf("%X, ", color_in_nes)
+
+		col: rl.Color = color_map_from_nes_to_real(color_in_nes)
+
+		x_add := flip_x ? 7 - (i % 8) : i % 8
+		y_add := flip_y ? 7 - (i / 8) : i / 8
+
+		the_p_i := ((y_pos + y_add) * pixel_grid.width) + x_pos + x_add
+
+		// bounds check
+		if the_p_i >= pixel_grid.width * pixel_grid.height || the_p_i < 0 {
+			fmt.printfln("tried to draw tile out of bounds, x: %v, y: %v", x_pos, y_pos)
+			continue
+		}
+
+		pixel_grid.pixels[the_p_i] = col
+	}
+
 }
 
 // draws a background tile in the pixel grid given a pattern tile and a palette index
@@ -444,6 +553,17 @@ color_map_from_nes_to_real :: proc(color_in_nes: u8) -> rl.Color {
 		col.xyz = {255, 139, 127}
 	case 0x21:
 		col.xyz = {93, 179, 255}
+	case 0x25:
+		col.xyz = {255, 131, 192}
+
+
+	// todo
+
+	case 0x37:
+		col.xyz = {248, 213, 180}
+	case 0x24:
+		col.xyz = {247, 133, 250}
+
 
 	case:
 		fmt.printf("%X, ", color_in_nes)
