@@ -1633,6 +1633,9 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 		} else {
 			rom_info.mapper = .NROM256
 		}
+	case:
+		fmt.eprintln("mapper not supported. exiting")
+		os.exit(1)
 	}
 
 	// flags 8
