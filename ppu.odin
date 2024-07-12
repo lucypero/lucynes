@@ -129,8 +129,18 @@ read_ppu_register :: proc(using nes: ^NES, ppu_reg: u16) -> u8 {
 	// PPUDATA
 	case 0x2007:
 		// fmt.printfln("reading PPUDATA")
-		val := ppu_read(nes, u16(ppu_v))
+
+		// returns the buffered read except when reading internal palette memory
+		val := ppu_buffer_read
+		ppu_buffer_read = ppu_read(nes, u16(ppu_v))
+
+		switch ppu_v {
+		case 0x3F00 ..= 0x3FFF:
+			val = ppu_buffer_read
+		}
+
 		increment_ppu_v(nes)
+
 		return val
 
 	case:

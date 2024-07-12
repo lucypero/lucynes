@@ -60,8 +60,8 @@ raylib_test :: proc() {
 
 	// initializing nes
 	nes: NES
-	// res := load_rom_from_file(&nes, "roms/DonkeyKong.nes")
-	res := load_rom_from_file(&nes, "roms/Kung Fu.nes")
+	res := load_rom_from_file(&nes, "roms/DonkeyKong.nes")
+	// res := load_rom_from_file(&nes, "roms/Kung Fu.nes")
 	// res := load_rom_from_file(&nes, "roms/Bomberman.nes")
 	// res := load_rom_from_file(&nes, "roms/PacMan.nes")
 	// res := load_rom_from_file(&nes, "roms/IceClimber.nes")

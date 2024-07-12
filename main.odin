@@ -150,6 +150,7 @@ NES :: struct {
 		},
 		reg:         u8,
 	},
+	ppu_buffer_read: u8,
 }
 
 nmi :: proc(using nes: ^NES) {
