@@ -116,17 +116,6 @@ NES :: struct {
 	poll_input:      bool,
 
 	// PPU stuff
-
-	// TODO: this isn't ram, so it shouldn't even be memory. don't store this.
-	//  have fields only for when it's actual hardware ram.
-	// ppu_bus:         [16 * 1024]u8, // PPU bus (separate from cpu bus/ram)
-
-	// i make it 16 kib otherwise it crashes but ppu only has 2kib. so idk what's going on.
-	// maybe there's some mirroring going on idk...
-
-	// it is because of PPU Memory map.
-	// you gotta implement ppu memory map.
-	// read PPU memory map in nesdev wiki
 	ppu_memory:      [2 * 1024]u8, // stores 2 nametables
 	ppu_palette:     [32]u8, // internal memory inside the PPU, stores palette data
 	ppu_oam:         [256]u8, // OAM data, inside the PPU
@@ -150,6 +139,32 @@ NES :: struct {
 		},
 		reg:         u8,
 	},
+	ppu_mask:        struct #raw_union {
+		// BGRs bMmG
+		using flags: bit_field u8 {
+			greyscale:            u8 | 1,
+			show_left_background: u8 | 1,
+			show_left_sprites:    u8 | 1,
+			show_background:      u8 | 1,
+			show_sprites:         u8 | 1,
+			emphasize_red:        u8 | 1,
+			emphasize_green:      u8 | 1,
+			emphasize_blue:       u8 | 1,
+		},
+		reg:         u8,
+	},
+	ppu_status:      struct #raw_union {
+		// VSO. ....
+		using flags: bit_field u8 {
+			open_bus:        u8 | 5,
+			sprite_overflow: u8 | 1,
+			sprite_zero_hit: u8 | 1,
+			vertical_blank:  u8 | 1,
+		},
+		reg:         u8,
+	},
+	ppu_x_scroll:    u8,
+	ppu_y_scroll:    u8,
 	ppu_buffer_read: u8,
 }
 

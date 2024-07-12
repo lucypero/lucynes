@@ -23,10 +23,18 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 
 		ppu_ctrl.reg = val
 
+	// PPUMASK
+	case 0x2001:
+		ppu_mask.reg = val
+
+	// PPUSTATUS
+	case 0x2002:
+	// do nothing
 
 	// OAMADDR
 	case 0x2003:
 		ppu_oam_address = val
+
 
 	// OAMDATA
 	case 0x2004:
@@ -38,19 +46,19 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 
 	// PPUSCROLL
 	case 0x2005:
+		// note: Changes made to the vertical scroll during rendering will only take effect on the next frame. 
+		if ppu_w {
+			ppu_y_scroll = val
+		} else {
+			ppu_x_scroll = val
+		}
+
+
 	// fmt.println("writing to ppuscroll")
 	//
 
 	// PPUADDR
 	case 0x2006:
-		// fmt.println("writing to ppuaddr")
-
-
-		// writes a 16 bit VRAM address, 1 bytes at a time(games have to call this twice)
-
-		// writes to upper byte first
-
-		// TODO write to ppu_v based on ppu_w
 		if ppu_w {
 			ppu_v = (ppu_v & 0xFF00) | uint(val)
 		} else {
@@ -58,25 +66,10 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 		}
 
 		ppu_w = !ppu_w
-
-		// fmt.printfln(
-		// 	"-- PPU interaction! call to PPUADDR!! writing: %X. ppu_v is now %X",
-		// 	val,
-		// 	ppu_v,
-		// )
 		return
 
 	//PPUDATA
 	case 0x2007:
-		// this is what you use to read/write to PPU memory (VRAM)
-		// this is what games use to fill nametables, change palettes, and more.
-
-		// it will write to the set 16 bit VRAM address set by PPUADDR (u need to store this address somewhere)
-		// fmt.printfln(
-		// 	"-- PPU interaction! call to PPUDATA!! writing: %X to PPU ADDRESS: %X",
-		// 	val,
-		// 	ppu_v,
-		// )
 		ppu_write(nes, u16(ppu_v), val)
 		increment_ppu_v(nes)
 		return
@@ -91,40 +84,47 @@ read_ppu_register :: proc(using nes: ^NES, ppu_reg: u16) -> u8 {
 		// return garbage if they try to read this. "open bus"
 		// https://forums.nesdev.org/viewtopic.php?t=6426
 
-		fmt.eprintfln("should not read to ppuctrl. it's write only")
+		// fmt.eprintfln("should not read to ppuctrl. it's write only")
 		return ppu_ctrl.reg
-
-	// OAMDATA
-	case 0x2004:
-		// TODO: what do i do against possible out of bounds writes?
-		return ppu_oam[ppu_oam_address]
 
 	// PPUMASK
 	case 0x2001:
-		// TODO
-		fmt.eprintfln("should not read to ppumask. it's write only")
-		return ram[ppu_reg]
+		// should never read to PPUMASK. just return the mask?
+		// fmt.eprintfln("should not read to ppumask. it's write only")
+		return ppu_mask.reg
 
 	// PPUSTATUS
 	case 0x2002:
-		//TODO
+		//TODO some of it
 
 		// return v blank as 1, rest 0
 
-		// clear bit 7
-
-		// clear address latch
-		ppu_status: u8
-
 		if ppu_on_vblank {
-			ppu_status |= 0x80
+			ppu_status.vertical_blank = 1
+		} else {
+			ppu_status.vertical_blank = 0
 		}
 
 		ppu_on_vblank = false
 
 		// fmt.printfln("reading ppu status. clearing latch")
 		ppu_w = false
-		return ppu_status
+		return ppu_status.reg
+
+	// OAMADDR
+	case 0x2003:
+		// it should never read here.. return open bus
+		return 0
+
+	// OAMDATA
+	case 0x2004:
+		// TODO: what do i do against possible out of bounds writes?
+		return ppu_oam[ppu_oam_address]
+
+	// PPUSCROLL
+	case 0x2005:
+		// it should never read here.. return open bus
+		return 0
 
 	// PPUDATA
 	case 0x2007:
