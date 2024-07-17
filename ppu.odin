@@ -23,6 +23,9 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 
 		ppu_ctrl.reg = val
 
+		temp_loopy.nametable_x = u16(ppu_ctrl.n & 0b1)
+		temp_loopy.nametable_y = u16(ppu_ctrl.n & 0b10)
+
 	// PPUMASK
 	case 0x2001:
 		ppu_mask.reg = val
@@ -47,32 +50,35 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 	// PPUSCROLL
 	case 0x2005:
 		// note: Changes made to the vertical scroll during rendering will only take effect on the next frame. 
-		if ppu_w {
-			ppu_y_scroll = val
-		} else {
-			ppu_x_scroll = val
-		}
 
-
-	// fmt.println("writing to ppuscroll")
-	//
-
-	// PPUADDR
-	case 0x2006:
-		if ppu_w {
-			ppu_v = (ppu_v & 0xFF00) | uint(val)
-		} else {
-			ppu_v = uint(val) << 8 | (ppu_v & 0x00FF)
+		// First write
+		if !ppu_w {
+			ppu_x = val & 0x07
+			temp_loopy.coarse_x = u16(val >> 3)
+		} else { 	// Second write
+			temp_loopy.fine_y = u16(val & 0x07)
+			temp_loopy.coarse_y = u16(val >> 3)
 		}
 
 		ppu_w = !ppu_w
-		return
+
+	// PPUADDR
+	case 0x2006:
+		// First write
+		if !ppu_w {
+			temp_loopy.reg = u16(val) << 8 | (temp_loopy.reg & 0x00FF)
+		} else { 	// Second write
+			temp_loopy.reg = (temp_loopy.reg & 0xFF00) | u16(val)
+			// once you write the full address, the current loopy gets updated with temp loopy
+			current_loopy.reg = temp_loopy.reg
+		}
+
+		ppu_w = !ppu_w
 
 	//PPUDATA
 	case 0x2007:
-		ppu_write(nes, u16(ppu_v), val)
-		increment_ppu_v(nes)
-		return
+		ppu_write(nes, current_loopy.reg, val)
+		increment_current_loopy(nes)
 	}
 }
 
@@ -132,14 +138,14 @@ read_ppu_register :: proc(using nes: ^NES, ppu_reg: u16) -> u8 {
 
 		// returns the buffered read except when reading internal palette memory
 		val := ppu_buffer_read
-		ppu_buffer_read = ppu_read(nes, u16(ppu_v))
+		ppu_buffer_read = ppu_read(nes, current_loopy.reg)
 
-		switch ppu_v {
+		switch current_loopy.reg {
 		case 0x3F00 ..= 0x3FFF:
 			val = ppu_buffer_read
 		}
 
-		increment_ppu_v(nes)
+		increment_current_loopy(nes)
 
 		return val
 
@@ -148,13 +154,13 @@ read_ppu_register :: proc(using nes: ^NES, ppu_reg: u16) -> u8 {
 	}
 }
 
-increment_ppu_v :: proc(using nes: ^NES) {
+increment_current_loopy :: proc(using nes: ^NES) {
 	goDown: bool = ppu_ctrl.i != 0
 
 	if goDown {
-		ppu_v += 32
+		current_loopy.reg += 32
 	} else {
-		ppu_v += 1
+		current_loopy.reg += 1
 	}
 }
 

@@ -99,6 +99,17 @@ Registers :: struct {
 	flags:           RegisterFlags, // Processor Status Register (Processor Flags)
 }
 
+LoopyRegister :: struct #raw_union {
+	using values: bit_field u16 {
+		coarse_x:    u16 | 5,
+		coarse_y:    u16 | 5,
+		nametable_x: u16 | 1,
+		nametable_y: u16 | 1,
+		fine_y:      u16 | 3,
+	},
+	reg:          u16,
+}
+
 NES :: struct {
 	using registers: Registers, // CPU Registers
 	// TODO: this isn't ram, so it shouldn't even be memory. don't store this. it's a bus, it's not real ram.
@@ -120,12 +131,11 @@ NES :: struct {
 	ppu_palette:     [32]u8, // internal memory inside the PPU, stores palette data
 	ppu_oam:         [256]u8, // OAM data, inside the PPU
 	ppu_oam_address: u8,
-	ppu_v:           uint, // current vram address (15 bits)
-	ppu_t:           uint, // Temporary VRAM address (15 bits)
-	ppu_x:           uint, // fine x scroll (3 bits)
-	ppu_w:           bool, // First or second write toggle (1 bit)
 	ppu_on_vblank:   bool,
 	ppu_cycles:      int,
+
+	//NOTE: if everything is stored in loopy, then this is all redundant state, no?
+	// consider deleting all this
 	ppu_ctrl:        struct #raw_union {
 		// VPHB SINN
 		using flags: bit_field u8 {
@@ -163,9 +173,13 @@ NES :: struct {
 		},
 		reg:         u8,
 	},
-	ppu_x_scroll:    u8,
-	ppu_y_scroll:    u8,
 	ppu_buffer_read: u8,
+
+	// ppu internals: new model: the ppu loopy model
+	current_loopy:   LoopyRegister,
+	temp_loopy:      LoopyRegister,
+	ppu_x:           u8, // fine x scroll (3 bits)
+	ppu_w:           bool, // First or second write toggle (1 bit)
 }
 
 nmi :: proc(using nes: ^NES) {
