@@ -264,3 +264,149 @@ ppu_readwrite :: proc(using nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 
 	return the_val^
 }
+
+
+// loads the background shifters with data of the next tile, on the least significant byte
+load_bg_shifters :: proc(using nes: ^NES) {
+	// patterns
+
+	// loading first bitplane of pattern tile
+	bg_shifter_pattern_lo = (bg_shifter_pattern_lo & 0xFF00) | u16(bg_next_tile_lsb)
+	// loading second bitplane of pattern tile
+	bg_shifter_pattern_hi = (bg_shifter_pattern_hi & 0xFF00) | u16(bg_next_tile_msb)
+
+	// attributes
+
+	// inflating the first bit of next tile attribute into the shifters
+	new_attrib_lo: u16 = bg_next_tile_attrib & 0b01 != 0 ? 0xFF : 0x00
+	bg_shifter_attrib_lo = (bg_shifter_attrib_lo & 0xFF00) | new_attrib_lo
+
+	// inflating the second bit of next tile attribute into the shifters
+	new_attrib_hi: u16 = bg_next_tile_attrib & 0b10 != 0 ? 0xFF : 0x00
+	bg_shifter_attrib_hi = (bg_shifter_attrib_hi & 0xFF00) | new_attrib_hi
+}
+
+// shifts the shifter registers by 1 bit to the left
+shift_shifters :: proc(using nes: ^NES) {
+	if (ppu_mask.show_background != 0) {
+		bg_shifter_pattern_lo <<= 1
+		bg_shifter_pattern_hi <<= 1
+		bg_shifter_attrib_lo <<= 1
+		bg_shifter_attrib_hi <<= 1
+	}
+}
+
+
+increment_scroll_x :: proc(using nes: ^NES) {
+	// TODO
+}
+
+
+// returns true if it hit a vblank
+ppu_tick :: proc(using nes: ^NES) -> bool {
+
+	// read "PPU Rendering"
+
+	// 262 scanlines
+	hit_vblank := false
+
+	scanline := ppu_cycles / 341
+
+	// how deep you are into the scanline
+	cycle_x := ppu_cycles % 341
+
+	// scanline guide:
+	// 0..= 239: visible scanlines
+	// 240: post render scanline (it idles)
+	// 241..=260: vertical blanking lines
+	// 261: pre-render scanline
+
+	// Vertical blanking lines (241-260)
+	// The VBlank flag of the PPU is set at tick 1 (the second tick) of scanline 241, where the VBlank NMI also occurs. The PPU makes no memory accesses during these scanlines, so PPU memory can be freely accessed by the program. 
+
+
+	// cycle 0
+	switch scanline {
+	// visible scanlines
+	case 0 ..= 239:
+		shift_shifters(nes)
+
+		switch cycle_x % 8 {
+		case 0:
+			load_bg_shifters(nes)
+
+			// fetch the next background tile ID
+			bg_next_tile_id = ppu_read(nes, 0x2000 | current_loopy.reg & 0x0FFF)
+		case 2:
+			// fetch the next background tile attribute
+
+			// All attribute memory begins at 0x03C0 within a nametable, so OR with
+			// result to select target nametable, and attribute byte offset. Finally
+			// OR with 0x2000 to offset into nametable address space on PPU bus.				
+			bg_next_tile_attrib = ppu_read(
+				nes,
+				0x23C0 |
+				(current_loopy.nametable_y << 11) |
+				(current_loopy.nametable_x << 10) |
+				((current_loopy.coarse_y >> 2) << 3) |
+				(current_loopy.coarse_x >> 2),
+			)
+
+			// selecting the right 2x2 block out of the 4x4 attribute entry
+
+			if (current_loopy.coarse_y & 0x02 != 0) {bg_next_tile_attrib >>= 4}
+			if (current_loopy.coarse_x & 0x02 != 0) {bg_next_tile_attrib >>= 2}
+
+			// you need only 2 bits
+			bg_next_tile_attrib &= 0x03
+
+		case 4:
+
+			// fetch the next background tile bitplane 1 (lsb)
+			bg_next_tile_lsb = ppu_read(nes, u16(ppu_ctrl.b << 12) +
+										 u16(bg_next_tile_id << 4) +
+										 current_loopy.fine_y) + 0
+
+		case 6:
+
+			// fetch the next background tile bitplane 2 (msb)
+			bg_next_tile_msb = ppu_read(nes, u16(ppu_ctrl.b << 12) +
+										 u16(bg_next_tile_id << 4) +
+										 current_loopy.fine_y) + 8
+
+	    case 7:
+			// increment scroll x
+			increment_scroll_x(nes)
+		}
+
+	// you gotta do certain things...
+
+
+	// First vertical blanking line
+	case 241:
+		// setting vblank and nmi
+		if ppu_cycles % 341 == 1 {
+			ppu_on_vblank = true
+			hit_vblank = true
+			if ppu_ctrl.v != 0 {
+				nmi(nes)
+			}
+		}
+	// pre-render scanline
+	case 261:
+		if ppu_cycles % 341 == 1 {
+			ppu_on_vblank = false
+		}
+
+	case:
+	// vblank scanlines
+	}
+
+	ppu_cycles += 1
+
+	if ppu_cycles > 341 * 262 {
+		ppu_cycles = 0
+	}
+
+	return hit_vblank
+}

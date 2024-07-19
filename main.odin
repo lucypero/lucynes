@@ -111,45 +111,46 @@ LoopyRegister :: struct #raw_union {
 }
 
 NES :: struct {
-	using registers: Registers, // CPU Registers
+	using registers:       Registers, // CPU Registers
 	// TODO: this isn't ram, so it shouldn't even be memory. don't store this. it's a bus, it's not real ram.
 	//  have fields only for when it's actual hardware ram.
-	ram:             [64 * 1024]u8, // 64 KB of memory
-	cycles:          uint,
-	rom_info:        RomInfo,
-	prg_rom:         []u8,
-	chr_rom:         []u8,
-	prg_ram:         []u8,
+	ram:                   [64 * 1024]u8, // 64 KB of memory
+	cycles:                uint,
+	rom_info:              RomInfo,
+	prg_rom:               []u8,
+	chr_rom:               []u8,
+	prg_ram:               []u8,
 
 	// input
-	port_0_register: u8,
-	port_1_register: u8,
-	poll_input:      bool,
+	port_0_register:       u8,
+	port_1_register:       u8,
+	poll_input:            bool,
 
 	// PPU stuff
-	ppu_memory:      [2 * 1024]u8, // stores 2 nametables
-	ppu_palette:     [32]u8, // internal memory inside the PPU, stores palette data
-	ppu_oam:         [256]u8, // OAM data, inside the PPU
-	ppu_oam_address: u8,
-	ppu_on_vblank:   bool,
-	ppu_cycles:      int,
+	ppu_memory:            [2 * 1024]u8, // stores 2 nametables
+	ppu_palette:           [32]u8, // internal memory inside the PPU, stores palette data
+	ppu_oam:               [256]u8, // OAM data, inside the PPU
+	ppu_oam_address:       u8,
+	ppu_on_vblank:         bool,
+	ppu_cycles:            int,
 
 	//NOTE: if everything is stored in loopy, then this is all redundant state, no?
 	// consider deleting all this
-	ppu_ctrl:        struct #raw_union {
+
+	ppu_ctrl:              struct #raw_union {
 		// VPHB SINN
 		using flags: bit_field u8 {
 			n: u8 | 2,
 			i: u8 | 1,
 			s: u8 | 1,
-			b: u8 | 1,
+			b: u8 | 1, // bg pattern table address (0: $0000, 1: $1000)
 			h: u8 | 1,
 			p: u8 | 1,
 			v: u8 | 1,
 		},
 		reg:         u8,
 	},
-	ppu_mask:        struct #raw_union {
+	ppu_mask:              struct #raw_union {
 		// BGRs bMmG
 		using flags: bit_field u8 {
 			greyscale:            u8 | 1,
@@ -163,7 +164,7 @@ NES :: struct {
 		},
 		reg:         u8,
 	},
-	ppu_status:      struct #raw_union {
+	ppu_status:            struct #raw_union {
 		// VSO. ....
 		using flags: bit_field u8 {
 			open_bus:        u8 | 5,
@@ -173,13 +174,28 @@ NES :: struct {
 		},
 		reg:         u8,
 	},
-	ppu_buffer_read: u8,
+	ppu_buffer_read:       u8,
 
 	// ppu internals: new model: the ppu loopy model
-	current_loopy:   LoopyRegister,
-	temp_loopy:      LoopyRegister,
-	ppu_x:           u8, // fine x scroll (3 bits)
-	ppu_w:           bool, // First or second write toggle (1 bit)
+	current_loopy:         LoopyRegister,
+	temp_loopy:            LoopyRegister,
+	ppu_x:                 u8, // fine x scroll (3 bits)
+	ppu_w:                 bool, // First or second write toggle (1 bit)
+
+
+	// data for rendering the next pixel
+	// TODO: what is this? i thought all the state required was the 4 variables above.
+	// idk look into it.
+	bg_next_tile_id:       u8,
+	bg_next_tile_attrib:   u8,
+	bg_next_tile_lsb:      u8, // bitplane of pattern tile
+	bg_next_tile_msb:      u8, // bitplane 2 of pattern tile
+
+	// shift registers
+	bg_shifter_pattern_lo: u16,
+	bg_shifter_pattern_hi: u16,
+	bg_shifter_attrib_lo:  u16,
+	bg_shifter_attrib_hi:  u16,
 }
 
 nmi :: proc(using nes: ^NES) {
@@ -1373,58 +1389,6 @@ nes_test_without_render :: proc() {
 	run_nes(&nes)
 }
 
-
-// returns true if it hit a vblank
-ppu_tick :: proc(using nes: ^NES) -> bool {
-
-	// 262 scanlines
-
-	hit_vblank := false
-
-	scanline := ppu_cycles / 341
-
-	// pretend that u do some scanlines here
-	// and set vblank as appropriate
-	// and call nmi when appropriate
-
-	// Vertical blanking lines (241-260)
-	// The VBlank flag of the PPU is set at tick 1 (the second tick) of scanline 241, where the VBlank NMI also occurs. The PPU makes no memory accesses during these scanlines, so PPU memory can be freely accessed by the program. 
-
-
-	// cycle 0
-	switch scanline {
-	case 0:
-	// ?
-
-	case 1 ..= 240:
-	// ???
-	// visible scanlines
-	case 241:
-		// setting vblank and nmi
-		if ppu_cycles % 341 == 1 {
-			ppu_on_vblank = true
-			hit_vblank = true
-			if ppu_ctrl.v != 0 {
-				nmi(nes)
-			}
-		}
-	case 261:
-		if ppu_cycles % 341 == 1 {
-			ppu_on_vblank = false
-		}
-
-	case:
-	// vblank scanlines
-	}
-
-	ppu_cycles += 1
-
-	if ppu_cycles > 341 * 262 {
-		ppu_cycles = 0
-	}
-
-	return hit_vblank
-}
 
 run_nes :: proc(using nes: ^NES) {
 
