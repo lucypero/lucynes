@@ -1386,37 +1386,38 @@ nes_test_without_render :: proc() {
 		return
 	}
 
-	run_nes(&nes)
+	// run_nes(&nes)
 }
 
 
-run_nes :: proc(using nes: ^NES) {
+// outdated
+// run_nes :: proc(using nes: ^NES) {
 
-	// initializing nes
+// 	// initializing nes
 
-	// do this in a reset too
-	low_byte := u16(read(nes, 0xFFFC))
-	high_byte := u16(read(nes, 0xFFFC + 1))
-	program_counter = high_byte << 8 | low_byte
+// 	// do this in a reset too
+// 	low_byte := u16(read(nes, 0xFFFC))
+// 	high_byte := u16(read(nes, 0xFFFC + 1))
+// 	program_counter = high_byte << 8 | low_byte
 
-	stack_pointer = 0xFD
-	flags = transmute(RegisterFlags)u8(0x24)
+// 	stack_pointer = 0xFD
+// 	flags = transmute(RegisterFlags)u8(0x24)
 
-	// running instructions forever
-	for true {
-		// main NES loop
-		// catchup method
-		past_cycles := cycles
-		run_instruction(nes)
-		cpu_cycles_dt := cycles - past_cycles
+// 	// running instructions forever
+// 	for true {
+// 		// main NES loop
+// 		// catchup method
+// 		past_cycles := cycles
+// 		run_instruction(nes)
+// 		cpu_cycles_dt := cycles - past_cycles
 
-		for i in 0 ..< cpu_cycles_dt * 3 {
-			ppu_tick(nes)
-		}
-	}
-}
+// 		for i in 0 ..< cpu_cycles_dt * 3 {
+// 			ppu_tick(nes)
+// 		}
+// 	}
+// }
 
-tick_nes_till_vblank :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8) {
+tick_nes_till_vblank :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8, pixel_grid: ^PixelGrid) {
 
 	vblank_hit := false
 
@@ -1437,7 +1438,7 @@ tick_nes_till_vblank :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8
 		cpu_cycles_dt := cycles - past_cycles
 
 		for i in 0 ..< cpu_cycles_dt * 3 {
-			if ppu_tick(nes) == true {
+			if ppu_tick(nes, pixel_grid) == true {
 				vblank_hit = true
 			}
 		}

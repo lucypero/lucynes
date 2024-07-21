@@ -7,7 +7,7 @@ import rl "vendor:raylib"
 // u might need this one
 //    void UpdateTexture(Texture2D texture, const void *pixels);                                         // Update GPU texture with new data
 
-scale_factor :: 4
+scale_factor :: 3
 
 nes_width :: 256
 nes_height :: 240
@@ -15,11 +15,11 @@ nes_height :: 240
 // screen_width :: nes_width * scale_factor
 // screen_height :: nes_height * scale_factor // ntsc might only show 224 scan lines
 
-screen_width :: 2000
-screen_height :: 1200
+screen_width :: nes_width * scale_factor
+screen_height :: nes_height * scale_factor
 
-framebuffer_width :: screen_width / scale_factor
-framebuffer_height :: screen_height / scale_factor
+framebuffer_width :: nes_width
+framebuffer_height :: nes_height
 
 PixelGrid :: struct {
 	pixels: []rl.Color,
@@ -93,10 +93,10 @@ raylib_test :: proc() {
 		fill_input_port(&port_0_input)
 
 		// run nes till vblank
-		tick_nes_till_vblank(&nes, port_0_input, port_1_input)
+		tick_nes_till_vblank(&nes, port_0_input, port_1_input, &pixel_grid)
 
 		// here you modify the pixels (draw the frame)
-		draw_frame(nes, &pixel_grid)
+		// draw_frame(nes, &pixel_grid)
 
 		rl.UpdateTexture(checked, raw_data(pixels))
 		rl.DrawTextureEx(checked, {0, 0}, 0, scale_factor, rl.WHITE)
@@ -562,9 +562,6 @@ color_map_from_nes_to_real :: proc(color_in_nes: u8) -> rl.Color {
 		col.xyz = {248, 213, 180}
 	case 0x24:
 		col.xyz = {247, 133, 250}
-
-	// 22 29
-
 	case 0x22:
 		col.xyz = {143, 161, 255}
 	case 0x29:
@@ -573,11 +570,11 @@ color_map_from_nes_to_real :: proc(color_in_nes: u8) -> rl.Color {
 		col.xyz = {185, 232, 184}
 	case 0x01:
 		col.xyz = {0, 45, 105}
+	case 0x38:
+		col.xyz = {233, 226, 183}
 
 	case:
 		fmt.printf("%X, ", color_in_nes)
-
-
 	}
 
 

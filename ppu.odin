@@ -55,7 +55,8 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 		if !ppu_w {
 			ppu_x = val & 0x07
 			temp_loopy.coarse_x = u16(val >> 3)
-		} else { 	// Second write
+		} // Second write
+		else {
 			temp_loopy.fine_y = u16(val & 0x07)
 			temp_loopy.coarse_y = u16(val >> 3)
 		}
@@ -184,15 +185,13 @@ ppu_readwrite :: proc(using nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 
 	// Pattern tables
 	// it's in cartridge's CHR ROM
-	case 0x0000 ..= 0x0FFF:
+	case 0x0000 ..= 0x1FFF:
 		if write {
 			fmt.eprintln("u are trying to write to cartridge's ROM...")
 		}
 
 		the_val = &chr_rom[mem]
-
 	// nametable data (it's in ppu memory)
-	// TODO: implement mirroring
 	case 0x2000 ..= 0x2FFF:
 		index_in_vram := mem - 0x2000
 
@@ -254,8 +253,7 @@ ppu_readwrite :: proc(using nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 
 		the_val = &ppu_palette[palette_mem]
 	case:
-		fmt.eprintfln("idk what u writing here at ppu bus %X", mem)
-
+		fmt.eprintfln("idk what u read/writing here at ppu bus %X", mem)
 	}
 
 	if write {
@@ -298,12 +296,66 @@ shift_shifters :: proc(using nes: ^NES) {
 
 
 increment_scroll_x :: proc(using nes: ^NES) {
-	// TODO
+	if !(ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0) {
+		return
+	}
+
+	// When crossing over nametables
+	if current_loopy.coarse_x == 31 {
+		current_loopy.coarse_x = 0
+		current_loopy.nametable_x = ~current_loopy.nametable_x
+	} else {
+		current_loopy.coarse_x += 1
+	}
 }
 
+increment_scroll_y :: proc(using nes: ^NES) {
+	if !(ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0) {
+		return
+	}
+
+	if current_loopy.fine_y < 7 {
+		current_loopy.fine_y += 1
+		return
+	}
+
+	current_loopy.fine_y = 0
+
+	if current_loopy.coarse_y == 29 {
+		current_loopy.coarse_y = 0
+		current_loopy.nametable_y = ~current_loopy.nametable_y
+	} else if current_loopy.coarse_y == 31 {
+		// i don't understand this one. why would we be in attribute memory here?
+		// this should never run i think...
+		current_loopy.coarse_y = 0
+	} else {
+		current_loopy.coarse_y += 1
+	}
+}
+
+// what does this do? when does this get called?
+transfer_address_x :: proc(using nes: ^NES) {
+
+	if !(ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0) {
+		return
+	}
+
+	current_loopy.nametable_x = temp_loopy.nametable_x
+	current_loopy.coarse_x = temp_loopy.coarse_x
+}
+
+transfer_address_y :: proc(using nes: ^NES) {
+	if !(ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0) {
+		return
+	}
+
+	current_loopy.fine_y = temp_loopy.fine_y
+	current_loopy.nametable_y = temp_loopy.nametable_y
+	current_loopy.coarse_y = temp_loopy.coarse_y
+}
 
 // returns true if it hit a vblank
-ppu_tick :: proc(using nes: ^NES) -> bool {
+ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) -> bool {
 
 	// read "PPU Rendering"
 
@@ -321,65 +373,81 @@ ppu_tick :: proc(using nes: ^NES) -> bool {
 	// 241..=260: vertical blanking lines
 	// 261: pre-render scanline
 
-	// Vertical blanking lines (241-260)
-	// The VBlank flag of the PPU is set at tick 1 (the second tick) of scanline 241, where the VBlank NMI also occurs. The PPU makes no memory accesses during these scanlines, so PPU memory can be freely accessed by the program. 
+	// cycle_x guide:
+	// 0: idle cycle
+	// 1..=256: fetching data
+	// 257..=320: fetching tile data for sprites on next scanline
+	// 321..=336: fetching two tiles for next scanline
+	// 337..=340: fetching nametable bytes but it is unused
 
 
 	// cycle 0
 	switch scanline {
 	// visible scanlines
 	case 0 ..= 239:
-		shift_shifters(nes)
+		if (cycle_x > 0 && cycle_x < 258) || (cycle_x >= 321 && cycle_x < 338) {
+			shift_shifters(nes)
+			switch (cycle_x - 1) % 8 {
+			case 0:
+				load_bg_shifters(nes)
 
-		switch cycle_x % 8 {
-		case 0:
-			load_bg_shifters(nes)
+				// fetch the next background tile ID
 
-			// fetch the next background tile ID
-			bg_next_tile_id = ppu_read(nes, 0x2000 | current_loopy.reg & 0x0FFF)
-		case 2:
-			// fetch the next background tile attribute
+				addr: u16 = 0x2000 | (current_loopy.reg & 0x0FFF)
+				bg_next_tile_id = ppu_read(nes, addr)
+			case 2:
+				// fetch the next background tile attribute
 
-			// All attribute memory begins at 0x03C0 within a nametable, so OR with
-			// result to select target nametable, and attribute byte offset. Finally
-			// OR with 0x2000 to offset into nametable address space on PPU bus.				
-			bg_next_tile_attrib = ppu_read(
-				nes,
-				0x23C0 |
-				(current_loopy.nametable_y << 11) |
-				(current_loopy.nametable_x << 10) |
-				((current_loopy.coarse_y >> 2) << 3) |
-				(current_loopy.coarse_x >> 2),
-			)
+				// All attribute memory begins at 0x03C0 within a nametable, so OR with
+				// result to select target nametable, and attribute byte offset. Finally
+				// OR with 0x2000 to offset into nametable address space on PPU bus.				
+				bg_next_tile_attrib = ppu_read(
+					nes,
+					0x23C0 |
+					(current_loopy.nametable_y << 11) |
+					(current_loopy.nametable_x << 10) |
+					((current_loopy.coarse_y >> 2) << 3) |
+					(current_loopy.coarse_x >> 2),
+				)
 
-			// selecting the right 2x2 block out of the 4x4 attribute entry
+				// selecting the right 2x2 block out of the 4x4 attribute entry
 
-			if (current_loopy.coarse_y & 0x02 != 0) {bg_next_tile_attrib >>= 4}
-			if (current_loopy.coarse_x & 0x02 != 0) {bg_next_tile_attrib >>= 2}
+				if current_loopy.coarse_y & 0x02 != 0 {bg_next_tile_attrib >>= 4}
+				if current_loopy.coarse_x & 0x02 != 0 {bg_next_tile_attrib >>= 2}
 
-			// you need only 2 bits
-			bg_next_tile_attrib &= 0x03
+				// you need only 2 bits
+				bg_next_tile_attrib &= 0x03
 
-		case 4:
+			case 4:
+				// fetch the next background tile bitplane 1 (lsb)
 
-			// fetch the next background tile bitplane 1 (lsb)
-			bg_next_tile_lsb = ppu_read(nes, u16(ppu_ctrl.b << 12) +
-										 u16(bg_next_tile_id << 4) +
-										 current_loopy.fine_y) + 0
+				addr: u16 =
+					(u16(ppu_ctrl.b) << 12) + 
+					(u16(bg_next_tile_id) << 4) +
+					current_loopy.fine_y + 0
 
-		case 6:
+				bg_next_tile_lsb = ppu_read(nes, addr)
+			case 6:
+				addr: u16 =
+					(u16(ppu_ctrl.b) << 12) + 
+					(u16(bg_next_tile_id) << 4) +
+					current_loopy.fine_y + 8
 
-			// fetch the next background tile bitplane 2 (msb)
-			bg_next_tile_msb = ppu_read(nes, u16(ppu_ctrl.b << 12) +
-										 u16(bg_next_tile_id << 4) +
-										 current_loopy.fine_y) + 8
-
-	    case 7:
-			// increment scroll x
-			increment_scroll_x(nes)
+				// fetch the next background tile bitplane 2 (msb)
+				bg_next_tile_msb = ppu_read(nes, addr)
+			case 7:
+				// increment scroll x
+				increment_scroll_x(nes)
+			}
 		}
 
-	// you gotta do certain things...
+		if cycle_x == 256 {
+			increment_scroll_y(nes)
+		}
+
+		if cycle_x == 257 {
+			transfer_address_x(nes)
+		}
 
 
 	// First vertical blanking line
@@ -398,6 +466,9 @@ ppu_tick :: proc(using nes: ^NES) -> bool {
 			ppu_on_vblank = false
 		}
 
+		if cycle_x >= 280 && cycle_x < 305 {
+			transfer_address_y(nes)
+		}
 	case:
 	// vblank scanlines
 	}
@@ -408,5 +479,67 @@ ppu_tick :: proc(using nes: ^NES) -> bool {
 		ppu_cycles = 0
 	}
 
+	/// Rendering the current pixel
+
+	// checks before bothering to draw a pixel
+
+	// checks if renderer is on
+	if ppu_mask.show_background == 0 {
+		return hit_vblank
+	}
+
+	// checks if it's on a visible pixel
+	if !(scanline <= 239 && cycle_x > 0 && cycle_x <= 256) {
+		return hit_vblank
+	}
+
+	bg_pixel: u8
+	bg_palette: u8
+
+	bit_mux: u16 = 0x8000 >> ppu_x
+
+	p0_pixel: u8 = (bg_shifter_pattern_lo & bit_mux) > 0 ? 1 : 0
+	p1_pixel: u8 = (bg_shifter_pattern_hi & bit_mux) > 0 ? 1 : 0
+	bg_pixel = (p1_pixel << 1) | p0_pixel
+
+	bg_pal0: u8 = (bg_shifter_attrib_lo & bit_mux) > 0 ? 1 : 0
+	bg_pal1: u8 = (bg_shifter_attrib_hi & bit_mux) > 0 ? 1 : 0
+	bg_palette = (bg_pal1 << 1) | bg_pal0
+
+	nes_color := get_background_color(nes^, bg_pixel, bg_palette)
+	real_color := color_map_from_nes_to_real(nes_color)
+
+	// position of pixel
+	pos_x := cycle_x - 1
+	pos_y := scanline
+
+	framebuffer.pixels[pos_y * 256 + pos_x] = real_color
+
 	return hit_vblank
+}
+
+// Gets color byte in palette, given a bg palette and a color inside the palette
+get_background_color :: proc(using nes: NES, bg_pixel: u8, bg_palette: u8) -> u8 {
+
+	palette_start: u16
+
+	switch bg_palette {
+	case 0:
+		palette_start = 0x3F01
+	case 1:
+		palette_start = 0x3F05
+	case 2:
+		palette_start = 0x3F09
+	case 3:
+		palette_start = 0x3F0D
+	}
+
+	palette_start -= 0x3F00
+
+	switch bg_pixel {
+	case 0:
+		return nes.ppu_palette[0]
+	case:
+		return nes.ppu_palette[palette_start + u16(bg_pixel) - 1]
+	}
 }
