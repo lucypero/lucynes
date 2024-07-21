@@ -4,9 +4,6 @@ import "core:fmt"
 import "core:os"
 import rl "vendor:raylib"
 
-// u might need this one
-//    void UpdateTexture(Texture2D texture, const void *pixels);                                         // Update GPU texture with new data
-
 scale_factor :: 3
 
 nes_width :: 256
