@@ -28,7 +28,7 @@ raylib_test :: proc() {
 
 	rl.InitWindow(screen_width, screen_height, "lucynes")
 	rl.SetWindowPosition(20, 50)
-	rl.SetTargetFPS(144)
+	rl.SetTargetFPS(60)
 
 	// Generate a checked texture by code
 	// Dynamic memory allocation to store pixels data (Color type)
@@ -57,7 +57,8 @@ raylib_test :: proc() {
 
 	// initializing nes
 	nes: NES
-	res := load_rom_from_file(&nes, "roms/DonkeyKong.nes")
+	// res := load_rom_from_file(&nes, "roms/DonkeyKong.nes")
+	res := load_rom_from_file(&nes, "roms/SuperMarioBros.nes")
 	// res := load_rom_from_file(&nes, "roms/Kung Fu.nes")
 	// res := load_rom_from_file(&nes, "roms/Bomberman.nes")
 	// res := load_rom_from_file(&nes, "roms/PacMan.nes")
@@ -569,6 +570,18 @@ color_map_from_nes_to_real :: proc(color_in_nes: u8) -> rl.Color {
 		col.xyz = {0, 45, 105}
 	case 0x38:
 		col.xyz = {233, 226, 183}
+	case 0x1A:
+		col.xyz = {7, 119, 4}
+
+	case 0x07:
+		col.xyz = {90, 26, 0}
+
+	case 0x18:
+		col.xyz = {109, 92, 0}
+
+	case 0x1C:
+		col.xyz = {0, 114, 125}
+
 
 	case:
 		fmt.printf("%X, ", color_in_nes)

@@ -201,7 +201,7 @@ ppu_readwrite :: proc(using nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 
 		switch mem {
 		case 0x2000 ..= 0x23FF:
-			if nes.rom_info.is_horizontal_arrangement {
+			if !nes.rom_info.is_horizontal_arrangement {
 				// write to first slot
 				index_in_vram = mem_modulo
 			} else {
@@ -209,7 +209,7 @@ ppu_readwrite :: proc(using nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 				index_in_vram = mem_modulo
 			}
 		case 0x2400 ..= 0x27FF:
-			if nes.rom_info.is_horizontal_arrangement {
+			if !nes.rom_info.is_horizontal_arrangement {
 				// write to first slot
 				index_in_vram = mem_modulo
 			} else {
@@ -217,7 +217,7 @@ ppu_readwrite :: proc(using nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 				index_in_vram = mem_modulo + 0x400
 			}
 		case 0x2800 ..= 0x2BFF:
-			if nes.rom_info.is_horizontal_arrangement {
+			if !nes.rom_info.is_horizontal_arrangement {
 				// write to second slot
 				index_in_vram = mem_modulo + 0x400
 			} else {
@@ -225,7 +225,7 @@ ppu_readwrite :: proc(using nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 				index_in_vram = mem_modulo
 			}
 		case 0x2C00 ..= 0x2FFF:
-			if nes.rom_info.is_horizontal_arrangement {
+			if !nes.rom_info.is_horizontal_arrangement {
 				// write to second slot
 				index_in_vram = mem_modulo + 0x400
 			} else {
@@ -488,6 +488,7 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) -> bool {
 
 		if cycle_x == 1 {
 			ppu_status.sprite_overflow = 0
+			ppu_status.sprite_zero_hit = 0
 
 			for i in 0 ..< 8 {
 				sprite_shifter_pattern_hi[i] = 0
@@ -517,7 +518,7 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) -> bool {
 	}
 
 	/// Rendering the current pixel
-	draw_pixel(nes^, framebuffer, cycle_x, scanline)
+	draw_pixel(nes, framebuffer, cycle_x, scanline)
 
 	return hit_vblank
 }
@@ -529,6 +530,7 @@ evaluate_sprites :: proc(using nes: ^NES, current_scanline: int) {
 	sprite_count = 0
 
 	oam_entry: u8
+	sprite_zero_hit_possible = false
 
 	oam_entries := slice.reinterpret([]OAMEntry, ppu_oam[:])
 
@@ -544,6 +546,12 @@ evaluate_sprites :: proc(using nes: ^NES, current_scanline: int) {
 
 		if diff >= 0 && diff < (ppu_ctrl.h != 0 ? 16 : 8) {
 			if sprite_count < 8 {
+
+				// is this sprite zero?
+				if oam_entry == 0 {
+					sprite_zero_hit_possible = true
+				}
+
 				// copy sprite to sprite scanline array
 				sprite_scanline[sprite_count] = oam_entries[oam_entry]
 			}
@@ -653,7 +661,7 @@ update_sprite_shift_registers :: proc(using nes: ^NES, current_scanline: int) {
 }
 
 // Writes a pixel in the pixel grid if it's on a visible slot
-draw_pixel :: proc(using nes: NES, pixel_grid: ^PixelGrid, cycle_x, scanline: int) {
+draw_pixel :: proc(using nes: ^NES, pixel_grid: ^PixelGrid, cycle_x, scanline: int) {
 	// checks before bothering to draw a pixel
 
 	// checks if renderer is on
@@ -688,6 +696,8 @@ draw_pixel :: proc(using nes: NES, pixel_grid: ^PixelGrid, cycle_x, scanline: in
 
 	if ppu_mask.show_sprites != 0 {
 
+		sprite_zero_being_rendered = false
+
 		for i in 0 ..< sprite_count {
 
 			if sprite_scanline[i].x != 0 {
@@ -703,7 +713,7 @@ draw_pixel :: proc(using nes: NES, pixel_grid: ^PixelGrid, cycle_x, scanline: in
 
 			if fg_pixel != 0 {
 				if i == 0 {
-					// sprite_zero_being_rendered = true
+					sprite_zero_being_rendered = true
 				}
 
 				break
@@ -738,11 +748,24 @@ draw_pixel :: proc(using nes: NES, pixel_grid: ^PixelGrid, cycle_x, scanline: in
 		}
 
 		// sprite zero hit detection
-		// TODO...
+		if sprite_zero_being_rendered && sprite_zero_hit_possible {
+			if ppu_mask.show_background != 0 && ppu_mask.show_sprites != 0 {
 
+				if ~(ppu_mask.show_left_background | ppu_mask.show_left_sprites) != 0 {
+					if cycle_x >= 9 && cycle_x < 258 {
+						ppu_status.sprite_zero_hit = 1
+					}
+
+				} else {
+					if cycle_x >= 1 && cycle_x < 258 {
+						ppu_status.sprite_zero_hit = 1
+					}
+				}
+			}
+		}
 	}
 
-	nes_color := get_color_from_palettes(nes, pixel, palette)
+	nes_color := get_color_from_palettes(nes^, pixel, palette)
 	real_color := color_map_from_nes_to_real(nes_color)
 
 	// position of pixel
