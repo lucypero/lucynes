@@ -110,47 +110,54 @@ LoopyRegister :: struct #raw_union {
 	reg:          u16,
 }
 
+// sprites
+OAMEntry :: struct {
+	y:         u8,
+	id:        u8,
+	attribute: u8,
+	x:         u8,
+}
+
 NES :: struct {
-	using registers:       Registers, // CPU Registers
+	using registers:            Registers, // CPU Registers
 	// TODO: this isn't ram, so it shouldn't even be memory. don't store this. it's a bus, it's not real ram.
 	//  have fields only for when it's actual hardware ram.
-	ram:                   [64 * 1024]u8, // 64 KB of memory
-	cycles:                uint,
-	rom_info:              RomInfo,
-	prg_rom:               []u8,
-	chr_rom:               []u8,
-	prg_ram:               []u8,
+	ram:                        [64 * 1024]u8, // 64 KB of memory
+	cycles:                     uint,
+	rom_info:                   RomInfo,
+	prg_rom:                    []u8,
+	chr_rom:                    []u8,
+	prg_ram:                    []u8,
 
 	// input
-	port_0_register:       u8,
-	port_1_register:       u8,
-	poll_input:            bool,
+	port_0_register:            u8,
+	port_1_register:            u8,
+	poll_input:                 bool,
 
 	// PPU stuff
-	ppu_memory:            [2 * 1024]u8, // stores 2 nametables
-	ppu_palette:           [32]u8, // internal memory inside the PPU, stores palette data
-	ppu_oam:               [256]u8, // OAM data, inside the PPU
-	ppu_oam_address:       u8,
-	ppu_on_vblank:         bool,
-	ppu_cycles:            int,
+	ppu_memory:                 [2 * 1024]u8, // stores 2 nametables
+	ppu_palette:                [32]u8, // internal memory inside the PPU, stores palette data
+	ppu_oam:                    [256]u8, // OAM data, inside the PPU
+	ppu_oam_address:            u8,
+	ppu_on_vblank:              bool,
+	ppu_cycles:                 int,
 
 	//NOTE: if everything is stored in loopy, then this is all redundant state, no?
 	// consider deleting all this
-
-	ppu_ctrl:              struct #raw_union {
+	ppu_ctrl:                   struct #raw_union {
 		// VPHB SINN
 		using flags: bit_field u8 {
 			n: u8 | 2,
 			i: u8 | 1,
-			s: u8 | 1,
+			s: u8 | 1, // sprite pattern table address for 8x8 sprites (0: $0000, 1: $1000)
 			b: u8 | 1, // bg pattern table address (0: $0000, 1: $1000)
-			h: u8 | 1,
+			h: u8 | 1, // sprite size (0: 8x8, 1: 8x16)
 			p: u8 | 1,
 			v: u8 | 1,
 		},
 		reg:         u8,
 	},
-	ppu_mask:              struct #raw_union {
+	ppu_mask:                   struct #raw_union {
 		// BGRs bMmG
 		using flags: bit_field u8 {
 			greyscale:            u8 | 1,
@@ -164,7 +171,7 @@ NES :: struct {
 		},
 		reg:         u8,
 	},
-	ppu_status:            struct #raw_union {
+	ppu_status:                 struct #raw_union {
 		// VSO. ....
 		using flags: bit_field u8 {
 			open_bus:        u8 | 5,
@@ -174,28 +181,38 @@ NES :: struct {
 		},
 		reg:         u8,
 	},
-	ppu_buffer_read:       u8,
+	ppu_buffer_read:            u8,
 
 	// ppu internals: new model: the ppu loopy model
-	current_loopy:         LoopyRegister,
-	temp_loopy:            LoopyRegister,
-	ppu_x:                 u8, // fine x scroll (3 bits)
-	ppu_w:                 bool, // First or second write toggle (1 bit)
+	current_loopy:              LoopyRegister,
+	temp_loopy:                 LoopyRegister,
+	ppu_x:                      u8, // fine x scroll (3 bits)
+	ppu_w:                      bool, // First or second write toggle (1 bit)
 
 
 	// data for rendering the next pixel
 	// TODO: what is this? i thought all the state required was the 4 variables above.
 	// idk look into it.
-	bg_next_tile_id:       u8,
-	bg_next_tile_attrib:   u8,
-	bg_next_tile_lsb:      u8, // bitplane of pattern tile
-	bg_next_tile_msb:      u8, // bitplane 2 of pattern tile
+	bg_next_tile_id:            u8,
+	bg_next_tile_attrib:        u8,
+	bg_next_tile_lsb:           u8, // bitplane of pattern tile
+	bg_next_tile_msb:           u8, // bitplane 2 of pattern tile
 
-	// shift registers
-	bg_shifter_pattern_lo: u16,
-	bg_shifter_pattern_hi: u16,
-	bg_shifter_attrib_lo:  u16,
-	bg_shifter_attrib_hi:  u16,
+	// background shift registers
+	bg_shifter_pattern_lo:      u16,
+	bg_shifter_pattern_hi:      u16,
+	bg_shifter_attrib_lo:       u16,
+	bg_shifter_attrib_hi:       u16,
+	sprite_scanline:            [8]OAMEntry, // the 8 possible sprites in a scanline
+	sprite_count:               u8, // to track how many sprites are in the next scanline
+
+	// sprite shift registers
+	sprite_shifter_pattern_lo:  [8]u8,
+	sprite_shifter_pattern_hi:  [8]u8,
+
+	// sprite zero collision flags
+	sprite_zero_hit_possible:   bool, // if a SZH is possible in the next scanline
+	sprite_zero_being_rendered: bool,
 }
 
 nmi :: proc(using nes: ^NES) {
@@ -1417,7 +1434,12 @@ nes_test_without_render :: proc() {
 // 	}
 // }
 
-tick_nes_till_vblank :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8, pixel_grid: ^PixelGrid) {
+tick_nes_till_vblank :: proc(
+	using nes: ^NES,
+	port_0_input: u8,
+	port_1_input: u8,
+	pixel_grid: ^PixelGrid,
+) {
 
 	vblank_hit := false
 
@@ -1760,4 +1782,12 @@ print_allocated_temp :: proc() {
 print_allocator_features :: proc() {
 	fmt.printfln("context.allocator features: %v", mem.query_features(context.allocator))
 	fmt.printfln("context.temp_allocator features: %v", mem.query_features(context.temp_allocator))
+}
+
+flip_byte :: proc(b: u8) -> u8 {
+	b := b
+	b = (b & 0xF0) >> 4 | (b & 0x0F) << 4
+	b = (b & 0xCC) >> 2 | (b & 0x33) << 2
+	b = (b & 0xAA) >> 1 | (b & 0x55) << 1
+	return b
 }

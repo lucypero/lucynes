@@ -4,6 +4,7 @@ import "base:runtime"
 import "core:fmt"
 import "core:mem"
 import "core:os"
+import "core:slice"
 import "core:strconv"
 import "core:strings"
 
@@ -55,8 +56,8 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 		if !ppu_w {
 			ppu_x = val & 0x07
 			temp_loopy.coarse_x = u16(val >> 3)
-		} // Second write
-		else {
+		} else // Second write
+		{
 			temp_loopy.fine_y = u16(val & 0x07)
 			temp_loopy.coarse_y = u16(val >> 3)
 		}
@@ -285,12 +286,24 @@ load_bg_shifters :: proc(using nes: ^NES) {
 }
 
 // shifts the shifter registers by 1 bit to the left
-shift_shifters :: proc(using nes: ^NES) {
-	if (ppu_mask.show_background != 0) {
+shift_shifters :: proc(using nes: ^NES, cycle_x: int) {
+	if ppu_mask.show_background != 0 {
 		bg_shifter_pattern_lo <<= 1
 		bg_shifter_pattern_hi <<= 1
 		bg_shifter_attrib_lo <<= 1
 		bg_shifter_attrib_hi <<= 1
+	}
+
+	// shifting sprite shifters (only when they hit the cycle)
+	if ppu_mask.show_sprites != 0 && cycle_x >= 1 && cycle_x < 258 {
+		for i in 0 ..< sprite_count {
+			if sprite_scanline[i].x > 0 {
+				sprite_scanline[i].x -= 1
+			} else {
+				sprite_shifter_pattern_lo[i] <<= 1
+				sprite_shifter_pattern_hi[i] <<= 1
+			}
+		}
 	}
 }
 
@@ -386,7 +399,7 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) -> bool {
 	// visible scanlines
 	case 0 ..= 239:
 		if (cycle_x > 0 && cycle_x < 258) || (cycle_x >= 321 && cycle_x < 338) {
-			shift_shifters(nes)
+			shift_shifters(nes, cycle_x)
 			switch (cycle_x - 1) % 8 {
 			case 0:
 				load_bg_shifters(nes)
@@ -422,16 +435,18 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) -> bool {
 				// fetch the next background tile bitplane 1 (lsb)
 
 				addr: u16 =
-					(u16(ppu_ctrl.b) << 12) + 
+					(u16(ppu_ctrl.b) << 12) +
 					(u16(bg_next_tile_id) << 4) +
-					current_loopy.fine_y + 0
+					current_loopy.fine_y +
+					0
 
 				bg_next_tile_lsb = ppu_read(nes, addr)
 			case 6:
 				addr: u16 =
-					(u16(ppu_ctrl.b) << 12) + 
+					(u16(ppu_ctrl.b) << 12) +
 					(u16(bg_next_tile_id) << 4) +
-					current_loopy.fine_y + 8
+					current_loopy.fine_y +
+					8
 
 				// fetch the next background tile bitplane 2 (msb)
 				bg_next_tile_msb = ppu_read(nes, addr)
@@ -447,6 +462,7 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) -> bool {
 
 		if cycle_x == 257 {
 			transfer_address_x(nes)
+
 		}
 
 
@@ -469,8 +485,29 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) -> bool {
 		if cycle_x >= 280 && cycle_x < 305 {
 			transfer_address_y(nes)
 		}
+
+		if cycle_x == 1 {
+			ppu_status.sprite_overflow = 0
+
+			for i in 0 ..< 8 {
+				sprite_shifter_pattern_hi[i] = 0
+				sprite_shifter_pattern_lo[i] = 0
+			}
+		}
 	case:
 	// vblank scanlines
+	}
+
+	// Foreground rendering
+
+	// doing it at all visible scanlines, at cycle 257 (non visible)
+	// evaluating sprites at next scanline
+	if scanline <= 239 && cycle_x == 257 {
+		evaluate_sprites(nes, scanline)
+	}
+
+	if scanline <= 239 && cycle_x == 340 {
+		update_sprite_shift_registers(nes, scanline)
 	}
 
 	ppu_cycles += 1
@@ -480,17 +517,153 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) -> bool {
 	}
 
 	/// Rendering the current pixel
+	draw_pixel(nes^, framebuffer, cycle_x, scanline)
 
+	return hit_vblank
+}
+
+// Does the sprite evaluation for the next scanline
+evaluate_sprites :: proc(using nes: ^NES, current_scanline: int) {
+	// clear sprite scanline array to 0xFF
+	slice.fill(slice.to_bytes(sprite_scanline[:]), 0xFF)
+	sprite_count = 0
+
+	oam_entry: u8
+
+	oam_entries := slice.reinterpret([]OAMEntry, ppu_oam[:])
+
+	for oam_entry < 64 && sprite_count < 9 {
+
+		// figuring out if the sprite is going to be visible on the next scanline
+		//  by looking at the Y position and the height of the sprite
+
+		// TODO: this is like evaluating the current scanline
+		// .  but u should evaluate the next one. what's going on?
+
+		diff: u16 = u16(current_scanline) - u16(oam_entries[oam_entry].y)
+
+		if diff >= 0 && diff < (ppu_ctrl.h != 0 ? 16 : 8) {
+			if sprite_count < 8 {
+				// copy sprite to sprite scanline array
+				sprite_scanline[sprite_count] = oam_entries[oam_entry]
+			}
+			sprite_count += 1
+		}
+
+		oam_entry += 1
+	}
+
+	// set sprite oveflow flag
+	ppu_status.sprite_overflow = sprite_count > 8 ? 1 : 0
+
+	if sprite_count > 8 {
+		sprite_count = 8
+	}
+}
+
+update_sprite_shift_registers :: proc(using nes: ^NES, current_scanline: int) {
+
+	for i in 0 ..< sprite_count {
+
+		sprite_pattern_bits_lo: u8
+		sprite_pattern_bits_hi: u8
+
+		sprite_pattern_addr_lo: u16
+		sprite_pattern_addr_hi: u16
+
+		if (ppu_ctrl.h == 0) {
+			// 8x8 sprite mode
+			// . the control register determines the pattern table
+
+			if sprite_scanline[i].attribute & 0x80 == 0 {
+				// sprite is not flipped vertically
+
+				sprite_pattern_addr_lo =
+					u16(ppu_ctrl.s) << 12 |
+					u16(sprite_scanline[i].id) << 4 |
+					u16((current_scanline - int(sprite_scanline[i].y)))
+			} else {
+				// sprite is flipped vertically
+
+
+				sprite_pattern_addr_lo =
+					u16(ppu_ctrl.s) << 12 |
+					u16(sprite_scanline[i].id) << 4 |
+					u16((7 - (current_scanline - int(sprite_scanline[i].y))))
+
+			}
+		} else {
+			// 8x16 sprite mode. the sprite attributes determines the pattern table
+
+			if sprite_scanline[i].attribute & 0x80 == 0 {
+				// sprite is not flipped vertically
+
+				if (current_scanline - int(sprite_scanline[i].y)) < 8 {
+					// reading top half tile
+
+					sprite_pattern_addr_lo =
+						u16(sprite_scanline[i].id & 0x01) << 12 |
+						u16(sprite_scanline[i].id & 0xFE) << 4 |
+						u16(((current_scanline - int(sprite_scanline[i].y)) & 0x07))
+
+				} else {
+					// reading bottom half tile
+
+					sprite_pattern_addr_lo =
+						u16(sprite_scanline[i].id & 0x01) << 12 |
+						u16(sprite_scanline[i].id & 0xFE + 1) << 4 |
+						u16(((current_scanline - int(sprite_scanline[i].y)) & 0x07))
+				}
+
+			} else {
+				// sprite is flipped vertically
+				if (current_scanline - int(sprite_scanline[i].y)) < 8 {
+					// reading top half tile
+					sprite_pattern_addr_lo =
+						u16(sprite_scanline[i].id & 0x01) << 12 |
+						u16(sprite_scanline[i].id & 0xFE + 1) << 4 |
+						u16(((7 - (current_scanline - int(sprite_scanline[i].y))) & 0x07))
+
+				} else {
+					// reading bottom half tile
+					sprite_pattern_addr_lo =
+						u16(sprite_scanline[i].id & 0x01) << 12 |
+						u16(sprite_scanline[i].id & 0xFE) << 4 |
+						u16(((7 - (current_scanline - int(sprite_scanline[i].y))) & 0x07))
+				}
+			}
+		}
+
+
+		sprite_pattern_addr_hi = sprite_pattern_addr_lo + 8
+
+		sprite_pattern_bits_lo = ppu_read(nes, sprite_pattern_addr_lo)
+		sprite_pattern_bits_hi = ppu_read(nes, sprite_pattern_addr_hi)
+
+		// If the sprite is flipped horizontally
+		if sprite_scanline[i].attribute & 0x40 != 0 {
+			// Flip the pattern bytes
+			sprite_pattern_bits_lo = flip_byte(sprite_pattern_bits_lo)
+			sprite_pattern_bits_hi = flip_byte(sprite_pattern_bits_hi)
+		}
+
+		sprite_shifter_pattern_lo[i] = sprite_pattern_bits_lo
+		sprite_shifter_pattern_hi[i] = sprite_pattern_bits_hi
+	}
+}
+
+// Writes a pixel in the pixel grid if it's on a visible slot
+draw_pixel :: proc(using nes: NES, pixel_grid: ^PixelGrid, cycle_x, scanline: int) {
 	// checks before bothering to draw a pixel
 
 	// checks if renderer is on
 	if ppu_mask.show_background == 0 {
-		return hit_vblank
+		return
 	}
 
 	// checks if it's on a visible pixel
 	if !(scanline <= 239 && cycle_x > 0 && cycle_x <= 256) {
-		return hit_vblank
+		return
 	}
 
 	bg_pixel: u8
@@ -506,24 +679,85 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) -> bool {
 	bg_pal1: u8 = (bg_shifter_attrib_hi & bit_mux) > 0 ? 1 : 0
 	bg_palette = (bg_pal1 << 1) | bg_pal0
 
-	nes_color := get_background_color(nes^, bg_pixel, bg_palette)
+
+	// foreground pixel
+
+	fg_pixel: u8
+	fg_palette: u8
+	fg_priority: u8
+
+	if ppu_mask.show_sprites != 0 {
+
+		for i in 0 ..< sprite_count {
+
+			if sprite_scanline[i].x != 0 {
+				continue
+			}
+
+			fg_pixel_lo: u8 = sprite_shifter_pattern_lo[i] & 0x80 > 0 ? 1 : 0
+			fg_pixel_hi: u8 = sprite_shifter_pattern_hi[i] & 0x80 > 0 ? 1 : 0
+			fg_pixel = (fg_pixel_hi << 1) | fg_pixel_lo
+
+			fg_palette = (sprite_scanline[i].attribute & 0x03) + 0x04
+			fg_priority = (sprite_scanline[i].attribute & 0x20) == 0 ? 1 : 0
+
+			if fg_pixel != 0 {
+				if i == 0 {
+					// sprite_zero_being_rendered = true
+				}
+
+				break
+			}
+		}
+	}
+
+	// combining background pixel and foreground pixel
+
+	pixel: u8
+	palette: u8
+
+	if bg_pixel == 0 && fg_pixel == 0 {
+		pixel = 0
+		palette = 0
+	} else if bg_pixel == 0 && fg_pixel > 0 {
+		pixel = fg_pixel
+		palette = fg_palette
+	} else if bg_pixel > 0 && fg_pixel == 0 {
+		pixel = bg_pixel
+		palette = bg_palette
+	} else if bg_pixel > 0 && fg_pixel > 0 {
+
+		// both bg and fg are visible.
+
+		if fg_priority != 0 {
+			pixel = fg_pixel
+			palette = fg_palette
+		} else {
+			pixel = bg_pixel
+			palette = bg_palette
+		}
+
+		// sprite zero hit detection
+		// TODO...
+
+	}
+
+	nes_color := get_color_from_palettes(nes, pixel, palette)
 	real_color := color_map_from_nes_to_real(nes_color)
 
 	// position of pixel
 	pos_x := cycle_x - 1
 	pos_y := scanline
 
-	framebuffer.pixels[pos_y * 256 + pos_x] = real_color
-
-	return hit_vblank
+	pixel_grid.pixels[pos_y * 256 + pos_x] = real_color
 }
 
 // Gets color byte in palette, given a bg palette and a color inside the palette
-get_background_color :: proc(using nes: NES, bg_pixel: u8, bg_palette: u8) -> u8 {
+get_color_from_palettes :: proc(using nes: NES, pixel: u8, palette: u8) -> u8 {
 
 	palette_start: u16
 
-	switch bg_palette {
+	switch palette {
 	case 0:
 		palette_start = 0x3F01
 	case 1:
@@ -532,14 +766,22 @@ get_background_color :: proc(using nes: NES, bg_pixel: u8, bg_palette: u8) -> u8
 		palette_start = 0x3F09
 	case 3:
 		palette_start = 0x3F0D
+	case 4:
+		palette_start = 0x3F11
+	case 5:
+		palette_start = 0x3F15
+	case 6:
+		palette_start = 0x3F19
+	case 7:
+		palette_start = 0x3F1D
 	}
 
 	palette_start -= 0x3F00
 
-	switch bg_pixel {
+	switch pixel {
 	case 0:
 		return nes.ppu_palette[0]
 	case:
-		return nes.ppu_palette[palette_start + u16(bg_pixel) - 1]
+		return nes.ppu_palette[palette_start + u16(pixel) - 1]
 	}
 }
