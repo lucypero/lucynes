@@ -1460,7 +1460,7 @@ tick_nes_till_vblank :: proc(
 		cpu_cycles_dt := cycles - past_cycles
 
 		for i in 0 ..< cpu_cycles_dt * 3 {
-			if ppu_tick(nes, pixel_grid) == true {
+			if ppu_tick(nes, pixel_grid) {
 				vblank_hit = true
 			}
 		}
