@@ -375,16 +375,11 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) -> bool {
 	// 262 scanlines
 	hit_vblank := false
 
-	scanline := ppu_cycles / 341
-
-	// how deep you are into the scanline
-	cycle_x := ppu_cycles % 341
-
 	// scanline guide:
+	// -1: pre-render scanline
 	// 0..= 239: visible scanlines
 	// 240: post render scanline (it idles)
 	// 241..=260: vertical blanking lines
-	// 261: pre-render scanline
 
 	// cycle_x guide:
 	// 0: idle cycle
@@ -394,13 +389,32 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) -> bool {
 	// 337..=340: fetching nametable bytes but it is unused
 
 
-	// cycle 0
-	switch scanline {
-	// visible scanlines
-	case 0 ..= 239:
-		if (cycle_x > 0 && cycle_x < 258) || (cycle_x >= 321 && cycle_x < 338) {
-			shift_shifters(nes, cycle_x)
-			switch (cycle_x - 1) % 8 {
+	// pre-render scanline
+	if ppu_scanline == -1 {
+		if ppu_cycle_x == 1 {
+			ppu_on_vblank = false
+		}
+
+		if ppu_cycle_x >= 280 && ppu_cycle_x < 305 {
+			transfer_address_y(nes)
+		}
+
+		if ppu_cycle_x == 1 {
+			ppu_status.sprite_overflow = 0
+			ppu_status.sprite_zero_hit = 0
+
+			for i in 0 ..< 8 {
+				sprite_shifter_pattern_hi[i] = 0
+				sprite_shifter_pattern_lo[i] = 0
+			}
+		}
+	}
+
+	// doing all the background data loading
+	if ppu_scanline >= -1 && ppu_scanline < 240 {
+		if (ppu_cycle_x > 0 && ppu_cycle_x < 258) || (ppu_cycle_x >= 321 && ppu_cycle_x <= 336) {
+			shift_shifters(nes, ppu_cycle_x)
+			switch (ppu_cycle_x - 1) % 8 {
 			case 0:
 				load_bg_shifters(nes)
 
@@ -456,76 +470,83 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) -> bool {
 			}
 		}
 
-		if cycle_x == 256 {
+		if ppu_cycle_x == 256 {
 			increment_scroll_y(nes)
 		}
 
-		if cycle_x == 257 {
+		if ppu_cycle_x == 257 {
+			load_bg_shifters(nes)
 			transfer_address_x(nes)
-
 		}
 
-
-	// First vertical blanking line
-	case 241:
-		// setting vblank and nmi
-		if ppu_cycles % 341 == 1 {
-			ppu_on_vblank = true
-			hit_vblank = true
-			if ppu_ctrl.v != 0 {
-				nmi(nes)
-			}
-		}
-	// pre-render scanline
-	case 261:
-		if ppu_cycles % 341 == 1 {
-			ppu_on_vblank = false
+		// Superfluous reads of tile id at end of scanline
+		if (ppu_cycle_x == 338 || ppu_cycle_x == 340) {
+			addr: u16 = 0x2000 | (current_loopy.reg & 0x0FFF)
+			bg_next_tile_id = ppu_read(nes, addr)
 		}
 
-		if cycle_x >= 280 && cycle_x < 305 {
+		if (ppu_scanline == -1 && ppu_cycle_x >= 280 && ppu_cycle_x < 305) {
+			// End of vertical blank period so reset the Y address ready for rendering
 			transfer_address_y(nes)
 		}
 
-		if cycle_x == 1 {
-			ppu_status.sprite_overflow = 0
-			ppu_status.sprite_zero_hit = 0
+		// Foreground rendering
 
-			for i in 0 ..< 8 {
-				sprite_shifter_pattern_hi[i] = 0
-				sprite_shifter_pattern_lo[i] = 0
-			}
+		// doing it at all visible scanlines, at cycle 257 (non visible)
+		// evaluating sprites at next ppu_scanline
+
+		// This is the correct way to do it but it doesn't work
+		
+		// well it seems like it works except
+		// the scroll split in smb is done 1 pixel too early
+
+		if ppu_scanline < 239 && ppu_cycle_x == 257 {
+			evaluate_sprites(nes, ppu_scanline + 1)
 		}
-	case:
-	// vblank scanlines
+
+		if ppu_scanline < 239 && ppu_cycle_x == 340 {
+			update_sprite_shift_registers(nes, ppu_scanline + 1)
+		}
+
+		// this is javidx's way and it's wrong. it's evaluating the current scanline 
+		//   but that one is already rendered!
+		// if ppu_scanline >= 0 && ppu_cycle_x == 257 {
+		// 	evaluate_sprites(nes, ppu_scanline)
+		// }
+
+		// if ppu_scanline <= 239 && ppu_cycle_x == 340 {
+		// 	update_sprite_shift_registers(nes, ppu_scanline)
+		// }
 	}
 
-	// Foreground rendering
-
-	// doing it at all visible scanlines, at cycle 257 (non visible)
-	// evaluating sprites at next scanline
-	if scanline <= 239 && cycle_x == 257 {
-		evaluate_sprites(nes, scanline)
+	// Setting vblank
+	if ppu_scanline == 241 && ppu_cycle_x == 1 {
+		ppu_on_vblank = true
+		hit_vblank = true
+		if ppu_ctrl.v != 0 {
+			nmi(nes)
+		}
 	}
 
-	if scanline <= 239 && cycle_x == 340 {
-		update_sprite_shift_registers(nes, scanline)
-	}
-
-	ppu_cycles += 1
-
-	if ppu_cycles > 341 * 262 {
-		ppu_cycles = 0
-	}
 
 	/// Rendering the current pixel
-	draw_pixel(nes, framebuffer, cycle_x, scanline)
+	draw_pixel(nes, framebuffer)
+
+	ppu_cycle_x += 1
+	if ppu_cycle_x >= 341 {
+		ppu_cycle_x = 0
+		ppu_scanline += 1
+		if ppu_scanline >= 261 {
+			ppu_scanline = -1
+		}
+	}
 
 	return hit_vblank
 }
 
-// Does the sprite evaluation for the next scanline
+// Does the sprite evaluation for the next ppu_scanline
 evaluate_sprites :: proc(using nes: ^NES, current_scanline: int) {
-	// clear sprite scanline array to 0xFF
+	// clear sprite ppu_scanline array to 0xFF
 	slice.fill(slice.to_bytes(sprite_scanline[:]), 0xFF)
 	sprite_count = 0
 
@@ -536,10 +557,10 @@ evaluate_sprites :: proc(using nes: ^NES, current_scanline: int) {
 
 	for oam_entry < 64 && sprite_count < 9 {
 
-		// figuring out if the sprite is going to be visible on the next scanline
+		// figuring out if the sprite is going to be visible on the next ppu_scanline
 		//  by looking at the Y position and the height of the sprite
 
-		// TODO: this is like evaluating the current scanline
+		// TODO: this is like evaluating the current ppu_scanline
 		// .  but u should evaluate the next one. what's going on?
 
 		diff: u16 = u16(current_scanline) - u16(oam_entries[oam_entry].y)
@@ -552,7 +573,7 @@ evaluate_sprites :: proc(using nes: ^NES, current_scanline: int) {
 					sprite_zero_hit_possible = true
 				}
 
-				// copy sprite to sprite scanline array
+				// copy sprite to sprite ppu_scanline array
 				sprite_scanline[sprite_count] = oam_entries[oam_entry]
 			}
 			sprite_count += 1
@@ -661,7 +682,7 @@ update_sprite_shift_registers :: proc(using nes: ^NES, current_scanline: int) {
 }
 
 // Writes a pixel in the pixel grid if it's on a visible slot
-draw_pixel :: proc(using nes: ^NES, pixel_grid: ^PixelGrid, cycle_x, scanline: int) {
+draw_pixel :: proc(using nes: ^NES, pixel_grid: ^PixelGrid) {
 	// checks before bothering to draw a pixel
 
 	// checks if renderer is on
@@ -670,7 +691,7 @@ draw_pixel :: proc(using nes: ^NES, pixel_grid: ^PixelGrid, cycle_x, scanline: i
 	}
 
 	// checks if it's on a visible pixel
-	if !(scanline <= 239 && cycle_x > 0 && cycle_x <= 256) {
+	if !(ppu_scanline >= 0 && ppu_scanline <= 239 && ppu_cycle_x > 0 && ppu_cycle_x <= 256) {
 		return
 	}
 
@@ -752,12 +773,12 @@ draw_pixel :: proc(using nes: ^NES, pixel_grid: ^PixelGrid, cycle_x, scanline: i
 			if ppu_mask.show_background != 0 && ppu_mask.show_sprites != 0 {
 
 				if ~(ppu_mask.show_left_background | ppu_mask.show_left_sprites) != 0 {
-					if cycle_x >= 9 && cycle_x < 258 {
+					if ppu_cycle_x >= 9 && ppu_cycle_x < 258 {
 						ppu_status.sprite_zero_hit = 1
 					}
 
 				} else {
-					if cycle_x >= 1 && cycle_x < 258 {
+					if ppu_cycle_x >= 1 && ppu_cycle_x < 258 {
 						ppu_status.sprite_zero_hit = 1
 					}
 				}
@@ -769,8 +790,8 @@ draw_pixel :: proc(using nes: ^NES, pixel_grid: ^PixelGrid, cycle_x, scanline: i
 	real_color := color_map_from_nes_to_real(nes_color)
 
 	// position of pixel
-	pos_x := cycle_x - 1
-	pos_y := scanline
+	pos_x := ppu_cycle_x - 1
+	pos_y := ppu_scanline
 
 	pixel_grid.pixels[pos_y * 256 + pos_x] = real_color
 }

@@ -140,7 +140,8 @@ NES :: struct {
 	ppu_oam:                    [256]u8, // OAM data, inside the PPU
 	ppu_oam_address:            u8,
 	ppu_on_vblank:              bool,
-	ppu_cycles:                 int,
+	ppu_cycle_x:                int, // current ppu cycle horizontally in the scanline (0..=340)
+	ppu_scanline:               int, // current ppu scanline (-1..=260)
 
 	//NOTE: if everything is stored in loopy, then this is all redundant state, no?
 	// consider deleting all this

@@ -78,3 +78,47 @@ order of inputs:
 (highest bit) -> lowest bit
 
 A B Select Start Up Down Left Right
+
+
+
+
+
+bad one (when your game works)
+450b9ceae
+
+good one (when your game doesn't work)
+34247b2658063621fb97a68a35a7b96e459398e0
+
+
+# possible bug
+
+when i was playing mario and i went rainbow mode, this happened:
+
+edit: it happens at other times too.
+
+idk what u read/writing here at ppu bus FFF6
+idk what u read/writing here at ppu bus FFFE
+idk what u read/writing here at ppu bus FFF6
+idk what u read/writing here at ppu bus FFFE
+idk what u read/writing here at ppu bus FFF3
+idk what u read/writing here at ppu bus FFFB
+idk what u read/writing here at ppu bus FFF3
+idk what u read/writing here at ppu bus FFFB
+idk what u read/writing here at ppu bus FFF0
+idk what u read/writing here at ppu bus FFF8
+idk what u read/writing here at ppu bus FFF0
+idk what u read/writing here at ppu bus FFF8
+idk what u read/writing here at ppu bus FFF5
+idk what u read/writing here at ppu bus FFFD
+idk what u read/writing here at ppu bus FFF5
+idk what u read/writing here at ppu bus FFFD
+idk what u read/writing here at ppu bus FFF2
+idk what u read/writing here at ppu bus FFFA
+idk what u read/writing here at ppu bus FFF2
+idk what u read/writing here at ppu bus FFFA
+
+# notes compared to javidx
+
+it seems he has the same sprite misalignment as me.
+sprites are one pixel to the left. or more.
+
