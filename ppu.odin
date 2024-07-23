@@ -285,17 +285,21 @@ load_bg_shifters :: proc(using nes: ^NES) {
 	bg_shifter_attrib_hi = (bg_shifter_attrib_hi & 0xFF00) | new_attrib_hi
 }
 
-// shifts the shifter registers by 1 bit to the left
-shift_shifters :: proc(using nes: ^NES, cycle_x: int) {
+// shifts the bg shifter registers by 1 bit to the left
+shift_bg_shifters :: proc(using nes: ^NES) {
 	if ppu_mask.show_background != 0 {
 		bg_shifter_pattern_lo <<= 1
 		bg_shifter_pattern_hi <<= 1
 		bg_shifter_attrib_lo <<= 1
 		bg_shifter_attrib_hi <<= 1
 	}
+}
 
+// shifts the fg shifter registers by 1 bit to the left
+//  when some conditions are hit
+shift_fg_shifters :: proc(using nes: ^NES) {
 	// shifting sprite shifters (only when they hit the cycle)
-	if ppu_mask.show_sprites != 0 && cycle_x >= 1 && cycle_x < 258 {
+	if ppu_mask.show_sprites != 0 && ppu_cycle_x >= 0 && ppu_cycle_x < 258 {
 		for i in 0 ..< sprite_count {
 			if sprite_scanline[i].x > 0 {
 				sprite_scanline[i].x -= 1
@@ -306,7 +310,6 @@ shift_shifters :: proc(using nes: ^NES, cycle_x: int) {
 		}
 	}
 }
-
 
 increment_scroll_x :: proc(using nes: ^NES) {
 	if !(ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0) {
@@ -413,7 +416,7 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) -> bool {
 	// doing all the background data loading
 	if ppu_scanline >= -1 && ppu_scanline < 240 {
 		if (ppu_cycle_x > 0 && ppu_cycle_x < 258) || (ppu_cycle_x >= 321 && ppu_cycle_x <= 336) {
-			shift_shifters(nes, ppu_cycle_x)
+			shift_bg_shifters(nes)
 			switch (ppu_cycle_x - 1) % 8 {
 			case 0:
 				load_bg_shifters(nes)
@@ -492,11 +495,13 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) -> bool {
 
 		// Foreground rendering
 
+		shift_fg_shifters(nes)
+
 		// doing it at all visible scanlines, at cycle 257 (non visible)
 		// evaluating sprites at next ppu_scanline
 
 		// This is the correct way to do it but it doesn't work
-		
+
 		// well it seems like it works except
 		// the scroll split in smb is done 1 pixel too early
 
@@ -563,7 +568,7 @@ evaluate_sprites :: proc(using nes: ^NES, current_scanline: int) {
 		// TODO: this is like evaluating the current ppu_scanline
 		// .  but u should evaluate the next one. what's going on?
 
-		diff: u16 = u16(current_scanline) - u16(oam_entries[oam_entry].y)
+		diff: u16 = u16(current_scanline) - u16(oam_entries[oam_entry].y + 1)
 
 		if diff >= 0 && diff < (ppu_ctrl.h != 0 ? 16 : 8) {
 			if sprite_count < 8 {
@@ -575,6 +580,8 @@ evaluate_sprites :: proc(using nes: ^NES, current_scanline: int) {
 
 				// copy sprite to sprite ppu_scanline array
 				sprite_scanline[sprite_count] = oam_entries[oam_entry]
+				sprite_scanline[sprite_count].x += 2
+				sprite_scanline[sprite_count].y += 1
 			}
 			sprite_count += 1
 		}
