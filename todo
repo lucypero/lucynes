@@ -1,8 +1,4 @@
-# Testing
-
-- just do mapper_000 since it will work for the test rom and donkey kong
-
-## odin stuff
+# odin stuff
 
 default_allocator :: heap_allocator
 default_allocator_proc :: heap_allocator_proc
@@ -22,49 +18,7 @@ core/mem/allocators.odin
 - does the temp allocator even exist if u don't init it?
 
 
-## Todo
-
-- you are writing to the cpu stack. prob in the ppu registers. fix that.
-
-
-
-
-- run some nes test roms to see what is going on.
- donkey kong is getting stuck somewhere. never writes to PPUADDR
-
-- don't allocate memory for the whole bus.
- the bus is a fake thing. it's not ram
- put actual ram in separate fields. it's easier.
-
-
-- it doesn't write to PPUCTRL. donkey kong. it never does. figure out why
-
-# PPU
-
-- do a test run of donkey kong to see how it uses the registers.
-- implement enough PPU stuff so that donkey kong can draw its own backgrounds.
-
-status register:
-
-See: PPU rendering for more information on the timing of setting and clearing the flags.
-
-
-- how do i set all the flags? or like how do i make sure that the flags are set correctly when read?
-
-
-- what is nmi?
-
-
-- what calls the nmi?
-
-- the ppu calls the nmi when:
-	- you write to ppuctrl on some conditions (if vblank is set, and you change nmi flag from 0 to 1, trigger nmi now)
-	- when vblank starts and bit 7 of ppuctrl is on
-
-
-
-
-## Input
+# Input
 
 write 1 -> $4016: signal controller to poll its input
 write 0 -> $4016: signal controller to finish its poll
@@ -127,4 +81,11 @@ see this for reference
 https://www.youtube.com/watch?v=7qirrV8w5SQ&t=344s
 
 
+# Todo
 
+- the hack u did to place sprites better causes problems.
+u are adding to x to a u8 so it will wrap. so sprites show up on the left when they're off screen
+
+- don't allocate memory for the whole bus.
+ the bus is a fake thing. it's not ram
+ put actual ram in separate fields. it's easier.
