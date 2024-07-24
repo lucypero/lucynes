@@ -59,8 +59,8 @@ raylib_test :: proc() {
 	nes: NES
 
 	// res := load_rom_from_file(&nes, "roms/DonkeyKong.nes")
-	res := load_rom_from_file(&nes, "roms/SuperMarioBros.nes")
-	// res := load_rom_from_file(&nes, "roms/Kung Fu.nes")
+	// res := load_rom_from_file(&nes, "roms/SuperMarioBros.nes")
+	res := load_rom_from_file(&nes, "roms/Kung Fu.nes")
 	// res := load_rom_from_file(&nes, "roms/Bomberman.nes")
 	// res := load_rom_from_file(&nes, "roms/PacMan.nes")
 	// res := load_rom_from_file(&nes, "roms/IceClimber.nes")

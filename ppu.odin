@@ -301,9 +301,7 @@ shift_fg_shifters :: proc(using nes: ^NES) {
 	// shifting sprite shifters (only when they hit the cycle)
 	if ppu_mask.show_sprites != 0 && ppu_cycle_x >= 0 && ppu_cycle_x < 258 {
 		for i in 0 ..< sprite_count {
-			if sprite_scanline[i].x > 0 {
-				sprite_scanline[i].x -= 1
-			} else {
+			if int(sprite_scanline[i].x) < ppu_cycle_x - 1 {
 				sprite_shifter_pattern_lo[i] <<= 1
 				sprite_shifter_pattern_hi[i] <<= 1
 			}
@@ -580,7 +578,6 @@ evaluate_sprites :: proc(using nes: ^NES, current_scanline: int) {
 
 				// copy sprite to sprite ppu_scanline array
 				sprite_scanline[sprite_count] = oam_entries[oam_entry]
-				sprite_scanline[sprite_count].x += 2
 				sprite_scanline[sprite_count].y += 1
 			}
 			sprite_count += 1
@@ -728,7 +725,7 @@ draw_pixel :: proc(using nes: ^NES, pixel_grid: ^PixelGrid) {
 
 		for i in 0 ..< sprite_count {
 
-			if sprite_scanline[i].x != 0 {
+			if int(sprite_scanline[i].x) > ppu_cycle_x - 1 {
 				continue
 			}
 
