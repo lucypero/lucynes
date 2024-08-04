@@ -90,8 +90,8 @@ How to run instructions:
 */
 
 NesTestLog :: struct {
-	cpu_registers : Registers,
-	cpu_cycles: uint
+	cpu_registers: Registers,
+	cpu_cycles:    uint,
 }
 
 Registers :: struct {
@@ -123,34 +123,34 @@ OAMEntry :: struct {
 }
 
 NES :: struct {
-	using registers:            Registers, // CPU Registers
+	using registers:                Registers, // CPU Registers
 	// TODO: this isn't ram, so it shouldn't even be memory. don't store this. it's a bus, it's not real ram.
 	//  have fields only for when it's actual hardware ram.
-	ram:                        [64 * 1024]u8, // 64 KB of memory
-	cycles:                     uint,
-	extra_instr_cycles: uint,
-	rom_info:                   RomInfo,
-	prg_rom:                    []u8,
-	chr_rom:                    []u8,
-	prg_ram:                    []u8,
+	ram:                            [64 * 1024]u8, // 64 KB of memory
+	cycles:                         uint,
+	extra_instr_cycles:             uint,
+	ignore_extra_addressing_cycles: bool,
+	rom_info:                       RomInfo,
+	prg_rom:                        []u8,
+	chr_rom:                        []u8,
+	prg_ram:                        []u8,
 
 	// input
-	port_0_register:            u8,
-	port_1_register:            u8,
-	poll_input:                 bool,
+	port_0_register:                u8,
+	port_1_register:                u8,
+	poll_input:                     bool,
 
 	// PPU stuff
-	ppu_memory:                 [2 * 1024]u8, // stores 2 nametables
-	ppu_palette:                [32]u8, // internal memory inside the PPU, stores palette data
-	ppu_oam:                    [256]u8, // OAM data, inside the PPU
-	ppu_oam_address:            u8,
-	ppu_on_vblank:              bool,
-	ppu_cycle_x:                int, // current ppu cycle horizontally in the scanline (0..=340)
-	ppu_scanline:               int, // current ppu scanline (-1..=260)
+	ppu_memory:                     [2 * 1024]u8, // stores 2 nametables
+	ppu_palette:                    [32]u8, // internal memory inside the PPU, stores palette data
+	ppu_oam:                        [256]u8, // OAM data, inside the PPU
+	ppu_oam_address:                u8,
+	ppu_cycle_x:                    int, // current ppu cycle horizontally in the scanline (0..=340)
+	ppu_scanline:                   int, // current ppu scanline (-1..=260)
 
 	//NOTE: if everything is stored in loopy, then this is all redundant state, no?
 	// consider deleting all this
-	ppu_ctrl:                   struct #raw_union {
+	ppu_ctrl:                       struct #raw_union {
 		// VPHB SINN
 		using flags: bit_field u8 {
 			n: u8 | 2,
@@ -163,7 +163,7 @@ NES :: struct {
 		},
 		reg:         u8,
 	},
-	ppu_mask:                   struct #raw_union {
+	ppu_mask:                       struct #raw_union {
 		// BGRs bMmG
 		using flags: bit_field u8 {
 			greyscale:            u8 | 1,
@@ -177,7 +177,7 @@ NES :: struct {
 		},
 		reg:         u8,
 	},
-	ppu_status:                 struct #raw_union {
+	ppu_status:                     struct #raw_union {
 		// VSO. ....
 		using flags: bit_field u8 {
 			open_bus:        u8 | 5,
@@ -187,38 +187,38 @@ NES :: struct {
 		},
 		reg:         u8,
 	},
-	ppu_buffer_read:            u8,
+	ppu_buffer_read:                u8,
 
 	// ppu internals: new model: the ppu loopy model
-	current_loopy:              LoopyRegister,
-	temp_loopy:                 LoopyRegister,
-	ppu_x:                      u8, // fine x scroll (3 bits)
-	ppu_w:                      bool, // First or second write toggle (1 bit)
+	current_loopy:                  LoopyRegister,
+	temp_loopy:                     LoopyRegister,
+	ppu_x:                          u8, // fine x scroll (3 bits)
+	ppu_w:                          bool, // First or second write toggle (1 bit)
 
 
 	// data for rendering the next pixel
 	// TODO: what is this? i thought all the state required was the 4 variables above.
 	// idk look into it.
-	bg_next_tile_id:            u8,
-	bg_next_tile_attrib:        u8,
-	bg_next_tile_lsb:           u8, // bitplane of pattern tile
-	bg_next_tile_msb:           u8, // bitplane 2 of pattern tile
+	bg_next_tile_id:                u8,
+	bg_next_tile_attrib:            u8,
+	bg_next_tile_lsb:               u8, // bitplane of pattern tile
+	bg_next_tile_msb:               u8, // bitplane 2 of pattern tile
 
 	// background shift registers
-	bg_shifter_pattern_lo:      u16,
-	bg_shifter_pattern_hi:      u16,
-	bg_shifter_attrib_lo:       u16,
-	bg_shifter_attrib_hi:       u16,
-	sprite_scanline:            [8]OAMEntry, // the 8 possible sprites in a scanline
-	sprite_count:               u8, // to track how many sprites are in the next scanline
+	bg_shifter_pattern_lo:          u16,
+	bg_shifter_pattern_hi:          u16,
+	bg_shifter_attrib_lo:           u16,
+	bg_shifter_attrib_hi:           u16,
+	sprite_scanline:                [8]OAMEntry, // the 8 possible sprites in a scanline
+	sprite_count:                   u8, // to track how many sprites are in the next scanline
 
 	// sprite shift registers
-	sprite_shifter_pattern_lo:  [8]u8,
-	sprite_shifter_pattern_hi:  [8]u8,
+	sprite_shifter_pattern_lo:      [8]u8,
+	sprite_shifter_pattern_hi:      [8]u8,
 
 	// sprite zero collision flags
-	sprite_zero_hit_possible:   bool, // if a SZH is possible in the next scanline
-	sprite_zero_being_rendered: bool,
+	sprite_zero_hit_possible:       bool, // if a SZH is possible in the next scanline
+	sprite_zero_being_rendered:     bool,
 }
 
 nmi :: proc(using nes: ^NES) {
@@ -410,7 +410,8 @@ parse_log_file :: proc(log_file: string) -> (res: [dynamic]NesTestLog, ok: bool)
 		reg.cpu_registers.accumulator = u8(strconv.parse_int(line[50:][:2], 16) or_return)
 		reg.cpu_registers.index_x = u8(strconv.parse_int(line[55:][:2], 16) or_return)
 		reg.cpu_registers.index_y = u8(strconv.parse_int(line[60:][:2], 16) or_return)
-		reg.cpu_registers.flags = transmute(RegisterFlags)u8(strconv.parse_int(line[65:][:2], 16) or_return)
+		reg.cpu_registers.flags =
+		transmute(RegisterFlags)u8(strconv.parse_int(line[65:][:2], 16) or_return)
 		reg.cpu_registers.stack_pointer = u8(strconv.parse_int(line[71:][:2], 16) or_return)
 		reg.cpu_cycles = uint(strconv.parse_uint(line[90:], 10) or_return)
 		append(&res, reg)
@@ -456,7 +457,7 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 	for read(nes, program_counter) != 0x00 {
 
 
-		state_before_instr : NesTestLog
+		state_before_instr: NesTestLog
 		state_before_instr.cpu_registers = registers
 		state_before_instr.cpu_cycles = nes.cycles
 
@@ -470,7 +471,8 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 			return true
 		}
 
-		if res := compare_reg(nes.registers, nes.cycles, register_logs[instructions_ran]); res != 0 {
+		if res := compare_reg(nes.registers, nes.cycles, register_logs[instructions_ran]);
+		   res != 0 {
 			// test fail
 
 			logs_reg := register_logs[instructions_ran]
@@ -481,7 +483,11 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 
 			switch res {
 			case 1:
-				fmt.printfln("PC: %X, TEST PC: %X", program_counter, logs_reg.cpu_registers.program_counter)
+				fmt.printfln(
+					"PC: %X, TEST PC: %X",
+					program_counter,
+					logs_reg.cpu_registers.program_counter,
+				)
 			case 2:
 				fmt.printfln("A: %X, TEST A: %X", accumulator, logs_reg.cpu_registers.accumulator)
 			case 3:
@@ -491,7 +497,11 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 			case 5:
 				fmt.printfln("P: %X, TEST P: %X", flags, logs_reg.cpu_registers.flags)
 			case 6:
-				fmt.printfln("SP: %X, TEST SP: %X", stack_pointer, logs_reg.cpu_registers.stack_pointer)
+				fmt.printfln(
+					"SP: %X, TEST SP: %X",
+					stack_pointer,
+					logs_reg.cpu_registers.stack_pointer,
+				)
 			case 7:
 				fmt.printfln("CYCLES: %v, TEST CYCLES: %v", nes.cycles, logs_reg.cpu_cycles)
 			}
@@ -511,7 +521,11 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 	return true
 }
 
-compare_reg :: proc(current_register: Registers, cpu_cycles: uint, log_register: NesTestLog) -> int {
+compare_reg :: proc(
+	current_register: Registers,
+	cpu_cycles: uint,
+	log_register: NesTestLog,
+) -> int {
 
 	if current_register.program_counter != log_register.cpu_registers.program_counter {
 		return 1
@@ -554,7 +568,7 @@ print_cpu_state :: proc(regs: NesTestLog) {
 		regs.cpu_registers.index_y,
 		transmute(u8)regs.cpu_registers.flags,
 		regs.cpu_registers.stack_pointer,
-		regs.cpu_cycles
+		regs.cpu_cycles,
 	)
 }
 
@@ -585,9 +599,13 @@ run_instruction :: proc(using nes: ^NES) {
 	// get first byte of instruction
 	instr := read(nes, program_counter)
 
-	if program_counter == 0x82DD || program_counter == 0x82DA {
-		fmt.printfln("PC: %X OPCODE: %X A: %X", program_counter, instr, accumulator)
+	// if program_counter == 0x82DD || program_counter == 0x82DA {
+	if program_counter == 0x82BD || program_counter == 0x82DA {
+		a := 0
+		a += 1
 	}
+
+	// fmt.printfln("PC: %X OPCODE: %X A: %X", program_counter, instr, accumulator)
 
 	program_counter += 1
 	switch instr {
@@ -1505,6 +1523,7 @@ nes_init :: proc(using nes: ^NES) {
 	low_byte := u16(read(nes, 0xFFFC))
 	high_byte := u16(read(nes, 0xFFFC + 1))
 	program_counter = high_byte << 8 | low_byte
+	ppu_status.vertical_blank = 1
 
 	stack_pointer = 0xFD
 	cycles = 7

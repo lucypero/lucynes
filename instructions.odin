@@ -69,6 +69,7 @@ instr_asl_accum :: proc(using nes: ^NES, _mem: u16) {
 }
 
 instr_asl :: proc(using nes: ^NES, mem: u16) {
+	ignore_extra_addressing_cycles = true
 	val := read(nes, mem)
 
 	temp := u16(val) << 1
@@ -142,9 +143,11 @@ instr_bit :: proc(using nes: ^NES, mem: u16) {
 	// A & M, N = M7, V = M6
 	// fmt.printfln("accum %X, mem is %X", accumulator, mem)
 
-	set_flag(&flags, .Zero, (accumulator & read(nes, mem)) == 0)
-	set_flag(&flags, .Overflow, (read(nes, mem) & 0x40) != 0)
-	set_flag(&flags, .Negative, (read(nes, mem) & 0x80) != 0)
+	val := read(nes, mem)
+
+	set_flag(&flags, .Zero, (accumulator & val) == 0)
+	set_flag(&flags, .Overflow, (val & 0x40) != 0)
+	set_flag(&flags, .Negative, (val & 0x80) != 0)
 }
 
 instr_bmi :: proc(using nes: ^NES, mem: u16) {
@@ -287,11 +290,13 @@ instr_cpy :: proc(using nes: ^NES, mem: u16) {
 
 // TODO maybe do a decrement helper
 instr_dec :: proc(using nes: ^NES, mem: u16) {
+	ignore_extra_addressing_cycles = true
 	val := read(nes, mem)
-	write(nes, mem, val - 1)
+	val -= 1
+	write(nes, mem, val)
 
-	set_flag(&flags, .Zero, read(nes, mem) == 0)
-	set_flag(&flags, .Negative, (read(nes, mem) & 0x80) != 0)
+	set_flag(&flags, .Zero, val == 0)
+	set_flag(&flags, .Negative, (val & 0x80) != 0)
 }
 
 instr_dex :: proc(using nes: ^NES, mem: u16) {
@@ -321,10 +326,12 @@ instr_eor :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_inc :: proc(using nes: ^NES, mem: u16) {
+	ignore_extra_addressing_cycles = true
 	val := read(nes, mem)
-	write(nes, mem, val + 1)
-	set_z(&flags, read(nes, mem))
-	set_n(&flags, read(nes, mem))
+	val += 1
+	write(nes, mem, val)
+	set_z(&flags, val)
+	set_n(&flags, val)
 }
 
 instr_inx :: proc(using nes: ^NES, mem: u16) {
@@ -419,6 +426,7 @@ instr_lsr_accumulator :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_lsr :: proc(using nes: ^NES, mem: u16) {
+	ignore_extra_addressing_cycles = true
 	val := read(nes, mem)
 
 	res := val >> 1
@@ -501,6 +509,7 @@ instr_rol :: proc(using nes: ^NES, mem: u16) {
 		res += 1
 	}
 
+	ignore_extra_addressing_cycles = true
 	write(nes, mem, res)
 
 	set_flag(&flags, .Carry, (temp & 0x80) != 0)
@@ -536,6 +545,7 @@ instr_ror :: proc(using nes: ^NES, mem: u16) {
 		res = res | 0x80
 	}
 
+	ignore_extra_addressing_cycles = true
 	write(nes, mem, res)
 
 	set_flag(&flags, .Carry, (temp & 0x01) == 1)
@@ -589,14 +599,17 @@ instr_sei :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_sta :: proc(using nes: ^NES, mem: u16) {
+	ignore_extra_addressing_cycles = true
 	write(nes, mem, accumulator)
 }
 
 instr_stx :: proc(using nes: ^NES, mem: u16) {
+	ignore_extra_addressing_cycles = true
 	write(nes, mem, index_x)
 }
 
 instr_sty :: proc(using nes: ^NES, mem: u16) {
+	ignore_extra_addressing_cycles = true
 	write(nes, mem, index_y)
 }
 
@@ -661,6 +674,7 @@ instr_rra :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_axs :: proc(using nes: ^NES, mem: u16) {
+	ignore_extra_addressing_cycles = true
 	write(nes, mem, accumulator & index_x)
 }
 

@@ -17,7 +17,7 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 		// fmt.printfln("writing to PPUCTRL %X", val)
 
 		// if vblank is set, and you change nmi flag from 0 to 1, trigger nmi now
-		if ppu_on_vblank && val & 0x80 != 0 && ppu_ctrl.v == 0 {
+		if (ppu_status.vertical_blank == 1) && val & 0x80 != 0 && ppu_ctrl.v == 0 {
 			// trigger NMI immediately
 			nmi(nes)
 		}
@@ -107,12 +107,11 @@ read_ppu_register :: proc(using nes: ^NES, ppu_reg: u16) -> u8 {
 		//TODO some of it
 
 		// return v blank as 1, rest 0
-
-		ppu_status.vertical_blank = ppu_on_vblank ? 1 : 0
-		ppu_on_vblank = false
+		returned_status := ppu_status
+		ppu_status.vertical_blank = 0
 		ppu_w = false
 		// fmt.printfln("reading ppu status. %X", ppu_status.reg)
-		return ppu_status.reg
+		return returned_status.reg
 
 	// OAMADDR
 	case 0x2003:
@@ -389,7 +388,6 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) -> bool {
 	// pre-render scanline
 	if ppu_scanline == -1 {
 		if ppu_cycle_x == 1 {
-			ppu_on_vblank = false
 			ppu_status.vertical_blank = 0
 			ppu_status.sprite_overflow = 0
 			ppu_status.sprite_zero_hit = 0
@@ -518,7 +516,7 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) -> bool {
 
 	// Setting vblank
 	if ppu_scanline == 241 && ppu_cycle_x == 1 {
-		ppu_on_vblank = true
+		ppu_status.vertical_blank = 1
 		hit_vblank = true
 		if ppu_ctrl.v != 0 {
 			nmi(nes)

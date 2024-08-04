@@ -55,7 +55,8 @@ raylib_test :: proc() {
 	// initializing nes
 	nes: NES
 
-	// rom_in_nes :: "roms/SuperMarioBros.nes"
+	rom_in_nes :: "roms/SuperMarioBros.nes"
+	// rom_in_nes :: "roms/IceClimber.nes"
 	// rom_in_nes :: "roms/DonkeyKong.nes"
 	// rom_in_nes :: "roms/Kung Fu.nes"
 	// rom_in_nes :: "tests/cpu_timing_test6/cpu_timing_test.nes"
@@ -63,7 +64,7 @@ raylib_test :: proc() {
 	// rom_in_nes :: "tests/full_nes_palette.nes"
 	// rom_in_nes :: "tests/nmi_sync/demo_ntsc.nes"
 	// rom_in_nes :: "tests/nmi_sync/demo_pal.nes"
-	rom_in_nes :: "tests/color_test.nes"
+	// rom_in_nes :: "tests/color_test.nes"
 	// rom_in_nes :: "nestest/nestest.nes"
 
 	// res := load_rom_from_file(&nes, "roms/DonkeyKong.nes")
@@ -602,8 +603,8 @@ color_map_from_nes_to_real :: proc(color_in_nes: u8) -> rl.Color {
 	color.w = 255
 
 
-	return color_map_from_nes_to_real_manual(color_in_nes)
-	// return color
+	// return color_map_from_nes_to_real_manual(color_in_nes)
+	return color
 
 	// return color.R << 24 | color.G << 16 | color.B << 8 | 0xFF;
 	// return rl.BLACK

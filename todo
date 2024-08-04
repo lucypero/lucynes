@@ -101,3 +101,6 @@ so how do u do it
 
 just havea variable in the nes that u set to 0 before running the instruction
 and the branching instructions can touch that
+
+read this about cycles
+https://forums.nesdev.org/viewtopic.php?t=24690

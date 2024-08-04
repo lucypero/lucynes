@@ -74,7 +74,13 @@ do_opcode :: proc(
 ) {
 	mem, extra_cycles := get_mem(nes, addr_mode)
 	nes.extra_instr_cycles = 0
+	nes.ignore_extra_addressing_cycles = false
 	instruction(nes, mem)
+
+	if nes.ignore_extra_addressing_cycles {
+		extra_cycles = 0
+	}
+
 	nes.cycles += cycles + extra_cycles + nes.extra_instr_cycles
 }
 
@@ -129,21 +135,26 @@ do_addrmode_absolute :: proc(using nes: ^NES) -> u16 {
 	return res
 }
 
-do_addrmode_absolute_index :: proc(using nes: ^NES, index_register: u8) -> u16 {
+do_addrmode_absolute_index :: proc(using nes: ^NES, index_register: u8) -> (u16, uint) {
 	res := read_u16_le(nes, program_counter)
+	extra_cycles: uint = 0
+	if (res & 0xFF00) != ((res + u16(index_register)) & 0xFF00) {
+		// It wrapped
+		extra_cycles = 1
+	}
 	res += u16(index_register)
 	program_counter += 2
-	return res
+	return res, extra_cycles
 }
 
 // TODO extra cycles
 do_addrmode_absolute_x :: proc(using nes: ^NES) -> (u16, uint) {
-	return do_addrmode_absolute_index(nes, index_x), 0
+	return do_addrmode_absolute_index(nes, index_x)
 }
 
 // TODO extra cycles
 do_addrmode_absolute_y :: proc(using nes: ^NES) -> (u16, uint) {
-	return do_addrmode_absolute_index(nes, index_y), 0
+	return do_addrmode_absolute_index(nes, index_y)
 }
 
 // returns the address to jump to
@@ -217,6 +228,13 @@ do_addrmode_ind_y :: proc(using nes: ^NES) -> (u16, uint) {
 	high_byte := u16(read(nes, addr_2))
 
 	val := high_byte << 8 | low_byte
+
+	extra_cycles: uint = 0
+	if (val & 0xFF00) != ((val + u16(index_y)) & 0xFF00) {
+		// It wrapped
+		extra_cycles = 1
+	}
+
 	val += u16(index_y)
 
 	// increment pc
@@ -225,5 +243,5 @@ do_addrmode_ind_y :: proc(using nes: ^NES) -> (u16, uint) {
 	// fmt.printfln("indx: addresses are: %X %X addr stored is %X", addr_1, addr_2, val)
 
 	// return the address
-	return val, 0
+	return val, extra_cycles
 }
