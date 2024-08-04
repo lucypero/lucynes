@@ -23,9 +23,8 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 		}
 
 		ppu_ctrl.reg = val
-
-		temp_loopy.nametable_x = u16(ppu_ctrl.n & 0b1)
-		temp_loopy.nametable_y = u16(ppu_ctrl.n & 0b10)
+		temp_loopy.nametable_x = u16(ppu_ctrl.n & 0b1) != 0 ? 1 : 0
+		temp_loopy.nametable_y = u16(ppu_ctrl.n & 0b10) != 0 ? 1 : 0
 
 	// PPUMASK
 	case 0x2001:
@@ -55,12 +54,12 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 		// First write
 		if !ppu_w {
 			ppu_x = val & 0x07
-			temp_loopy.coarse_x = u16(val >> 3)
+			temp_loopy.coarse_x = u16(val) >> 3
 			// fmt.printfln("changing coarse x. at scanline %v cycle %v", ppu_scanline, ppu_cycle_x)
 		} else // Second write
 		{
-			temp_loopy.fine_y = u16(val & 0x07)
-			temp_loopy.coarse_y = u16(val >> 3)
+			temp_loopy.fine_y = u16(val) & 0x07
+			temp_loopy.coarse_y = u16(val) >> 3
 		}
 
 		ppu_w = !ppu_w
@@ -189,14 +188,18 @@ ppu_readwrite :: proc(using nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 
 		the_val = &chr_rom[mem]
 	// nametable data (it's in ppu memory)
-	case 0x2000 ..= 0x2FFF:
+	case 0x2000 ..< 0x3000:
 		index_in_vram := mem - 0x2000
+
+		// is_horizontal_arrengement = false -> horizontal mirroring (ice climber)
+		// is_horizontal_arrengement = true -> vertical mirroring (super mario bros)
 
 		// the part of mem into each nametable
 		mem_modulo := index_in_vram % 0x400
 
 		switch mem {
-		case 0x2000 ..= 0x23FF:
+		// First virtual nametalbe slot
+		case 0x2000 ..< 0x2400:
 			if !nes.rom_info.is_horizontal_arrangement {
 				// write to first slot
 				index_in_vram = mem_modulo
@@ -204,7 +207,8 @@ ppu_readwrite :: proc(using nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 				// write to first slot
 				index_in_vram = mem_modulo
 			}
-		case 0x2400 ..= 0x27FF:
+		// Second virtual nametalbe slot
+		case 0x2400 ..< 0x2800:
 			if !nes.rom_info.is_horizontal_arrangement {
 				// write to first slot
 				index_in_vram = mem_modulo
@@ -212,7 +216,8 @@ ppu_readwrite :: proc(using nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 				// write to second slot
 				index_in_vram = mem_modulo + 0x400
 			}
-		case 0x2800 ..= 0x2BFF:
+		// Third virtual nametalbe slot
+		case 0x2800 ..< 0x2C00:
 			if !nes.rom_info.is_horizontal_arrangement {
 				// write to second slot
 				index_in_vram = mem_modulo + 0x400
@@ -220,7 +225,8 @@ ppu_readwrite :: proc(using nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 				// write to first slot
 				index_in_vram = mem_modulo
 			}
-		case 0x2C00 ..= 0x2FFF:
+		// Fourth virtual nametalbe slot
+		case 0x2C00 ..< 0x3000:
 			if !nes.rom_info.is_horizontal_arrangement {
 				// write to second slot
 				index_in_vram = mem_modulo + 0x400
@@ -229,6 +235,8 @@ ppu_readwrite :: proc(using nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 				index_in_vram = mem_modulo + 0x400
 			}
 		}
+
+		// fmt.printfln("is horizontal arrangement %v. %X -> %X", nes.rom_info.is_horizontal_arrangement, mem, index_in_vram + 0x2000)
 
 		the_val = &ppu_memory[index_in_vram]
 	case 0x3000 ..= 0x3EFF:
@@ -333,6 +341,7 @@ increment_scroll_y :: proc(using nes: ^NES) {
 
 	if current_loopy.coarse_y == 29 {
 		current_loopy.coarse_y = 0
+		// flipping nametable y
 		current_loopy.nametable_y = ~current_loopy.nametable_y
 	} else if current_loopy.coarse_y == 31 {
 		// i don't understand this one. why would we be in attribute memory here?
