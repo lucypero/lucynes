@@ -17,6 +17,15 @@ import "core:strings"
 Mapper :: enum {
 	NROM128, // 00
 	NROM256, // 00 
+	UXROM, // 02
+}
+
+UXROMData :: struct {
+	bank: uint,
+}
+
+MapperData :: union {
+	UXROMData,
 }
 
 RomFormat :: enum {
@@ -134,6 +143,7 @@ NES :: struct {
 	prg_rom:                        []u8,
 	chr_rom:                        []u8,
 	prg_ram:                        []u8,
+	mapper_data:                    MapperData,
 
 	// input
 	port_0_register:                u8,
@@ -284,7 +294,7 @@ read :: proc(using nes: ^NES, addr: u16) -> u8 {
 	switch rom_info.mapper {
 	case .NROM128:
 		switch addr {
-		case 0x8000 ..= 0xBFFF:
+		case 0x8000 ..< 0xC000:
 			return prg_rom[addr - 0x8000]
 		case 0xC000 ..= 0xFFFF:
 			return prg_rom[addr - 0xC000]
@@ -293,6 +303,22 @@ read :: proc(using nes: ^NES, addr: u16) -> u8 {
 		switch addr {
 		case 0x8000 ..= 0xFFFF:
 			return prg_rom[addr - 0x8000]
+		}
+	case .UXROM:
+		switch addr {
+		case 0x8000 ..< 0xC000:
+			// use the bank i guess
+			// data.bank <- use that
+			// fmt.printfln("reading switchable memory. bank is %v", data.bank)
+			data := mapper_data.(UXROMData)
+			return prg_rom[uint(addr) - 0x8000 + (data.bank * 0x4000)]
+		case 0xC000 ..= 0xFFFF:
+			// it's the last bank
+			// fmt.printfln("reading last bank")
+			offset: uint = uint(addr) - 0xC000
+			bank_count: uint = len(prg_rom) / 0x4000
+			bank_offset := (uint(bank_count) - 1) * 0x4000
+			return prg_rom[bank_offset + offset]
 		}
 	}
 
@@ -311,14 +337,6 @@ read :: proc(using nes: ^NES, addr: u16) -> u8 {
 }
 
 write :: proc(using nes: ^NES, addr: u16, val: u8) {
-
-	wrote_to_rom := false
-
-	defer {
-		if wrote_to_rom {
-			fmt.eprintfln("tried to write to read only memory!! that is bad i think: %v", addr)
-		}
-	}
 
 	switch addr {
 	// PPU registers
@@ -357,20 +375,25 @@ write :: proc(using nes: ^NES, addr: u16, val: u8) {
 	case .NROM128:
 		switch addr {
 		case 0x8000 ..= 0xBFFF:
-			wrote_to_rom = true
 			// prg_rom[addr - 0x8000] = val
 			return
 		case 0xC000 ..= 0xFFFF:
-			wrote_to_rom = true
 			// prg_rom[addr - 0xC000] = val
 			return
 		}
 	case .NROM256:
 		switch addr {
 		case 0x8000 ..= 0xFFFF:
-			wrote_to_rom = true
 			// prg_rom[addr - 0x8000] = val
 			return
+		}
+	case .UXROM:
+		switch addr {
+		case 0x8000 ..= 0xFFFF:
+			data := &mapper_data.(UXROMData)
+			data.bank = uint(val) & 0x0F
+			// fmt.printfln("bank switching! to %v", data.bank)
+		// here u do the bank switch
 		}
 	}
 
@@ -378,7 +401,7 @@ write :: proc(using nes: ^NES, addr: u16, val: u8) {
 		switch addr {
 		case 0x6000 ..= 0x7FFF:
 			// wrote to prg ram! it's ok i think
-			fmt.println("wrote to prg ram! probably ok")
+			// fmt.println("wrote to prg ram! probably ok")
 			prg_ram[addr - 0x6000] = val
 			return
 		}
@@ -1700,8 +1723,11 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 		} else {
 			rom_info.mapper = .NROM256
 		}
+	case 2:
+		rom_info.mapper = .UXROM
+		nes.mapper_data = UXROMData{}
 	case:
-		fmt.eprintln("mapper not supported. exiting")
+		fmt.eprintfln("mapper not supported: %v. exiting", mapper_number)
 		os.exit(1)
 	}
 
@@ -1736,9 +1762,6 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 	}
 
 	copy(prg_rom[:], rom_string[prg_rom_start:])
-
-	fmt.printfln("rom info: %v", rom_info)
-
 	rom_info.rom_loaded = true
 
 	nes.rom_info = rom_info
@@ -1748,6 +1771,8 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 	// allocating prg ram
 	// assuming it is always 8kib
 	nes.prg_ram = make([]u8, 1024 * 8)
+
+	fmt.printfln("rom info: %v", rom_info)
 
 	return true
 }

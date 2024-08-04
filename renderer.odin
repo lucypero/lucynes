@@ -56,7 +56,8 @@ raylib_test :: proc() {
 	nes: NES
 
 	// rom_in_nes :: "roms/SuperMarioBros.nes"
-	rom_in_nes :: "roms/IceClimber.nes"
+	rom_in_nes :: "roms/Mega Man.nes"
+	// rom_in_nes :: "roms/IceClimber.nes"
 	// rom_in_nes :: "roms/DonkeyKong.nes"
 	// rom_in_nes :: "roms/Kung Fu.nes"
 	// rom_in_nes :: "tests/cpu_timing_test6/cpu_timing_test.nes"

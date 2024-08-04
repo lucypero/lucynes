@@ -14,7 +14,7 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 	// PPUCTRL
 	case 0x2000:
 		// writing to ppuctrl
-		// fmt.printfln("writing to PPUCTRL %X", val)
+		// fmt.printfln("writing to PPUCTRL %b", val)
 
 		// if vblank is set, and you change nmi flag from 0 to 1, trigger nmi now
 		if (ppu_status.vertical_blank == 1) && val & 0x80 != 0 && ppu_ctrl.v == 0 {
