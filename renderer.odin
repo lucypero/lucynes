@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:os"
 import rl "vendor:raylib"
 
-scale_factor :: 3
+scale_factor :: 5
 
 nes_width :: 256
 nes_height :: 240
@@ -30,13 +30,10 @@ raylib_test :: proc() {
 	rl.SetWindowPosition(20, 50)
 	rl.SetTargetFPS(60)
 
-	// Generate a checked texture by code
-	// Dynamic memory allocation to store pixels data (Color type)
 	pixels := make([]rl.Color, framebuffer_width * framebuffer_height)
 
-	// Load pixels data into an image structure and create texture
 	checkedIm := rl.Image {
-		data    = raw_data(pixels), // We can assign pixels directly to data
+		data    = raw_data(pixels),
 		width   = framebuffer_width,
 		height  = framebuffer_height,
 		format  = .UNCOMPRESSED_R8G8B8A8,
@@ -58,13 +55,23 @@ raylib_test :: proc() {
 	// initializing nes
 	nes: NES
 
+	// rom_in_nes :: "roms/SuperMarioBros.nes"
+	// rom_in_nes :: "roms/DonkeyKong.nes"
+	// rom_in_nes :: "roms/Kung Fu.nes"
+	// rom_in_nes :: "tests/cpu_timing_test6/cpu_timing_test.nes"
+	// rom_in_nes :: "tests/branch_timing_tests/1.Branch_Basics.nes"
+	// rom_in_nes :: "tests/full_nes_palette.nes"
+	// rom_in_nes :: "tests/nmi_sync/demo_ntsc.nes"
+	// rom_in_nes :: "tests/nmi_sync/demo_pal.nes"
+	rom_in_nes :: "tests/color_test.nes"
+	// rom_in_nes :: "nestest/nestest.nes"
+
 	// res := load_rom_from_file(&nes, "roms/DonkeyKong.nes")
-	// res := load_rom_from_file(&nes, "roms/SuperMarioBros.nes")
-	res := load_rom_from_file(&nes, "roms/Kung Fu.nes")
+	res := load_rom_from_file(&nes, rom_in_nes)
+	// res := load_rom_from_file(&nes, "roms/Kung Fu.nes")
 	// res := load_rom_from_file(&nes, "roms/Bomberman.nes")
 	// res := load_rom_from_file(&nes, "roms/PacMan.nes")
 	// res := load_rom_from_file(&nes, "roms/IceClimber.nes")
-	// res := load_rom_from_file(&nes, "nestest/nestest.nes")
 
 	if !res {
 		fmt.eprintln("could not load rom")
@@ -86,6 +93,11 @@ raylib_test :: proc() {
 		clear_pixels(pixels, rl.BLACK)
 
 		// doing input
+
+		if rl.IsKeyDown(.ENTER) {
+			// reset nes
+			nes_reset(&nes, rom_in_nes)
+		}
 
 		port_0_input: u8
 		port_1_input: u8

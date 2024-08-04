@@ -56,6 +56,7 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 		if !ppu_w {
 			ppu_x = val & 0x07
 			temp_loopy.coarse_x = u16(val >> 3)
+			// fmt.printfln("changing coarse x. at scanline %v cycle %v", ppu_scanline, ppu_cycle_x)
 		} else // Second write
 		{
 			temp_loopy.fine_y = u16(val & 0x07)
@@ -107,16 +108,10 @@ read_ppu_register :: proc(using nes: ^NES, ppu_reg: u16) -> u8 {
 
 		// return v blank as 1, rest 0
 
-		if ppu_on_vblank {
-			ppu_status.vertical_blank = 1
-		} else {
-			ppu_status.vertical_blank = 0
-		}
-
+		ppu_status.vertical_blank = ppu_on_vblank ? 1 : 0
 		ppu_on_vblank = false
-
-		// fmt.printfln("reading ppu status. clearing latch")
 		ppu_w = false
+		// fmt.printfln("reading ppu status. %X", ppu_status.reg)
 		return ppu_status.reg
 
 	// OAMADDR
@@ -187,9 +182,11 @@ ppu_readwrite :: proc(using nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 	// Pattern tables
 	// it's in cartridge's CHR ROM
 	case 0x0000 ..= 0x1FFF:
-		if write {
-			fmt.eprintln("u are trying to write to cartridge's ROM...")
-		}
+		// if write {
+		// 	fmt.eprintln("u are trying to write to cartridge's ROM...")
+		// } else {
+		// 	fmt.printfln("u are trying to read to cartridge's ROM... %X", mem)
+		// }
 
 		the_val = &chr_rom[mem]
 	// nametable data (it's in ppu memory)
@@ -389,18 +386,11 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) -> bool {
 	// 321..=336: fetching two tiles for next scanline
 	// 337..=340: fetching nametable bytes but it is unused
 
-
 	// pre-render scanline
 	if ppu_scanline == -1 {
 		if ppu_cycle_x == 1 {
 			ppu_on_vblank = false
-		}
-
-		if ppu_cycle_x >= 280 && ppu_cycle_x < 305 {
-			transfer_address_y(nes)
-		}
-
-		if ppu_cycle_x == 1 {
+			ppu_status.vertical_blank = 0
 			ppu_status.sprite_overflow = 0
 			ppu_status.sprite_zero_hit = 0
 
@@ -408,6 +398,10 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) -> bool {
 				sprite_shifter_pattern_hi[i] = 0
 				sprite_shifter_pattern_lo[i] = 0
 			}
+		}
+
+		if ppu_cycle_x >= 280 && ppu_cycle_x < 305 {
+			transfer_address_y(nes)
 		}
 	}
 

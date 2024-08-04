@@ -73,8 +73,9 @@ do_opcode :: proc(
 	cycles: uint,
 ) {
 	mem, extra_cycles := get_mem(nes, addr_mode)
+	nes.extra_instr_cycles = 0
 	instruction(nes, mem)
-	nes.cycles += cycles + extra_cycles
+	nes.cycles += cycles + extra_cycles + nes.extra_instr_cycles
 }
 
 // it just returns what's in A

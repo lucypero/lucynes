@@ -89,6 +89,10 @@ How to run instructions:
 
 */
 
+NesTestLog :: struct {
+	cpu_registers : Registers,
+	cpu_cycles: uint
+}
 
 Registers :: struct {
 	program_counter: u16, // Program Counter Register
@@ -124,6 +128,7 @@ NES :: struct {
 	//  have fields only for when it's actual hardware ram.
 	ram:                        [64 * 1024]u8, // 64 KB of memory
 	cycles:                     uint,
+	extra_instr_cycles: uint,
 	rom_info:                   RomInfo,
 	prg_rom:                    []u8,
 	chr_rom:                    []u8,
@@ -391,7 +396,7 @@ set_flag :: proc(flags: ^RegisterFlags, flag: RegisterFlagEnum, predicate: bool)
 	}
 }
 
-parse_log_file :: proc(log_file: string) -> (res: [dynamic]Registers, ok: bool) {
+parse_log_file :: proc(log_file: string) -> (res: [dynamic]NesTestLog, ok: bool) {
 
 	ok = false
 
@@ -400,13 +405,14 @@ parse_log_file :: proc(log_file: string) -> (res: [dynamic]Registers, ok: bool) 
 	log_string := string(log_bytes)
 
 	for line in strings.split_lines_iterator(&log_string) {
-		reg: Registers
-		reg.program_counter = u16(strconv.parse_int(line[:4], 16) or_return)
-		reg.accumulator = u8(strconv.parse_int(line[50:][:2], 16) or_return)
-		reg.index_x = u8(strconv.parse_int(line[55:][:2], 16) or_return)
-		reg.index_y = u8(strconv.parse_int(line[60:][:2], 16) or_return)
-		reg.flags = transmute(RegisterFlags)u8(strconv.parse_int(line[65:][:2], 16) or_return)
-		reg.stack_pointer = u8(strconv.parse_int(line[71:][:2], 16) or_return)
+		reg: NesTestLog
+		reg.cpu_registers.program_counter = u16(strconv.parse_int(line[:4], 16) or_return)
+		reg.cpu_registers.accumulator = u8(strconv.parse_int(line[50:][:2], 16) or_return)
+		reg.cpu_registers.index_x = u8(strconv.parse_int(line[55:][:2], 16) or_return)
+		reg.cpu_registers.index_y = u8(strconv.parse_int(line[60:][:2], 16) or_return)
+		reg.cpu_registers.flags = transmute(RegisterFlags)u8(strconv.parse_int(line[65:][:2], 16) or_return)
+		reg.cpu_registers.stack_pointer = u8(strconv.parse_int(line[71:][:2], 16) or_return)
+		reg.cpu_cycles = uint(strconv.parse_uint(line[90:], 10) or_return)
 		append(&res, reg)
 	}
 
@@ -427,7 +433,7 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 		return false
 	}
 
-	nes.registers = register_logs[0]
+	nes.registers = register_logs[0].cpu_registers
 
 	test_rom, ok_2 := os.read_entire_file(program_file)
 
@@ -442,13 +448,17 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 
 	program_counter = 0xC000
 	stack_pointer = 0xFD
+	cycles = 7
 	flags = transmute(RegisterFlags)u8(0x24)
 
 	instructions_ran := 0
 
 	for read(nes, program_counter) != 0x00 {
 
-		state_before_instr := registers
+
+		state_before_instr : NesTestLog
+		state_before_instr.cpu_registers = registers
+		state_before_instr.cpu_cycles = nes.cycles
 
 		// fmt.printfln("running line %v", instructions_ran + 1)
 		// print_cpu_state(state_before_instr)
@@ -460,7 +470,7 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 			return true
 		}
 
-		if res := compare_reg(nes.registers, register_logs[instructions_ran]); res != 0 {
+		if res := compare_reg(nes.registers, nes.cycles, register_logs[instructions_ran]); res != 0 {
 			// test fail
 
 			logs_reg := register_logs[instructions_ran]
@@ -471,17 +481,19 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 
 			switch res {
 			case 1:
-				fmt.printfln("PC: %X, TEST PC: %X", program_counter, logs_reg.program_counter)
+				fmt.printfln("PC: %X, TEST PC: %X", program_counter, logs_reg.cpu_registers.program_counter)
 			case 2:
-				fmt.printfln("A: %X, TEST A: %X", accumulator, logs_reg.accumulator)
+				fmt.printfln("A: %X, TEST A: %X", accumulator, logs_reg.cpu_registers.accumulator)
 			case 3:
-				fmt.printfln("X: %X, TEST X: %X", index_x, logs_reg.index_x)
+				fmt.printfln("X: %X, TEST X: %X", index_x, logs_reg.cpu_registers.index_x)
 			case 4:
-				fmt.printfln("Y: %X, TEST Y: %X", index_y, logs_reg.index_y)
+				fmt.printfln("Y: %X, TEST Y: %X", index_y, logs_reg.cpu_registers.index_y)
 			case 5:
-				fmt.printfln("P: %X, TEST P: %X", flags, logs_reg.flags)
+				fmt.printfln("P: %X, TEST P: %X", flags, logs_reg.cpu_registers.flags)
 			case 6:
-				fmt.printfln("SP: %X, TEST SP: %X", stack_pointer, logs_reg.stack_pointer)
+				fmt.printfln("SP: %X, TEST SP: %X", stack_pointer, logs_reg.cpu_registers.stack_pointer)
+			case 7:
+				fmt.printfln("CYCLES: %v, TEST CYCLES: %v", nes.cycles, logs_reg.cpu_cycles)
 			}
 
 			fmt.println("state before instr:")
@@ -489,7 +501,9 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 
 
 			fmt.println("state after instruction:")
-			print_cpu_state(registers)
+			state_before_instr.cpu_registers = registers
+			state_before_instr.cpu_cycles = nes.cycles
+			print_cpu_state(state_before_instr)
 			return false
 		}
 	}
@@ -497,45 +511,50 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 	return true
 }
 
-compare_reg :: proc(current_register: Registers, log_register: Registers) -> int {
+compare_reg :: proc(current_register: Registers, cpu_cycles: uint, log_register: NesTestLog) -> int {
 
-	if current_register.program_counter != log_register.program_counter {
+	if current_register.program_counter != log_register.cpu_registers.program_counter {
 		return 1
 	}
 
-	if current_register.accumulator != log_register.accumulator {
+	if current_register.accumulator != log_register.cpu_registers.accumulator {
 		return 2
 	}
 
-	if current_register.index_x != log_register.index_x {
+	if current_register.index_x != log_register.cpu_registers.index_x {
 		return 3
 	}
 
-	if current_register.index_y != log_register.index_y {
+	if current_register.index_y != log_register.cpu_registers.index_y {
 		return 4
 	}
 
-	if current_register.flags != log_register.flags {
+	if current_register.flags != log_register.cpu_registers.flags {
 		return 5
 	}
 
-	if current_register.stack_pointer != log_register.stack_pointer {
+	if current_register.stack_pointer != log_register.cpu_registers.stack_pointer {
 		return 6
+	}
+
+	if cpu_cycles != log_register.cpu_cycles {
+		return 7
 	}
 
 
 	return 0
 }
 
-print_cpu_state :: proc(regs: Registers) {
+print_cpu_state :: proc(regs: NesTestLog) {
 	fmt.printfln(
-		"PC: %X A: %X X: %X Y: %X P: %X SP: %X",
-		regs.program_counter,
-		regs.accumulator,
-		regs.index_x,
-		regs.index_y,
-		transmute(u8)regs.flags,
-		regs.stack_pointer,
+		"PC: %X A: %X X: %X Y: %X P: %X SP: %X CYC: %v",
+		regs.cpu_registers.program_counter,
+		regs.cpu_registers.accumulator,
+		regs.cpu_registers.index_x,
+		regs.cpu_registers.index_y,
+		transmute(u8)regs.cpu_registers.flags,
+		regs.cpu_registers.stack_pointer,
+		regs.cpu_cycles
 	)
 }
 
@@ -565,9 +584,12 @@ read_u16_le :: proc(nes: ^NES, addr: u16) -> u16 {
 run_instruction :: proc(using nes: ^NES) {
 	// get first byte of instruction
 	instr := read(nes, program_counter)
-	// fmt.printfln("PC: %X OPCODE: %X", program_counter, instr)
+
+	if program_counter == 0x82DD || program_counter == 0x82DA {
+		fmt.printfln("PC: %X OPCODE: %X A: %X", program_counter, instr, accumulator)
+	}
+
 	program_counter += 1
-	// fmt.printfln("running op %X", instr)
 	switch instr {
 
 	// AND
@@ -897,7 +919,7 @@ run_instruction :: proc(using nes: ^NES) {
 	// ROL
 
 	case 0x2A:
-		do_opcode(nes, .Accumulator, instr_rol_accumulator, 4)
+		do_opcode(nes, .Accumulator, instr_rol_accumulator, 2)
 	case 0x26:
 		do_opcode(nes, .ZeroPage, instr_rol, 5)
 	case 0x36:
@@ -1472,12 +1494,20 @@ tick_nes_till_vblank :: proc(
 	}
 }
 
+// resets everything
+nes_reset :: proc(nes: ^NES, rom_file: string) {
+	nes^ = {}
+	res := load_rom_from_file(nes, rom_file)
+	nes_init(nes)
+}
+
 nes_init :: proc(using nes: ^NES) {
 	low_byte := u16(read(nes, 0xFFFC))
 	high_byte := u16(read(nes, 0xFFFC + 1))
 	program_counter = high_byte << 8 | low_byte
 
 	stack_pointer = 0xFD
+	cycles = 7
 	flags = transmute(RegisterFlags)u8(0x24)
 }
 
@@ -1675,15 +1705,22 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 	chr_rom_start := prg_rom_start + rom_info.prg_rom_size
 
 	prg_rom := make([]u8, rom_info.prg_rom_size)
-	chr_rom := make([]u8, rom_info.chr_rom_size)
+
+	chr_rom: []u8
+
+	if rom_info.chr_rom_size == 0 {
+		fmt.printfln("chr rom size is 0.. so it uses chr ram? what is that?")
+		chr_rom = make([]u8, 0x2000)
+	} else {
+		chr_rom = make([]u8, rom_info.chr_rom_size)
+		copy(chr_rom[:], rom_string[chr_rom_start:])
+	}
 
 	copy(prg_rom[:], rom_string[prg_rom_start:])
-	copy(chr_rom[:], rom_string[chr_rom_start:])
 
 	fmt.printfln("rom info: %v", rom_info)
 
 	rom_info.rom_loaded = true
-
 
 	nes.rom_info = rom_info
 	nes.prg_rom = prg_rom

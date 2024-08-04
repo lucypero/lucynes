@@ -107,25 +107,40 @@ instr_adc_inner :: proc(using nes: ^NES, value: u8) {
 
 instr_bcc :: proc(using nes: ^NES, mem: u16) {
 	if .Carry not_in flags {
+		extra_instr_cycles += 1
+		if (program_counter & 0xFF00) != (mem & 0xFF00) {
+			// crossed pages
+			extra_instr_cycles += 1
+		}
 		program_counter = mem
 	}
 }
 
 instr_bcs :: proc(using nes: ^NES, mem: u16) {
 	if .Carry in flags {
+		extra_instr_cycles += 1
+		if (program_counter & 0xFF00) != (mem & 0xFF00) {
+			// crossed pages
+			extra_instr_cycles += 1
+		}
 		program_counter = mem
 	}
 }
 
 instr_beq :: proc(using nes: ^NES, mem: u16) {
 	if .Zero in flags {
+		extra_instr_cycles += 1
+		if (program_counter & 0xFF00) != (mem & 0xFF00) {
+			// crossed pages
+			extra_instr_cycles += 1
+		}
 		program_counter = mem
 	}
 }
 
 instr_bit :: proc(using nes: ^NES, mem: u16) {
-
 	// A & M, N = M7, V = M6
+	// fmt.printfln("accum %X, mem is %X", accumulator, mem)
 
 	set_flag(&flags, .Zero, (accumulator & read(nes, mem)) == 0)
 	set_flag(&flags, .Overflow, (read(nes, mem) & 0x40) != 0)
@@ -134,18 +149,33 @@ instr_bit :: proc(using nes: ^NES, mem: u16) {
 
 instr_bmi :: proc(using nes: ^NES, mem: u16) {
 	if .Negative in flags {
+		extra_instr_cycles += 1
+		if (program_counter & 0xFF00) != (mem & 0xFF00) {
+			// crossed pages
+			extra_instr_cycles += 1
+		}
 		program_counter = mem
 	}
 }
 
 instr_bne :: proc(using nes: ^NES, mem: u16) {
 	if .Zero not_in flags {
+		extra_instr_cycles += 1
+		if (program_counter & 0xFF00) != (mem & 0xFF00) {
+			// crossed pages
+			extra_instr_cycles += 1
+		}
 		program_counter = mem
 	}
 }
 
 instr_bpl :: proc(using nes: ^NES, mem: u16) {
 	if .Negative not_in flags {
+		extra_instr_cycles += 1
+		if (program_counter & 0xFF00) != (mem & 0xFF00) {
+			// crossed pages
+			extra_instr_cycles += 1
+		}
 		program_counter = mem
 	}
 }
@@ -158,6 +188,11 @@ instr_brk :: proc(using nes: ^NES, mem: u16) {
 
 instr_bvc :: proc(using nes: ^NES, mem: u16) {
 	if .Overflow not_in flags {
+		extra_instr_cycles += 1
+		if (program_counter & 0xFF00) != (mem & 0xFF00) {
+			// crossed pages
+			extra_instr_cycles += 1
+		}
 		program_counter = mem
 	}
 }
@@ -165,6 +200,11 @@ instr_bvc :: proc(using nes: ^NES, mem: u16) {
 
 instr_bvs :: proc(using nes: ^NES, mem: u16) {
 	if .Overflow in flags {
+		extra_instr_cycles += 1
+		if (program_counter & 0xFF00) != (mem & 0xFF00) {
+			// crossed pages
+			extra_instr_cycles += 1
+		}
 		program_counter = mem
 	}
 }

@@ -89,3 +89,15 @@ u are adding to x to a u8 so it will wrap. so sprites show up on the left when t
 - don't allocate memory for the whole bus.
  the bus is a fake thing. it's not ram
  put actual ram in separate fields. it's easier.
+
+
+# cpu timing
+
+u gotta do the extra cycles on the addressing modes
+
+for relative, it's an instruction thing. depends if it succeeds or not
+
+so how do u do it
+
+just havea variable in the nes that u set to 0 before running the instruction
+and the branching instructions can touch that
