@@ -175,6 +175,9 @@ ppu_readwrite :: proc(using nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 	temp_val: u8
 	the_val: ^u8 = &temp_val
 
+	// ignoring top 2 bits (it's a 14 bit bus)
+	mem := mem & 0x3FFF
+
 	switch mem {
 
 	// Pattern tables
@@ -258,7 +261,12 @@ ppu_readwrite :: proc(using nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 
 		the_val = &ppu_palette[palette_mem]
 	case:
-		fmt.eprintfln("idk what u read/writing here at ppu bus %X", mem)
+		if write {
+			fmt.eprintfln("idk what u writing here at ppu bus %X", mem)
+
+		} else {
+			fmt.eprintfln("idk what u reading here at ppu bus %X", mem)
+		}
 	}
 
 	if write {
@@ -567,7 +575,7 @@ evaluate_sprites :: proc(using nes: ^NES, current_scanline: int) {
 		// TODO: this is like evaluating the current ppu_scanline
 		// .  but u should evaluate the next one. what's going on?
 
-		diff: u16 = u16(current_scanline) - u16(oam_entries[oam_entry].y + 1)
+		diff: u16 = u16(current_scanline) - (u16(oam_entries[oam_entry].y) + 1)
 
 		if diff >= 0 && diff < (ppu_ctrl.h != 0 ? 16 : 8) {
 			if sprite_count < 8 {

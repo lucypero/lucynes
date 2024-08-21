@@ -56,7 +56,9 @@ raylib_test :: proc() {
 	nes: NES
 
 	// rom_in_nes :: "roms/SuperMarioBros.nes"
-	rom_in_nes :: "roms/Mega Man.nes"
+	// rom_in_nes :: "roms/Mega Man.nes"
+	// rom_in_nes :: "roms/Castlevania.nes"
+	rom_in_nes :: "roms/Metal Gear.nes"
 	// rom_in_nes :: "roms/IceClimber.nes"
 	// rom_in_nes :: "roms/DonkeyKong.nes"
 	// rom_in_nes :: "roms/Kung Fu.nes"
@@ -65,6 +67,7 @@ raylib_test :: proc() {
 	// rom_in_nes :: "tests/full_nes_palette.nes"
 	// rom_in_nes :: "tests/nmi_sync/demo_ntsc.nes"
 	// rom_in_nes :: "tests/nmi_sync/demo_pal.nes"
+	// rom_in_nes :: "tests/240pee.nes"
 	// rom_in_nes :: "tests/color_test.nes"
 	// rom_in_nes :: "nestest/nestest.nes"
 

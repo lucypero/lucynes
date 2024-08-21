@@ -34,9 +34,6 @@ order of inputs:
 A B Select Start Up Down Left Right
 
 
-
-
-
 bad one (when your game works)
 450b9ceae
 
@@ -104,3 +101,9 @@ and the branching instructions can touch that
 
 read this about cycles
 https://forums.nesdev.org/viewtopic.php?t=24690
+
+
+
+
+###
+
