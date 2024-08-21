@@ -1428,7 +1428,7 @@ _main :: proc() {
 	// mirror_test()
 	// nes_test_without_render()
 	// union_test()
-	raylib_test()
+	window_main()
 }
 
 union_test :: proc() {
