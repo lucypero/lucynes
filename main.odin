@@ -6,6 +6,7 @@ import "core:mem"
 import "core:os"
 import "core:strconv"
 import "core:strings"
+import rl "vendor:raylib"
 
 // Emulator authors may wish to emulate the NTSC NES/Famicom CPU at 21441960 Hz ((341×262−0.5)×4×60) to ensure a synchronised/stable 60 frames per second.[2]
 
@@ -392,7 +393,7 @@ write :: proc(using nes: ^NES, addr: u16, val: u8) {
 		case 0x8000 ..= 0xFFFF:
 			data := &mapper_data.(UXROMData)
 			data.bank = uint(val) & 0x0F
-			// fmt.printfln("bank switching! to %v", data.bank)
+		// fmt.printfln("bank switching! to %v", data.bank)
 		// here u do the bank switch
 		}
 	}
@@ -1428,7 +1429,30 @@ _main :: proc() {
 	// mirror_test()
 	// nes_test_without_render()
 	// union_test()
+	
 	window_main()
+}
+
+// reads a pal file and converts it to [64]rl.Color
+get_palette :: proc(pal_file: string) -> (p_palette: []rl.Color, ok: bool) {
+
+	palette := make([]rl.Color, 64)
+
+	log_bytes := os.read_entire_file(pal_file) or_return
+	defer delete(log_bytes)
+
+	if len(log_bytes) < 64 {
+		return palette, false
+	}
+
+	for i in 0 ..< 64 {
+		palette[i].r = log_bytes[i * 3 + 0]
+		palette[i].g = log_bytes[i * 3 + 1]
+		palette[i].b = log_bytes[i * 3 + 2]
+		palette[i].w = 255
+	}
+
+	return palette, true
 }
 
 union_test :: proc() {

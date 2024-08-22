@@ -18,6 +18,28 @@ screen_height :: nes_height * scale_factor
 framebuffer_width :: nes_width
 framebuffer_height :: nes_height
 
+// palette_file :: "palettes/ntscpalette.pal"
+palette_file :: "palettes/Composite_wiki.pal"
+
+// rom_in_nes :: "roms/SuperMarioBros.nes"
+rom_in_nes :: "roms/Mega Man.nes"
+// rom_in_nes :: "roms/Castlevania.nes"
+// rom_in_nes :: "roms/Metal Gear.nes"
+// rom_in_nes :: "roms/IceClimber.nes"
+// rom_in_nes :: "roms/DonkeyKong.nes"
+// rom_in_nes :: "roms/Kung Fu.nes"
+// rom_in_nes :: "tests/cpu_timing_test6/cpu_timing_test.nes"
+// rom_in_nes :: "tests/branch_timing_tests/1.Branch_Basics.nes"
+// rom_in_nes :: "tests/full_nes_palette.nes"
+// rom_in_nes :: "tests/nmi_sync/demo_ntsc.nes"
+// rom_in_nes :: "tests/nmi_sync/demo_pal.nes"
+// rom_in_nes :: "tests/240pee.nes"
+// rom_in_nes :: "tests/full_palette.nes"
+// rom_in_nes :: "tests/color_test.nes"
+// rom_in_nes :: "nestest/nestest.nes"
+
+palette: []rl.Color
+
 PixelGrid :: struct {
 	pixels: []rl.Color,
 	width:  int,
@@ -52,24 +74,16 @@ window_main :: proc() {
 
 	run_nestest_test()
 
+	ok: bool
+	palette, ok = get_palette(palette_file)
+	if !ok {
+		fmt.eprintln("could not get palette")
+		os.exit(1)
+	}
+
 	// initializing nes
 	nes: NES
 
-	// rom_in_nes :: "roms/SuperMarioBros.nes"
-	// rom_in_nes :: "roms/Mega Man.nes"
-	// rom_in_nes :: "roms/Castlevania.nes"
-	rom_in_nes :: "roms/Metal Gear.nes"
-	// rom_in_nes :: "roms/IceClimber.nes"
-	// rom_in_nes :: "roms/DonkeyKong.nes"
-	// rom_in_nes :: "roms/Kung Fu.nes"
-	// rom_in_nes :: "tests/cpu_timing_test6/cpu_timing_test.nes"
-	// rom_in_nes :: "tests/branch_timing_tests/1.Branch_Basics.nes"
-	// rom_in_nes :: "tests/full_nes_palette.nes"
-	// rom_in_nes :: "tests/nmi_sync/demo_ntsc.nes"
-	// rom_in_nes :: "tests/nmi_sync/demo_pal.nes"
-	// rom_in_nes :: "tests/240pee.nes"
-	// rom_in_nes :: "tests/color_test.nes"
-	// rom_in_nes :: "nestest/nestest.nes"
 
 	// res := load_rom_from_file(&nes, "roms/DonkeyKong.nes")
 	res := load_rom_from_file(&nes, rom_in_nes)
@@ -171,189 +185,6 @@ fill_input_port :: proc(port_input: ^u8) {
 	}
 }
 
-
-Tile :: [8 * 8]int
-
 color_map_from_nes_to_real :: proc(color_in_nes: u8) -> rl.Color {
-
-	// TODO find a better palette. this one is too saturated
-	// learn how to read .pal files
-	console_palette: [][3]u8 =  {
-		{0x80, 0x80, 0x80},
-		{0x00, 0x3D, 0xA6},
-		{0x00, 0x12, 0xB0},
-		{0x44, 0x00, 0x96},
-		{0xA1, 0x00, 0x5E},
-		{0xC7, 0x00, 0x28},
-		{0xBA, 0x06, 0x00},
-		{0x8C, 0x17, 0x00},
-		{0x5C, 0x2F, 0x00},
-		{0x10, 0x45, 0x00},
-		{0x05, 0x4A, 0x00},
-		{0x00, 0x47, 0x2E},
-		{0x00, 0x41, 0x66},
-		{0x00, 0x00, 0x00},
-		{0x05, 0x05, 0x05},
-		{0x05, 0x05, 0x05},
-		{0xC7, 0xC7, 0xC7},
-		{0x00, 0x77, 0xFF},
-		{0x21, 0x55, 0xFF},
-		{0x82, 0x37, 0xFA},
-		{0xEB, 0x2F, 0xB5},
-		{0xFF, 0x29, 0x50},
-		{0xFF, 0x22, 0x00},
-		{0xD6, 0x32, 0x00},
-		{0xC4, 0x62, 0x00},
-		{0x35, 0x80, 0x00},
-		{0x05, 0x8F, 0x00},
-		{0x00, 0x8A, 0x55},
-		{0x00, 0x99, 0xCC},
-		{0x21, 0x21, 0x21},
-		{0x09, 0x09, 0x09},
-		{0x09, 0x09, 0x09},
-		{0xFF, 0xFF, 0xFF},
-		{0x0F, 0xD7, 0xFF},
-		{0x69, 0xA2, 0xFF},
-		{0xD4, 0x80, 0xFF},
-		{0xFF, 0x45, 0xF3},
-		{0xFF, 0x61, 0x8B},
-		{0xFF, 0x88, 0x33},
-		{0xFF, 0x9C, 0x12},
-		{0xFA, 0xBC, 0x20},
-		{0x9F, 0xE3, 0x0E},
-		{0x2B, 0xF0, 0x35},
-		{0x0C, 0xF0, 0xA4},
-		{0x05, 0xFB, 0xFF},
-		{0x5E, 0x5E, 0x5E},
-		{0x0D, 0x0D, 0x0D},
-		{0x0D, 0x0D, 0x0D},
-		{0xFF, 0xFF, 0xFF},
-		{0xA6, 0xFC, 0xFF},
-		{0xB3, 0xEC, 0xFF},
-		{0xDA, 0xAB, 0xEB},
-		{0xFF, 0xA8, 0xF9},
-		{0xFF, 0xAB, 0xB3},
-		{0xFF, 0xD2, 0xB0},
-		{0xFF, 0xEF, 0xA6},
-		{0xFF, 0xF7, 0x9C},
-		{0xD7, 0xE8, 0x95},
-		{0xA6, 0xED, 0xAF},
-		{0xA2, 0xF2, 0xDA},
-		{0x99, 0xFF, 0xFC},
-		{0xDD, 0xDD, 0xDD},
-		{0x11, 0x11, 0x11},
-		{0x11, 0x11, 0x11},
-	}
-
-	color_in_nes := color_in_nes & 0x3F
-
-	color: rl.Color
-	color.xyz = console_palette[color_in_nes]
-
-	// making it darker
-	// factor:f32= 0.5
-	// color.x = u8(f32(color.x) * factor)
-	// color.y = u8(f32(color.y) * factor)
-	// color.z = u8(f32(color.z) * factor)
-
-	color.w = 255
-
-
-	// return color_map_from_nes_to_real_manual(color_in_nes)
-	return color
-
-	// return color.R << 24 | color.G << 16 | color.B << 8 | 0xFF;
-	// return rl.BLACK
-}
-
-// manual way i did it. 
-color_map_from_nes_to_real_manual :: proc(color_in_nes: u8) -> rl.Color {
-
-	col: rl.Color = rl.BLACK
-
-	// this will take a long time
-
-	switch color_in_nes {
-
-	case 0x00:
-		col.xyz = {101, 102, 102}
-	case 0x0F:
-		col.xyz = {0, 0, 0}
-	case 0x12:
-		col.xyz = {64, 81, 208}
-	case 0x2C:
-		col.xyz = {62, 194, 205}
-	case 0x27:
-		col.xyz = {239, 154, 73}
-	case 0x30:
-		col.xyz = {254, 254, 255}
-	case 0x15:
-		col.xyz = {192, 52, 112}
-	case 0x33:
-		col.xyz = {232, 209, 255}
-	case 0x36:
-		col.xyz = {255, 207, 202}
-	case 0x06:
-		col.xyz = {113, 15, 7}
-	case 0x17:
-		col.xyz = {159, 74, 0}
-	case 0x02:
-		col.xyz = {121, 31, 127}
-	case 0x05:
-		col.xyz = {115, 10, 55}
-	case 0x28:
-		col.xyz = {180, 172, 44}
-	case 0x19:
-		col.xyz = {54, 109, 0}
-	case 0x11:
-		col.xyz = {15, 99, 179}
-	case 0x16:
-		col.xyz = {189, 60, 48}
-	case 0x20:
-		col.xyz = {254, 254, 255}
-	case 0x26:
-		col.xyz = {255, 139, 127}
-	case 0x21:
-		col.xyz = {93, 179, 255}
-	case 0x25:
-		col.xyz = {255, 131, 192}
-	case 0x37:
-		col.xyz = {248, 213, 180}
-	case 0x24:
-		col.xyz = {247, 133, 250}
-	case 0x22:
-		col.xyz = {143, 161, 255}
-	case 0x29:
-		col.xyz = {133, 188, 47}
-	case 0x3A:
-		col.xyz = {185, 232, 184}
-	case 0x01:
-		col.xyz = {0, 45, 105}
-	case 0x38:
-		col.xyz = {233, 226, 183}
-	case 0x1A:
-		col.xyz = {7, 119, 4}
-	case 0x07:
-		col.xyz = {90, 26, 0}
-	case 0x18:
-		col.xyz = {109, 92, 0}
-	case 0x1C:
-		col.xyz = {0, 114, 125}
-	case 0x3C:
-		col.xyz = {175, 229, 234}
-	case 0x09:
-		col.xyz = {11, 52, 0}
-	case 0x0C:
-		col.xyz = {1, 56, 64}
-	case 0x10:
-		col.xyz = {174, 174, 174}
-
-	case:
-		fmt.printf("%X, ", color_in_nes)
-	}
-
-
-	return col
-
-
+	return palette[color_in_nes & 0x3F]
 }
