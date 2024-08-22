@@ -623,12 +623,6 @@ run_instruction :: proc(using nes: ^NES) {
 	// get first byte of instruction
 	instr := read(nes, program_counter)
 
-	// if program_counter == 0x82DD || program_counter == 0x82DA {
-	if program_counter == 0x82BD || program_counter == 0x82DA {
-		a := 0
-		a += 1
-	}
-
 	// fmt.printfln("PC: %X OPCODE: %X A: %X", program_counter, instr, accumulator)
 
 	program_counter += 1
