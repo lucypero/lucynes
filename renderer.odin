@@ -46,6 +46,7 @@ PixelGrid :: struct {
 
 window_main :: proc() {
 
+	rl.SetTraceLogLevel(.ERROR)
 	rl.InitWindow(screen_width, screen_height, "lucynes")
 	rl.SetWindowPosition(20, 50)
 	rl.SetTargetFPS(60)

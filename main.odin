@@ -1448,6 +1448,7 @@ main :: proc() {
 
 	_main()
 
+	fmt.printfln(`-------- Allocations report: -----------`)
 	report_allocations(&nes_allocator, "NES")
 	report_allocations(&forever_allocator, "Forever")
 	print_allocated_temp()
@@ -1716,13 +1717,13 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 	// PRG ROM data (16384 * x bytes) (but later on it just says 16kb units)
 	// CHR ROM data, if present (8192 * y bytes) (but later on it just says 8kb units)
 
-	fmt.printfln("byte 4 in rom string: %X", rom_string[4])
+	// fmt.printfln("byte 4 in rom string: %X", rom_string[4])
 
 	rom_info.prg_rom_size = int(rom_string[4]) * 16384
 	rom_info.chr_rom_size = int(rom_string[5]) * 8192
 
-	fmt.printfln("prg rom size: %v bytes", rom_info.prg_rom_size)
-	fmt.printfln("chr rom size: %v bytes", rom_info.chr_rom_size)
+	// fmt.printfln("prg rom size: %v bytes", rom_info.prg_rom_size)
+	// fmt.printfln("chr rom size: %v bytes", rom_info.chr_rom_size)
 
 	// Flags 6
 
@@ -1781,7 +1782,7 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 
 	prg_ram_size: u8 = rom_string[8]
 
-	fmt.printfln("prg ram size according to flags 8: %v", prg_ram_size)
+	// fmt.printfln("prg ram size according to flags 8: %v", prg_ram_size)
 
 	// where is all the rom data
 	header_size :: 16
@@ -1800,7 +1801,7 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 	chr_rom: []u8
 
 	if rom_info.chr_rom_size == 0 {
-		fmt.printfln("chr rom size is 0.. so it uses chr ram? what is that?")
+		// fmt.printfln("chr rom size is 0.. so it uses chr ram? what is that?")
 		chr_rom = make([]u8, 0x2000)
 	} else {
 		chr_rom = make([]u8, rom_info.chr_rom_size)
@@ -1818,7 +1819,7 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 	// assuming it is always 8kib
 	nes.prg_ram = make([]u8, 1024 * 8)
 
-	fmt.printfln("rom info: %v", rom_info)
+	// fmt.printfln("rom info: %v", rom_info)
 
 	return true
 }
