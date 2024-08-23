@@ -38,8 +38,6 @@ rom_in_nes :: "roms/Mega Man.nes"
 // rom_in_nes :: "tests/color_test.nes"
 // rom_in_nes :: "nestest/nestest.nes"
 
-palette: []rl.Color
-
 PixelGrid :: struct {
 	pixels: []rl.Color,
 	width:  int,
@@ -83,25 +81,7 @@ window_main :: proc() {
 
 	// initializing nes
 	nes: NES
-
-
-	// res := load_rom_from_file(&nes, "roms/DonkeyKong.nes")
-	res := load_rom_from_file(&nes, rom_in_nes)
-	// res := load_rom_from_file(&nes, "roms/Kung Fu.nes")
-	// res := load_rom_from_file(&nes, "roms/Bomberman.nes")
-	// res := load_rom_from_file(&nes, "roms/PacMan.nes")
-	// res := load_rom_from_file(&nes, "roms/IceClimber.nes")
-
-	if !res {
-		fmt.eprintln("could not load rom")
-		os.exit(1)
-	}
-
-	// initializing nes
-
-	// do this in a reset too
-
-	nes_init(&nes)
+	nes_reset(&nes, rom_in_nes)
 
 	for !rl.WindowShouldClose() {
 

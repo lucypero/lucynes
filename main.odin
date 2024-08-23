@@ -3,17 +3,24 @@ package main
 import "base:runtime"
 import "core:fmt"
 import "core:mem"
+import mv "core:mem/virtual"
 import "core:os"
 import "core:strconv"
 import "core:strings"
 import rl "vendor:raylib"
 
-// Emulator authors may wish to emulate the NTSC NES/Famicom CPU at 21441960 Hz ((341×262−0.5)×4×60) to ensure a synchronised/stable 60 frames per second.[2]
+// Allocators
 
-// Stack: The processor supports a 256 byte stack located between $0100 and $01FF.
-// The processor is little endian and expects addresses to be stored in memory least significant byte first.
+// one for all memory that a NES needs. it will be freed when you reset or switch games.
+nes_arena: mv.Arena
+nes_allocator: mem.Tracking_Allocator
 
-// flags
+// one for long term things that last forever
+forever_arena: mv.Arena
+forever_allocator: mem.Tracking_Allocator
+
+
+palette: []rl.Color
 
 Mapper :: enum {
 	NROM128, // 00
@@ -1390,28 +1397,60 @@ run_instruction :: proc(using nes: ^NES) {
 	flags += {.NoEffect1}
 }
 
+report_allocations :: proc(allocator: ^mem.Tracking_Allocator, allocator_name: string) {
+	fmt.printfln(
+		`--- %v allocator: ---
+Current memory allocated: %v KB
+Peak memory allocated: %v KB
+Total allocation count: %v`,
+		allocator_name,
+		f32(allocator.current_memory_allocated) / 1000,
+		f32(allocator.peak_memory_allocated) / 1000,
+		allocator.total_allocation_count,
+	)
+}
 
-main :: proc() {
-
-	track: mem.Tracking_Allocator
-	mem.tracking_allocator_init(&track, context.allocator)
-	context.allocator = mem.tracking_allocator(&track)
-
-	_main()
-
-	if len(track.allocation_map) > 0 {
-		fmt.eprintf("=== %v allocations not freed: ===\n", len(track.allocation_map))
-		for _, entry in track.allocation_map {
+warn_leaks :: proc(allocator: ^mem.Tracking_Allocator, allocator_name: string) {
+	if len(allocator.allocation_map) > 0 {
+		fmt.eprintf(
+			"=== %v allocations not freed from %v allocator: ===\n",
+			len(allocator.allocation_map),
+			allocator_name,
+		)
+		for _, entry in allocator.allocation_map {
 			fmt.eprintf("- %v bytes @ %v\n", entry.size, entry.location)
 		}
 	}
-	if len(track.bad_free_array) > 0 {
-		fmt.eprintf("=== %v incorrect frees: ===\n", len(track.bad_free_array))
-		for entry in track.bad_free_array {
+	if len(allocator.bad_free_array) > 0 {
+		fmt.eprintf(
+			"=== %v incorrect frees from %v allocator: ===\n",
+			len(allocator.bad_free_array),
+			allocator_name,
+		)
+		for entry in allocator.bad_free_array {
 			fmt.eprintf("- %p @ %v\n", entry.memory, entry.location)
 		}
 	}
-	mem.tracking_allocator_destroy(&track)
+}
+
+main :: proc() {
+
+	init_tracking_alloc :: proc(arena: ^mv.Arena, tracking_allocator: ^mem.Tracking_Allocator) {
+		res := mv.arena_init_static(arena)
+		assert(res == .None)
+		mem.tracking_allocator_init(tracking_allocator, mv.arena_allocator(arena))
+	}
+
+	init_tracking_alloc(&nes_arena, &nes_allocator)
+	init_tracking_alloc(&forever_arena, &forever_allocator)
+
+	context.allocator = mem.tracking_allocator(&forever_allocator)
+
+	_main()
+
+	report_allocations(&nes_allocator, "NES")
+	report_allocations(&forever_allocator, "Forever")
+	print_allocated_temp()
 }
 
 _main :: proc() {
@@ -1421,9 +1460,8 @@ _main :: proc() {
 
 	// print_patterntable(nes)
 	// mirror_test()
-	// nes_test_without_render()
 	// union_test()
-	
+
 	window_main()
 }
 
@@ -1472,20 +1510,6 @@ union_test :: proc() {
 	ppu_ctrl.reg = 0x20
 
 	fmt.printfln("%b", transmute(u8)ppu_ctrl)
-}
-
-nes_test_without_render :: proc() {
-	run_nestest_test()
-
-	nes: NES
-	res := load_rom_from_file(&nes, "roms/DonkeyKong.nes")
-	// res := load_rom_from_file(&nes, "nestest/nestest.nes")
-
-	if !res {
-		return
-	}
-
-	// run_nes(&nes)
 }
 
 
@@ -1553,10 +1577,16 @@ tick_nes_till_vblank :: proc(
 	}
 }
 
-// resets everything
+// resets all NES state. loads cartridge again
 nes_reset :: proc(nes: ^NES, rom_file: string) {
+	context.allocator = mem.tracking_allocator(&nes_allocator)
+	free_all(context.allocator)
 	nes^ = {}
 	res := load_rom_from_file(nes, rom_file)
+	if !res {
+		fmt.eprintln("could not load rom")
+		os.exit(1)
+	}
 	nes_init(nes)
 }
 
@@ -1660,9 +1690,7 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 		return false
 	}
 
-	defer {
-		delete(test_rom)
-	}
+	defer delete(test_rom)
 
 	rom_string := string(test_rom)
 
@@ -1855,7 +1883,6 @@ flags_test :: proc() {
 
 }
 
-
 ///  memory / allocator / context things
 
 get_total_allocated :: proc() -> int {
@@ -1876,7 +1903,11 @@ print_allocated :: proc() {
 
 print_allocated_temp :: proc() {
 	alloc := (^runtime.Arena)(context.temp_allocator.data)
-	fmt.printfln("total allocated on temp allocator: %v bytes", alloc.total_used)
+	fmt.printfln(
+		`--- Temp allocator: ---
+Total memory allocated: %v KB`,
+		f32(alloc.total_used) / 1000,
+	)
 }
 
 print_allocator_features :: proc() {
