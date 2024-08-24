@@ -1,6 +1,8 @@
 package main
 
+import "core:c"
 import "core:fmt"
+import "core:math"
 import "core:os"
 import rl "vendor:raylib"
 
@@ -22,7 +24,9 @@ framebuffer_height :: nes_height
 palette_file :: "palettes/Composite_wiki.pal"
 
 // rom_in_nes :: "roms/SuperMarioBros.nes"
-rom_in_nes :: "roms/Mega Man.nes"
+// rom_in_nes :: "roms/Mega Man.nes"
+rom_in_nes :: "roms/Contra.nes"
+// rom_in_nes :: "roms/Duck Tales.nes"
 // rom_in_nes :: "roms/Castlevania.nes"
 // rom_in_nes :: "roms/Metal Gear.nes"
 // rom_in_nes :: "roms/IceClimber.nes"
@@ -83,6 +87,10 @@ window_main :: proc() {
 	// initializing nes
 	nes: NES
 	nes_reset(&nes, rom_in_nes)
+
+	// initting audio
+	audio_demo : AudioDemo
+	audio_demo_init(&audio_demo)
 
 	for !rl.WindowShouldClose() {
 

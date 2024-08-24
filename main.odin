@@ -273,6 +273,10 @@ read :: proc(using nes: ^NES, addr: u16) -> u8 {
 
 		return read_ppu_register(nes, u16(ppu_reg))
 
+	// APU STATUS
+	case 0x4015:
+		// apu status
+		return apu_read(nes, addr)
 
 	// Input
 	case 0x4016:
@@ -352,6 +356,11 @@ write :: proc(using nes: ^NES, addr: u16, val: u8) {
 		ppu_reg := get_mirrored(int(addr), 0x2000, 0x2007)
 		// fmt.printfln("writing to a ppu register %X", ppu_reg)
 		write_ppu_register(nes, u16(ppu_reg), val)
+		return
+
+	// APU Registers
+	case 0x4000 ..= 0x4013, 0x4015, 0x4017:
+		apu_write(nes, addr, val)
 		return
 
 	// Input
