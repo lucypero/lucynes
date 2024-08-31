@@ -25,9 +25,9 @@ palette_file :: "palettes/Composite_wiki.pal"
 
 // rom_in_nes :: "roms/SuperMarioBros.nes"
 // rom_in_nes :: "roms/Mega Man.nes"
-rom_in_nes :: "roms/Contra.nes"
+// rom_in_nes :: "roms/Contra.nes"
 // rom_in_nes :: "roms/Duck Tales.nes"
-// rom_in_nes :: "roms/Castlevania.nes"
+rom_in_nes :: "roms/Castlevania.nes"
 // rom_in_nes :: "roms/Metal Gear.nes"
 // rom_in_nes :: "roms/IceClimber.nes"
 // rom_in_nes :: "roms/DonkeyKong.nes"
@@ -75,6 +75,10 @@ window_main :: proc() {
 
 	// rl.UnloadImage(checkedIm) // Unload CPU (RAM) image data (pixels)
 
+	// initting audio
+	audio_demo : AudioDemo
+	audio_demo_init(&audio_demo)
+
 	run_nestest_test()
 
 	ok: bool
@@ -88,9 +92,6 @@ window_main :: proc() {
 	nes: NES
 	nes_reset(&nes, rom_in_nes)
 
-	// initting audio
-	audio_demo : AudioDemo
-	audio_demo_init(&audio_demo)
 
 	for !rl.WindowShouldClose() {
 

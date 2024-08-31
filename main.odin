@@ -7,6 +7,8 @@ import mv "core:mem/virtual"
 import "core:os"
 import "core:strconv"
 import "core:strings"
+import "core:sync"
+import "core:sync/chan"
 import rl "vendor:raylib"
 
 // Allocators
@@ -237,7 +239,16 @@ NES :: struct {
 	// sprite zero collision flags
 	sprite_zero_hit_possible:       bool, // if a SZH is possible in the next scanline
 	sprite_zero_being_rendered:     bool,
+
+	// APU state
+	apu:                            APU,
 }
+
+// sync stuff for passing data to audio thread
+mutex: sync.Mutex
+ring_buffer: Buffer
+sema: sync.Sema
+sample_channel: chan.Chan(f32)
 
 nmi :: proc(using nes: ^NES) {
 
@@ -1472,6 +1483,7 @@ _main :: proc() {
 	// mirror_test()
 	// union_test()
 
+
 	window_main()
 }
 
@@ -1522,34 +1534,6 @@ union_test :: proc() {
 	fmt.printfln("%b", transmute(u8)ppu_ctrl)
 }
 
-
-// outdated
-// run_nes :: proc(using nes: ^NES) {
-
-// 	// initializing nes
-
-// 	// do this in a reset too
-// 	low_byte := u16(read(nes, 0xFFFC))
-// 	high_byte := u16(read(nes, 0xFFFC + 1))
-// 	program_counter = high_byte << 8 | low_byte
-
-// 	stack_pointer = 0xFD
-// 	flags = transmute(RegisterFlags)u8(0x24)
-
-// 	// running instructions forever
-// 	for true {
-// 		// main NES loop
-// 		// catchup method
-// 		past_cycles := cycles
-// 		run_instruction(nes)
-// 		cpu_cycles_dt := cycles - past_cycles
-
-// 		for i in 0 ..< cpu_cycles_dt * 3 {
-// 			ppu_tick(nes)
-// 		}
-// 	}
-// }
-
 tick_nes_till_vblank :: proc(
 	using nes: ^NES,
 	port_0_input: u8,
@@ -1579,6 +1563,7 @@ tick_nes_till_vblank :: proc(
 			if ppu_tick(nes, pixel_grid) {
 				vblank_hit = true
 			}
+			apu_tick(nes)
 		}
 
 		if vblank_hit {
@@ -1609,6 +1594,7 @@ nes_init :: proc(using nes: ^NES) {
 	stack_pointer = 0xFD
 	cycles = 7
 	flags = transmute(RegisterFlags)u8(0x24)
+	apu_init(nes)
 }
 
 print_patterntable :: proc(nes: NES) {
