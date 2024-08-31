@@ -116,6 +116,39 @@ sample_generator_thread_proc :: proc(data: rawptr) {
 	}
 }
 
+last_sample: f32
+
+audio_callback :: proc(device: ^ma.device, output, input: rawptr, frame_count: u32) {
+
+	app := (^AudioDemo)(device.pUserData)
+
+	// get device buffer
+	device_buffer := mem.slice_ptr((^f32)(output), int(frame_count))
+
+	for i in 0 ..< frame_count {
+		sample, ok := chan.try_recv(sample_channel)
+		if ok {
+			// fmt.println("got sample")
+			device_buffer[i] = sample * 0.1
+			last_sample = device_buffer[i]
+		} else {
+			// fmt.println("did not got sample")
+			device_buffer[i] = last_sample
+		}
+	}
+}
+
+// nes stuff
+
+APU :: struct {
+	frame_clock_counter: u32,
+	clock_counter:       u32,
+	pulse1:              PulseChannel,
+	pulse2:              PulseChannel,
+	triangle:            TriangleChannel,
+	global_time:         f64,
+}
+
 apu_read :: proc(using nes: ^NES, addr: u16) -> u8 {
 
 	// addr will be 0x4015
@@ -144,6 +177,10 @@ apu_write :: proc(using nes: ^NES, addr: u16, val: u8) {
 			pulse.seq.sequence = 0b11111100
 			pulse.osc.duty_cycle = 0.750
 		}
+
+		// LC halt
+		l: bool = (val & 0x20) != 0
+		pulse.length_counter.halt = l
 	}
 
 	set_pulse_timer_low :: proc(val: u8, pulse: ^PulseChannel) {
@@ -154,6 +191,9 @@ apu_write :: proc(using nes: ^NES, addr: u16, val: u8) {
 		// pulse1_seq.reload = (pulse1_seq.reload & 0xFF00) | u16(val)
 		pulse.seq.reload = (u16(val) & 0x07) << 8 | (pulse.seq.reload & 0x00FF)
 		pulse.seq.timer = pulse.seq.reload
+
+		l := (val & 0xF8) >> 3
+		lc_load(&pulse.length_counter, l)
 	}
 
 	switch addr {
@@ -193,13 +233,13 @@ apu_write :: proc(using nes: ^NES, addr: u16, val: u8) {
 	// Triangle Length counter halt / linear counter control (C), linear counter load (R) 
 	//    CRRR RRRR
 	case 0x4008:
-		fmt.printfln("write to 40008: %X", val)
+		// fmt.printfln("write to 40008: %X", val)
 		// Getting R 
 		r := val & 0x7F
 		// Getting C
 		c := val & 0x80
 
-		triangle.length_counter_halt = c != 0
+		triangle.length_counter.halt = c != 0
 		triangle.linear_counter_reload = int(r)
 
 	// Unused
@@ -215,6 +255,9 @@ apu_write :: proc(using nes: ^NES, addr: u16, val: u8) {
 		triangle.seq.reload = (u16(val) & 0x07) << 8 | (triangle.seq.reload & 0x00FF)
 		triangle.seq.timer = triangle.seq.reload
 		triangle.linear_reload_flag = true
+
+		l := (val & 0xF8) >> 3
+		lc_load(&triangle.length_counter, l)
 
 	/// NOISE channel
 
@@ -255,9 +298,11 @@ apu_write :: proc(using nes: ^NES, addr: u16, val: u8) {
 	// Enable DMC (D), noise (N), triangle (T), and pulse channels (2/1)
 	//  ---D NT21
 	case 0x4015:
-		pulse1.enable = (val & 0x01) != 0
-		pulse2.enable = (val & 0x02) != 0
-		triangle.enable = (val & 0x4) != 0
+		lc_set_enabled(&pulse1.length_counter, (val & 0x01) != 0)
+		lc_set_enabled(&pulse2.length_counter, (val & 0x01) != 0)
+
+	// TODO the rest of lc
+	// lc_set_enabled(&triangle.length_counter, (val & 0x04) != 0)
 
 	/// APU Frame counter
 	// 5-frame sequence, disable frame interrupt (write) 
@@ -267,35 +312,12 @@ apu_write :: proc(using nes: ^NES, addr: u16, val: u8) {
 	}
 }
 
-last_sample: f32
-
-audio_callback :: proc(device: ^ma.device, output, input: rawptr, frame_count: u32) {
-
-	app := (^AudioDemo)(device.pUserData)
-
-	// get device buffer
-	device_buffer := mem.slice_ptr((^f32)(output), int(frame_count))
-
-	for i in 0 ..< frame_count {
-		sample, ok := chan.try_recv(sample_channel)
-		if ok {
-			// fmt.println("got sample")
-			device_buffer[i] = sample * 0.1
-			last_sample = device_buffer[i]
-		} else {
-			// fmt.println("did not got sample")
-			device_buffer[i] = last_sample
-		}
-	}
-}
-
-// nes stuff
-
 apu_init :: proc(using nes: ^NES) {
 	using apu
 
 	pulse_init(&pulse1)
 	pulse_init(&pulse2)
+	triangle_init(&triangle)
 }
 
 
@@ -342,6 +364,10 @@ apu_tick :: proc(using nes: ^NES) {
 		// Half frame "beats" adjust the note length and
 		// frequency sweepers
 		if half_frame_clock {
+			lc_tick(&pulse1.length_counter)
+			lc_tick(&pulse2.length_counter)
+			lc_tick(&triangle.length_counter)
+
 			// pulse1_lc.clock(pulse1_enable, pulse1_halt)
 			// pulse2_lc.clock(pulse2_enable, pulse2_halt)
 			// noise_lc.clock(noise_enable, noise_halt)
@@ -364,23 +390,13 @@ apu_tick :: proc(using nes: ^NES) {
 	if clock_counter % 3 == 0 {
 		// Update Triangle channel
 
-		sequencer_clock(&triangle.seq, triangle.enable, proc(seq: ^u32) {
+		sequencer_clock(&triangle.seq, triangle.length_counter.enabled, proc(seq: ^u32) {
 			seq^ = seq^ + 1
 			if seq^ >= 32 {
 				seq^ = 0
 			}
 		})
-
-		if triangle.linear_reload_flag {
-			triangle.linear_counter = triangle.linear_counter_reload + 1
-			fmt.printfln("counting from %v", triangle.linear_counter)
-			triangle.linear_reload_flag = false
-		} else if !triangle.length_counter_halt && triangle.linear_counter > 0 {
-			triangle.linear_counter -= 1
-			fmt.printfln("counting down..")
-		}
 	}
-
 
 	// generating sample (mixing everything)
 	if (clock_counter % (6 * 20)) == 0 {
@@ -394,10 +410,20 @@ apu_tick :: proc(using nes: ^NES) {
 		triangle_s := triangle_sample(&triangle)
 
 		// formula for mixing
-
 		pulse_out: f64 = 95.88 / ((8128 / (pulse1_s * 5 + pulse2_s * 5)) + 100)
+
+		if pulse1_s == 0 && pulse2_s == 0 {
+			pulse_out = 0
+		}
+
 		tnd_out: f64 = (159.79 / ((1 / (triangle_s / 8227)) + 100))
+
+		if triangle_s == 0 {
+			tnd_out = 0
+		}
+
 		sample = pulse_out + tnd_out
+
 		// sample = tnd_out
 
 		// sample = (pulse1_s - 0.5) * 0.5 + (pulse2_s - 0.5) * 0.5
@@ -466,6 +492,8 @@ sequencer_clock :: proc(using seq: ^Sequencer, enable: bool, seq_proc: Sequencer
 	return output
 }
 
+// -- Length Counter
+
 LengthCounter :: struct {
 	// uint8_t _lcLookupTable[32] = { 10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14, 12, 16, 24, 18, 48, 20, 96, 22, 192, 24, 72, 26, 16, 28, 32, 30 };
 	new_halt_value: bool,
@@ -476,31 +504,71 @@ LengthCounter :: struct {
 	halt:           bool,
 }
 
-TriangleChannel :: struct {
-	seq:                   Sequencer,
-	seq_pos:               int,
-	enable:                bool,
-	length_counter:        int,
-	length_counter_halt:   bool,
-	linear_counter:        int,
-	linear_counter_reload: int,
-	linear_reload_flag:    bool,
-	linear_control_flag:   bool,
+lc_load :: proc(using lc: ^LengthCounter, index: u8) {
+
+	if !lc.enabled do return
+
+	lookuptable: [32]u8 =  {
+		10,
+		254,
+		20,
+		2,
+		40,
+		4,
+		80,
+		6,
+		160,
+		8,
+		60,
+		10,
+		14,
+		12,
+		26,
+		14,
+		12,
+		16,
+		24,
+		18,
+		48,
+		20,
+		96,
+		22,
+		192,
+		24,
+		72,
+		26,
+		16,
+		28,
+		32,
+		30,
+	}
+
+	lc.reload_value = lookuptable[index]
+	lc.previous_value = lc.counter
+	lc.counter = lc.reload_value
 }
 
-APU :: struct {
-	frame_clock_counter: u32,
-	clock_counter:       u32,
-	pulse1:              PulseChannel,
-	pulse2:              PulseChannel,
-	triangle:            TriangleChannel,
-	global_time:         f64,
+lc_set_enabled :: proc(using lc: ^LengthCounter, new_enable: bool) {
+	if !new_enable {
+		lc.counter = 0
+	}
+	lc.enabled = new_enable
 }
+
+lc_tick :: proc(using lc: ^LengthCounter) {
+
+	if lc.halt do return
+
+	if lc.counter > 0 {
+		lc.counter -= 1
+	}
+}
+
+// -- /Length Counter
 
 
 PulseChannel :: struct {
 	seq:            Sequencer,
-	enable:         bool,
 	osc:            PulseOscilator,
 	length_counter: LengthCounter,
 }
@@ -508,12 +576,13 @@ PulseChannel :: struct {
 pulse_update :: proc(pulse: ^PulseChannel) {
 	sequencer_clock(
 		&pulse.seq,
-		pulse.enable,
+		pulse.length_counter.enabled,
 		proc(seq: ^u32) {
 			// Shift right by 1 bit, wrapping around
 			seq^ = ((seq^ & 0x0001) << 7) | ((seq^ & 0x00FE) >> 1)
 		},
 	)
+
 }
 
 pulse_init :: proc(pulse: ^PulseChannel) {
@@ -525,16 +594,37 @@ pulse_init :: proc(pulse: ^PulseChannel) {
 }
 
 pulse_sample :: proc(using pulse: ^PulseChannel) -> f64 {
-	if !enable {
+	if !length_counter.enabled {
+		return 0
+	}
+
+	if length_counter.counter <= 0 {
 		return 0
 	}
 
 	return f64(pulse.seq.output)
 }
 
+TriangleChannel :: struct {
+	seq:                   Sequencer,
+	seq_pos:               int,
+	// length_counter:        int,
+	// length_counter_halt:   bool,
+	linear_counter:        int,
+	linear_counter_reload: int,
+	linear_reload_flag:    bool,
+	linear_control_flag:   bool,
+	length_counter:        LengthCounter,
+}
+
+triangle_init :: proc(using triangle: ^TriangleChannel) {
+	length_counter.enabled = true
+}
+
 triangle_sample :: proc(using triangle: ^TriangleChannel) -> f64 {
 
-	if !enable do return 0
+	if !length_counter.enabled do return 0
+	if length_counter.counter <= 0 do return 0
 
 	triangle_s: f64
 
