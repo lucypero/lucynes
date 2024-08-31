@@ -20,6 +20,14 @@ screen_height :: nes_height * scale_factor
 framebuffer_width :: nes_width
 framebuffer_height :: nes_height
 
+target_fps :: 60
+
+// the CPU clockrate for NTSC systems is 1789773 Hz
+//    https://www.nesdev.org/wiki/Cycle_reference_chart
+
+effective_cpu_clockrate :: 1789773 * target_fps / 60.0988
+ppu_ticks_between_samples :: effective_cpu_clockrate * 3 / OUTPUT_SAMPLE_RATE
+
 // palette_file :: "palettes/ntscpalette.pal"
 palette_file :: "palettes/Composite_wiki.pal"
 
@@ -53,7 +61,7 @@ window_main :: proc() {
 	rl.SetTraceLogLevel(.ERROR)
 	rl.InitWindow(screen_width, screen_height, "lucynes")
 	rl.SetWindowPosition(20, 50)
-	rl.SetTargetFPS(60)
+	rl.SetTargetFPS(target_fps)
 
 	pixels := make([]rl.Color, framebuffer_width * framebuffer_height)
 

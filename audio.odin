@@ -141,12 +141,13 @@ audio_callback :: proc(device: ^ma.device, output, input: rawptr, frame_count: u
 // nes stuff
 
 APU :: struct {
-	frame_clock_counter: u32,
-	clock_counter:       u32,
-	pulse1:              PulseChannel,
-	pulse2:              PulseChannel,
-	triangle:            TriangleChannel,
-	global_time:         f64,
+	frame_clock_counter:         u32,
+	clock_counter:               u32,
+	pulse1:                      PulseChannel,
+	pulse2:                      PulseChannel,
+	triangle:                    TriangleChannel,
+	global_time:                 f64,
+	ppu_ticks_since_last_sample: f64,
 }
 
 apu_read :: proc(using nes: ^NES, addr: u16) -> u8 {
@@ -404,46 +405,49 @@ apu_tick :: proc(using nes: ^NES) {
 		})
 	}
 
-	// generating sample (mixing everything)
-	if (clock_counter % (6 * 20)) == 0 {
-
-		// make the signal sound nice
-		sample: f64
-
-		pulse1_s := pulse_sample(&pulse1)
-		pulse2_s := pulse_sample(&pulse2)
-
-		triangle_s := triangle_sample(&triangle)
-
-		// formula for mixing
-		pulse_out: f64 = 95.88 / ((8128 / (pulse1_s * 5 + pulse2_s * 5)) + 100)
-
-		if pulse1_s == 0 && pulse2_s == 0 {
-			pulse_out = 0
-		}
-
-		tnd_out: f64 = (159.79 / ((1 / (triangle_s / 8227)) + 100))
-
-		if triangle_s == 0 {
-			tnd_out = 0
-		}
-
-		sample = pulse_out + tnd_out
-
-		// sample = tnd_out
-
-		// sample = (pulse1_s - 0.5) * 0.5 + (pulse2_s - 0.5) * 0.5
-
-		// pulse1_osc.freq = 1789773.0 / (16.0 * f64(pulse1_seq.reload + 1))
-		// pulse1_sample = osc_sample(&pulse1_osc, global_time)
-		ok := chan.try_send(sample_channel, f32(sample))
-
-		if !ok {
-			fmt.printfln("not ok")
-		}
+	ppu_ticks_since_last_sample += 1.0
+	if ppu_ticks_since_last_sample > ppu_ticks_between_samples {
+		ppu_ticks_since_last_sample -= ppu_ticks_between_samples
+		generate_sample(&apu)
 	}
 
 	clock_counter += 1
+}
+
+generate_sample :: proc(using apu: ^APU) {
+	sample: f64
+
+	pulse1_s := pulse_sample(&pulse1)
+	pulse2_s := pulse_sample(&pulse2)
+
+	triangle_s := triangle_sample(&triangle)
+
+	// formula for mixing
+	pulse_out: f64 = 95.88 / ((8128 / (pulse1_s * 5 + pulse2_s * 5)) + 100)
+
+	if pulse1_s == 0 && pulse2_s == 0 {
+		pulse_out = 0
+	}
+
+	tnd_out: f64 = (159.79 / ((1 / (triangle_s / 8227)) + 100))
+
+	if triangle_s == 0 {
+		tnd_out = 0
+	}
+
+	sample = pulse_out + tnd_out
+
+	// sample = tnd_out
+
+	// sample = (pulse1_s - 0.5) * 0.5 + (pulse2_s - 0.5) * 0.5
+
+	// pulse1_osc.freq = 1789773.0 / (16.0 * f64(pulse1_seq.reload + 1))
+	// pulse1_sample = osc_sample(&pulse1_osc, global_time)
+	ok := chan.try_send(sample_channel, f32(sample))
+
+	if !ok {
+		fmt.printfln("not ok")
+	}
 }
 
 Sequencer :: struct {
@@ -574,11 +578,11 @@ lc_tick :: proc(using lc: ^LengthCounter) {
 
 
 PulseChannel :: struct {
-	seq:            Sequencer,
-	osc:            PulseOscilator,
-	length_counter: LengthCounter,
+	seq:                 Sequencer,
+	osc:                 PulseOscilator,
+	length_counter:      LengthCounter,
 	use_constant_volume: bool,
-	constant_volume: u8,
+	constant_volume:     u8,
 }
 
 pulse_update :: proc(pulse: ^PulseChannel) {
@@ -614,7 +618,7 @@ pulse_sample :: proc(using pulse: ^PulseChannel) -> f64 {
 		return f64(pulse.seq.output) * (f64(pulse.constant_volume) * 0.25)
 	}
 
-	return f64(pulse.seq.output) 
+	return f64(pulse.seq.output)
 }
 
 TriangleChannel :: struct {
