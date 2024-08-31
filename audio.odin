@@ -193,16 +193,28 @@ apu_write :: proc(using nes: ^NES, addr: u16, val: u8) {
 	// Triangle Length counter halt / linear counter control (C), linear counter load (R) 
 	//    CRRR RRRR
 	case 0x4008:
+		fmt.printfln("write to 40008: %X", val)
+		// Getting R 
+		r := val & 0x7F
+		// Getting C
+		c := val & 0x80
+
+		triangle.length_counter_halt = c != 0
+		triangle.linear_counter_reload = int(r)
 
 	// Unused
 	case 0x4009:
 
 	// Triangle timer low
 	case 0x400A:
+		triangle.seq.reload = triangle.seq.reload & 0xFF00 | u16(val)
 
 	// Length counter load (L), timer high (T), set linear counter reload flag 
 	//   LLLL LTTT
 	case 0x400B:
+		triangle.seq.reload = (u16(val) & 0x07) << 8 | (triangle.seq.reload & 0x00FF)
+		triangle.seq.timer = triangle.seq.reload
+		triangle.linear_reload_flag = true
 
 	/// NOISE channel
 
@@ -245,6 +257,7 @@ apu_write :: proc(using nes: ^NES, addr: u16, val: u8) {
 	case 0x4015:
 		pulse1.enable = (val & 0x01) != 0
 		pulse2.enable = (val & 0x02) != 0
+		triangle.enable = (val & 0x4) != 0
 
 	/// APU Frame counter
 	// 5-frame sequence, disable frame interrupt (write) 
@@ -285,11 +298,6 @@ apu_init :: proc(using nes: ^NES) {
 	pulse_init(&pulse2)
 }
 
-pulse_init :: proc(pulse: ^PulseChannel) {
-	pulse.osc.amp = 1
-	pulse.osc.pi = 3.14159
-	pulse.osc.harmonics = 20
-}
 
 apu_tick :: proc(using nes: ^NES) {
 	using apu
@@ -342,60 +350,65 @@ apu_tick :: proc(using nes: ^NES) {
 		}
 
 		// Update Pulse 1 channel
-		sequencer_clock(
-			&pulse1.seq,
-			pulse1.enable,
-			proc(seq: ^u32) {
-				// Shift right by 1 bit, wrapping around
-				seq^ = ((seq^ & 0x0001) << 7) | ((seq^ & 0x00FE) >> 1)
-			},
-		)
-		pulse1.sample = f64(pulse1.seq.output)
-
-
+		pulse_update(&pulse1)
 		// Update Pulse 2 channel
-		sequencer_clock(
-			&pulse2.seq,
-			pulse2.enable,
-			proc(seq: ^u32) {
-				// Shift right by 1 bit, wrapping around
-				seq^ = ((seq^ & 0x0001) << 7) | ((seq^ & 0x00FE) >> 1)
-			},
-		)
-		pulse2.sample = f64(pulse2.seq.output)
-
-
-		// generating sample (mixing everything)
-		if (clock_counter % (6 * 20)) == 0 {
-
-			// make the signal sound nice
-			sample: f64
-
-			pulse1_s, pulse2_s: f64
-
-			if pulse1.enable {
-				pulse1_s = pulse1.sample
-			}
-			if pulse2.enable {
-				pulse2_s = pulse2.sample
-			}
-
-			sample = (pulse1_s - 0.5) * 0.5 + (pulse2_s - 0.5) * 0.5
-
-			// pulse1_osc.freq = 1789773.0 / (16.0 * f64(pulse1_seq.reload + 1))
-			// pulse1_sample = osc_sample(&pulse1_osc, global_time)
-			ok := chan.try_send(sample_channel, f32(sample))
-
-			if !ok {
-				fmt.printfln("not ok")
-			}
-		}
+		pulse_update(&pulse2)
 
 		// for ring_buffer.written > len(ring_buffer.data) / 2 do sync.sema_wait(&sema)
 		// sync.lock(&mutex)
 		// // debug here
 		// buffer_write_sample(&ring_buffer, f32(pulse1_sample), true)
 		// sync.unlock(&mutex)
+	}
+
+	if clock_counter % 3 == 0 {
+		// Update Triangle channel
+
+		sequencer_clock(&triangle.seq, triangle.enable, proc(seq: ^u32) {
+			seq^ = seq^ + 1
+			if seq^ >= 32 {
+				seq^ = 0
+			}
+		})
+
+		if triangle.linear_reload_flag {
+			triangle.linear_counter = triangle.linear_counter_reload + 1
+			fmt.printfln("counting from %v", triangle.linear_counter)
+			triangle.linear_reload_flag = false
+		} else if !triangle.length_counter_halt && triangle.linear_counter > 0 {
+			triangle.linear_counter -= 1
+			fmt.printfln("counting down..")
+		}
+	}
+
+
+	// generating sample (mixing everything)
+	if (clock_counter % (6 * 20)) == 0 {
+
+		// make the signal sound nice
+		sample: f64
+
+		pulse1_s := pulse_sample(&pulse1)
+		pulse2_s := pulse_sample(&pulse2)
+
+		triangle_s := triangle_sample(&triangle)
+
+		// formula for mixing
+
+		pulse_out: f64 = 95.88 / ((8128 / (pulse1_s * 5 + pulse2_s * 5)) + 100)
+		tnd_out: f64 = (159.79 / ((1 / (triangle_s / 8227)) + 100))
+		sample = pulse_out + tnd_out
+		// sample = tnd_out
+
+		// sample = (pulse1_s - 0.5) * 0.5 + (pulse2_s - 0.5) * 0.5
+
+		// pulse1_osc.freq = 1789773.0 / (16.0 * f64(pulse1_seq.reload + 1))
+		// pulse1_sample = osc_sample(&pulse1_osc, global_time)
+		ok := chan.try_send(sample_channel, f32(sample))
+
+		if !ok {
+			fmt.printfln("not ok")
+		}
 	}
 
 	clock_counter += 1
@@ -453,11 +466,26 @@ sequencer_clock :: proc(using seq: ^Sequencer, enable: bool, seq_proc: Sequencer
 	return output
 }
 
-PulseChannel :: struct {
-	seq:    Sequencer,
-	enable: bool,
-	sample: f64,
-	osc:    PulseOscilator,
+LengthCounter :: struct {
+	// uint8_t _lcLookupTable[32] = { 10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14, 12, 16, 24, 18, 48, 20, 96, 22, 192, 24, 72, 26, 16, 28, 32, 30 };
+	new_halt_value: bool,
+	counter:        u8,
+	reload_value:   u8,
+	previous_value: u8,
+	enabled:        bool,
+	halt:           bool,
+}
+
+TriangleChannel :: struct {
+	seq:                   Sequencer,
+	seq_pos:               int,
+	enable:                bool,
+	length_counter:        int,
+	length_counter_halt:   bool,
+	linear_counter:        int,
+	linear_counter_reload: int,
+	linear_reload_flag:    bool,
+	linear_control_flag:   bool,
 }
 
 APU :: struct {
@@ -465,5 +493,117 @@ APU :: struct {
 	clock_counter:       u32,
 	pulse1:              PulseChannel,
 	pulse2:              PulseChannel,
+	triangle:            TriangleChannel,
 	global_time:         f64,
+}
+
+
+PulseChannel :: struct {
+	seq:            Sequencer,
+	enable:         bool,
+	osc:            PulseOscilator,
+	length_counter: LengthCounter,
+}
+
+pulse_update :: proc(pulse: ^PulseChannel) {
+	sequencer_clock(
+		&pulse.seq,
+		pulse.enable,
+		proc(seq: ^u32) {
+			// Shift right by 1 bit, wrapping around
+			seq^ = ((seq^ & 0x0001) << 7) | ((seq^ & 0x00FE) >> 1)
+		},
+	)
+}
+
+pulse_init :: proc(pulse: ^PulseChannel) {
+	pulse.osc.amp = 1
+	pulse.osc.pi = 3.14159
+	pulse.osc.harmonics = 20
+
+	pulse.length_counter.enabled = true
+}
+
+pulse_sample :: proc(using pulse: ^PulseChannel) -> f64 {
+	if !enable {
+		return 0
+	}
+
+	return f64(pulse.seq.output)
+}
+
+triangle_sample :: proc(using triangle: ^TriangleChannel) -> f64 {
+
+	if !enable do return 0
+
+	triangle_s: f64
+
+	switch seq.sequence {
+	case 0:
+		triangle_s = 15
+	case 1:
+		triangle_s = 14
+	case 2:
+		triangle_s = 13
+	case 3:
+		triangle_s = 12
+	case 4:
+		triangle_s = 11
+	case 5:
+		triangle_s = 10
+	case 6:
+		triangle_s = 9
+	case 7:
+		triangle_s = 8
+	case 8:
+		triangle_s = 7
+	case 9:
+		triangle_s = 6
+	case 10:
+		triangle_s = 5
+	case 11:
+		triangle_s = 4
+	case 12:
+		triangle_s = 3
+	case 13:
+		triangle_s = 2
+	case 14:
+		triangle_s = 1
+	case 15:
+		triangle_s = 0
+	case 16:
+		triangle_s = 0
+	case 17:
+		triangle_s = 1
+	case 18:
+		triangle_s = 2
+	case 19:
+		triangle_s = 3
+	case 20:
+		triangle_s = 4
+	case 21:
+		triangle_s = 5
+	case 22:
+		triangle_s = 6
+	case 23:
+		triangle_s = 7
+	case 24:
+		triangle_s = 8
+	case 25:
+		triangle_s = 9
+	case 26:
+		triangle_s = 10
+	case 27:
+		triangle_s = 11
+	case 28:
+		triangle_s = 12
+	case 29:
+		triangle_s = 13
+	case 30:
+		triangle_s = 14
+	case 31:
+		triangle_s = 15
+	}
+
+	return triangle_s
 }
