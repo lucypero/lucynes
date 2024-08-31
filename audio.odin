@@ -161,7 +161,7 @@ apu_read :: proc(using nes: ^NES, addr: u16) -> u8 {
 apu_write :: proc(using nes: ^NES, addr: u16, val: u8) {
 	using apu
 
-	set_pulse_duty_cycle :: proc(val: u8, pulse: ^PulseChannel) {
+	set_pulse_4000_4004 :: proc(val: u8, pulse: ^PulseChannel) {
 		switch (val & 0xC0) >> 6 {
 		// the 4 duty cycle modes.
 		case 0x00:
@@ -181,6 +181,11 @@ apu_write :: proc(using nes: ^NES, addr: u16, val: u8) {
 		// LC halt
 		l: bool = (val & 0x20) != 0
 		pulse.length_counter.halt = l
+
+		c: bool = (val & 0x10) != 0
+		pulse.use_constant_volume = c
+		v: u8 = val & 0x0F
+		pulse.constant_volume = v
 	}
 
 	set_pulse_timer_low :: proc(val: u8, pulse: ^PulseChannel) {
@@ -201,11 +206,11 @@ apu_write :: proc(using nes: ^NES, addr: u16, val: u8) {
 
 	// Pulse 1 Duty cycle
 	case 0x4000:
-		set_pulse_duty_cycle(val, &pulse1)
+		set_pulse_4000_4004(val, &pulse1)
 
 	// Pulse 2 Duty cycle
 	case 0x4004:
-		set_pulse_duty_cycle(val, &pulse2)
+		set_pulse_4000_4004(val, &pulse2)
 
 	// Pulse 1 APU Sweep
 	case 0x4001:
@@ -299,7 +304,8 @@ apu_write :: proc(using nes: ^NES, addr: u16, val: u8) {
 	//  ---D NT21
 	case 0x4015:
 		lc_set_enabled(&pulse1.length_counter, (val & 0x01) != 0)
-		lc_set_enabled(&pulse2.length_counter, (val & 0x01) != 0)
+		lc_set_enabled(&pulse2.length_counter, (val & 0x02) != 0)
+		lc_set_enabled(&triangle.length_counter, (val & 0x04) != 0)
 
 	// TODO the rest of lc
 	// lc_set_enabled(&triangle.length_counter, (val & 0x04) != 0)
@@ -571,6 +577,8 @@ PulseChannel :: struct {
 	seq:            Sequencer,
 	osc:            PulseOscilator,
 	length_counter: LengthCounter,
+	use_constant_volume: bool,
+	constant_volume: u8,
 }
 
 pulse_update :: proc(pulse: ^PulseChannel) {
@@ -602,7 +610,11 @@ pulse_sample :: proc(using pulse: ^PulseChannel) -> f64 {
 		return 0
 	}
 
-	return f64(pulse.seq.output)
+	if pulse.use_constant_volume {
+		return f64(pulse.seq.output) * (f64(pulse.constant_volume) * 0.25)
+	}
+
+	return f64(pulse.seq.output) 
 }
 
 TriangleChannel :: struct {
