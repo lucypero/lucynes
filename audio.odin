@@ -128,28 +128,44 @@ apu_read :: proc(using nes: ^NES, addr: u16) -> u8 {
 apu_write :: proc(using nes: ^NES, addr: u16, val: u8) {
 	using apu
 
+	set_pulse_duty_cycle :: proc(val: u8, pulse: ^PulseChannel) {
+		switch (val & 0xC0) >> 6 {
+		// the 4 duty cycle modes.
+		case 0x00:
+			pulse.seq.sequence = 0b00000001
+			pulse.osc.duty_cycle = 0.125
+		case 0x01:
+			pulse.seq.sequence = 0b00000011
+			pulse.osc.duty_cycle = 0.250
+		case 0x02:
+			pulse.seq.sequence = 0b00001111
+			pulse.osc.duty_cycle = 0.500
+		case 0x03:
+			pulse.seq.sequence = 0b11111100
+			pulse.osc.duty_cycle = 0.750
+		}
+	}
+
+	set_pulse_timer_low :: proc(val: u8, pulse: ^PulseChannel) {
+		pulse.seq.reload = (pulse.seq.reload & 0xFF00) | u16(val)
+	}
+
+	set_pulse_timer_high :: proc(val: u8, pulse: ^PulseChannel) {
+		// pulse1_seq.reload = (pulse1_seq.reload & 0xFF00) | u16(val)
+		pulse.seq.reload = (u16(val) & 0x07) << 8 | (pulse.seq.reload & 0x00FF)
+		pulse.seq.timer = pulse.seq.reload
+	}
+
 	switch addr {
 	/// PULSE channels
 
 	// Pulse 1 Duty cycle
 	case 0x4000:
-		switch (val & 0xC0) >> 6 {
-		// the 4 duty cycle modes.
-		case 0x00:
-			pulse1_seq.sequence = 0b00000001
-			pulse1_osc.duty_cycle = 0.125
-		case 0x01:
-			pulse1_seq.sequence = 0b00000011
-			pulse1_osc.duty_cycle = 0.250
-		case 0x02:
-			pulse1_seq.sequence = 0b00001111
-			pulse1_osc.duty_cycle = 0.500
-		case 0x03:
-			pulse1_seq.sequence = 0b11111100
-			pulse1_osc.duty_cycle = 0.750
-		}
+		set_pulse_duty_cycle(val, &pulse1)
+
 	// Pulse 2 Duty cycle
 	case 0x4004:
+		set_pulse_duty_cycle(val, &pulse2)
 
 	// Pulse 1 APU Sweep
 	case 0x4001:
@@ -158,19 +174,19 @@ apu_write :: proc(using nes: ^NES, addr: u16, val: u8) {
 
 	// Pulse 1 timer Low 8 bits
 	case 0x4002:
-		pulse1_seq.reload = (pulse1_seq.reload & 0xFF00) | u16(val)
+		set_pulse_timer_low(val, &pulse1)
 
 	// Pulse 2 timer Low 8 bits
 	case 0x4006:
+		set_pulse_timer_low(val, &pulse2)
 
 	// Pulse 1 length counter load and timer High 3 bits 
 	case 0x4003:
-		// pulse1_seq.reload = (pulse1_seq.reload & 0xFF00) | u16(val)
-		pulse1_seq.reload = (u16(val) & 0x07) << 8 | (pulse1_seq.reload & 0x00FF)
-		pulse1_seq.timer = pulse1_seq.reload
+		set_pulse_timer_high(val, &pulse1)
 
 	// Pulse 2 length counter load and timer High 3 bits 
 	case 0x4007:
+		set_pulse_timer_high(val, &pulse2)
 
 	/// TRIANGLE channel
 
@@ -227,7 +243,8 @@ apu_write :: proc(using nes: ^NES, addr: u16, val: u8) {
 	// Enable DMC (D), noise (N), triangle (T), and pulse channels (2/1)
 	//  ---D NT21
 	case 0x4015:
-		pulse1_enable = (val & 0x01) != 0
+		pulse1.enable = (val & 0x01) != 0
+		pulse2.enable = (val & 0x02) != 0
 
 	/// APU Frame counter
 	// 5-frame sequence, disable frame interrupt (write) 
@@ -237,7 +254,7 @@ apu_write :: proc(using nes: ^NES, addr: u16, val: u8) {
 	}
 }
 
-last_sample : f32
+last_sample: f32
 
 audio_callback :: proc(device: ^ma.device, output, input: rawptr, frame_count: u32) {
 
@@ -264,9 +281,14 @@ audio_callback :: proc(device: ^ma.device, output, input: rawptr, frame_count: u
 apu_init :: proc(using nes: ^NES) {
 	using apu
 
-	pulse1_osc.amp = 1
-	pulse1_osc.pi = 3.14159
-	pulse1_osc.harmonics = 20
+	pulse_init(&pulse1)
+	pulse_init(&pulse2)
+}
+
+pulse_init :: proc(pulse: ^PulseChannel) {
+	pulse.osc.amp = 1
+	pulse.osc.pi = 3.14159
+	pulse.osc.harmonics = 20
 }
 
 apu_tick :: proc(using nes: ^NES) {
@@ -321,23 +343,48 @@ apu_tick :: proc(using nes: ^NES) {
 
 		// Update Pulse 1 channel
 		sequencer_clock(
-			&pulse1_seq,
-			pulse1_enable,
+			&pulse1.seq,
+			pulse1.enable,
 			proc(seq: ^u32) {
 				// Shift right by 1 bit, wrapping around
 				seq^ = ((seq^ & 0x0001) << 7) | ((seq^ & 0x00FE) >> 1)
 			},
 		)
-		pulse1_sample = f64(pulse1_seq.output)
+		pulse1.sample = f64(pulse1.seq.output)
 
 
-		if (clock_counter % (6 * 20)) == 0 && pulse1_enable {
+		// Update Pulse 2 channel
+		sequencer_clock(
+			&pulse2.seq,
+			pulse2.enable,
+			proc(seq: ^u32) {
+				// Shift right by 1 bit, wrapping around
+				seq^ = ((seq^ & 0x0001) << 7) | ((seq^ & 0x00FE) >> 1)
+			},
+		)
+		pulse2.sample = f64(pulse2.seq.output)
+
+
+		// generating sample (mixing everything)
+		if (clock_counter % (6 * 20)) == 0 {
 
 			// make the signal sound nice
+			sample: f64
+
+			pulse1_s, pulse2_s: f64
+
+			if pulse1.enable {
+				pulse1_s = pulse1.sample
+			}
+			if pulse2.enable {
+				pulse2_s = pulse2.sample
+			}
+
+			sample = (pulse1_s - 0.5) * 0.5 + (pulse2_s - 0.5) * 0.5
 
 			// pulse1_osc.freq = 1789773.0 / (16.0 * f64(pulse1_seq.reload + 1))
 			// pulse1_sample = osc_sample(&pulse1_osc, global_time)
-			ok := chan.try_send(sample_channel, f32(pulse1_sample))
+			ok := chan.try_send(sample_channel, f32(sample))
 
 			if !ok {
 				fmt.printfln("not ok")
@@ -406,14 +453,17 @@ sequencer_clock :: proc(using seq: ^Sequencer, enable: bool, seq_proc: Sequencer
 	return output
 }
 
+PulseChannel :: struct {
+	seq:    Sequencer,
+	enable: bool,
+	sample: f64,
+	osc:    PulseOscilator,
+}
+
 APU :: struct {
 	frame_clock_counter: u32,
 	clock_counter:       u32,
-
-	// Pulse 1
-	pulse1_seq:          Sequencer,
-	pulse1_enable:       bool,
-	pulse1_sample:       f64,
-	pulse1_osc:          PulseOscilator,
+	pulse1:              PulseChannel,
+	pulse2:              PulseChannel,
 	global_time:         f64,
 }
