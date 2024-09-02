@@ -189,6 +189,25 @@ apu_write :: proc(using nes: ^NES, addr: u16, val: u8) {
 		pulse.constant_volume = v
 	}
 
+	// EPPP.NSSS
+	set_pulse_sweep :: proc(pulse: ^PulseChannel, val: u8) {
+		e := (val & 0x80) != 0
+		p := (val & 0x70) >> 4
+		n := (val & 0x08) != 0
+		s := (val & 0x07)
+
+		pulse.sweep.enabled = e
+		pulse.sweep.period = p + 1
+		pulse.sweep.negate = n
+		pulse.sweep.shift_count = s
+
+		// Update target period
+		pulse_update_target_period(pulse)
+
+		// Side effects: Set the reload flag
+		pulse.sweep.reload = true
+	}
+
 	set_pulse_timer_low :: proc(val: u8, pulse: ^PulseChannel) {
 		pulse.seq.reload = (pulse.seq.reload & 0xFF00) | u16(val)
 	}
@@ -215,8 +234,10 @@ apu_write :: proc(using nes: ^NES, addr: u16, val: u8) {
 
 	// Pulse 1 APU Sweep
 	case 0x4001:
+		set_pulse_sweep(&pulse1, val)
 	// Pulse 2 APU Sweep
 	case 0x4005:
+		set_pulse_sweep(&pulse1, val)
 
 	// Pulse 1 timer Low 8 bits
 	case 0x4002:
@@ -322,8 +343,8 @@ apu_write :: proc(using nes: ^NES, addr: u16, val: u8) {
 apu_init :: proc(using nes: ^NES) {
 	using apu
 
-	pulse_init(&pulse1)
-	pulse_init(&pulse2)
+	pulse_init(&pulse1, true)
+	pulse_init(&pulse2, false)
 	triangle_init(&triangle)
 }
 
@@ -374,6 +395,9 @@ apu_tick :: proc(using nes: ^NES) {
 			lc_tick(&pulse1.length_counter)
 			lc_tick(&pulse2.length_counter)
 			lc_tick(&triangle.length_counter)
+
+			pulse_sweep_tick(&pulse1)
+			pulse_sweep_tick(&pulse2)
 
 			// pulse1_lc.clock(pulse1_enable, pulse1_halt)
 			// pulse2_lc.clock(pulse2_enable, pulse2_halt)
@@ -574,15 +598,73 @@ lc_tick :: proc(using lc: ^LengthCounter) {
 	}
 }
 
-// -- /Length Counter
+// -- / Length Counter
 
+// -- Sweep
+
+Sweep :: struct {
+	enabled:       bool,
+	reload:        bool,
+	negate:        bool,
+	shift_count:   u8,
+	period:        u8,
+	target_period: u32,
+	divider:       u8,
+}
+
+
+// -- / Sweep
+
+// -- Pulse channel
 
 PulseChannel :: struct {
+	is_channel_one:      bool,
 	seq:                 Sequencer,
 	osc:                 PulseOscilator,
 	length_counter:      LengthCounter,
 	use_constant_volume: bool,
 	constant_volume:     u8,
+	real_period:         u16,
+	sweep:               Sweep,
+}
+
+pulse_set_period :: proc(using pulse: ^PulseChannel, new_period: u16) {
+	real_period = new_period
+	seq.reload = (real_period) * 2 + 1
+	// 	_timer.SetPeriod((_realPeriod * 2) + 1);
+	pulse_update_target_period(pulse)
+}
+
+pulse_sweep_tick :: proc(using pulse: ^PulseChannel) {
+	sweep.divider -= 1
+
+	if sweep.divider == 0 {
+		if sweep.shift_count > 0 &&
+		   sweep.enabled &&
+		   real_period >= 8 &&
+		   sweep.target_period <= 0x7FF {
+			pulse_set_period(pulse, u16(sweep.target_period))
+		}
+		sweep.divider = sweep.period
+	}
+
+	if sweep.reload {
+		sweep.divider = sweep.period
+		sweep.reload = false
+	}
+}
+
+pulse_update_target_period :: proc(using pulse: ^PulseChannel) {
+	shift_result: u16 = (real_period >> sweep.shift_count)
+	if (sweep.negate) {
+		sweep.target_period = u32(real_period) - u32(shift_result)
+		if (is_channel_one) {
+			// As a result, a negative sweep on pulse channel 1 will subtract the shifted period value minus 1
+			sweep.target_period -= 1
+		}
+	} else {
+		sweep.target_period = u32(real_period) + u32(shift_result)
+	}
 }
 
 pulse_update :: proc(pulse: ^PulseChannel) {
@@ -594,15 +676,21 @@ pulse_update :: proc(pulse: ^PulseChannel) {
 			seq^ = ((seq^ & 0x0001) << 7) | ((seq^ & 0x00FE) >> 1)
 		},
 	)
-
 }
 
-pulse_init :: proc(pulse: ^PulseChannel) {
+pulse_init :: proc(pulse: ^PulseChannel, is_channel_one: bool) {
+	pulse.is_channel_one = is_channel_one
 	pulse.osc.amp = 1
 	pulse.osc.pi = 3.14159
 	pulse.osc.harmonics = 20
 
 	pulse.length_counter.enabled = true
+}
+
+pulse_is_muted :: proc(using pulse: ^PulseChannel) -> bool {
+	// A period of t < 8, either set explicitly or via a sweep period update,
+	//   silences the corresponding pulse channel.
+	return (real_period < 8) || (!sweep.negate && sweep.target_period > 0x7FF)
 }
 
 pulse_sample :: proc(using pulse: ^PulseChannel) -> f64 {
@@ -618,8 +706,14 @@ pulse_sample :: proc(using pulse: ^PulseChannel) -> f64 {
 		return f64(pulse.seq.output) * (f64(pulse.constant_volume) * 0.25)
 	}
 
+	if pulse_is_muted(pulse) do return 0
+
 	return f64(pulse.seq.output)
 }
+
+// -- / Pulse channel
+
+// -- Triangle channel
 
 TriangleChannel :: struct {
 	seq:                   Sequencer,
@@ -713,3 +807,5 @@ triangle_sample :: proc(using triangle: ^TriangleChannel) -> f64 {
 
 	return triangle_s
 }
+
+// -- / Triangle channel
