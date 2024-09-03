@@ -132,7 +132,7 @@ audio_callback :: proc(device: ^ma.device, output, input: rawptr, frame_count: u
 			device_buffer[i] = sample * 0.1
 			last_sample = device_buffer[i]
 		} else {
-			// fmt.println("did not got sample")
+			fmt.println("did not got sample")
 			device_buffer[i] = last_sample
 		}
 	}
@@ -162,8 +162,13 @@ apu_read :: proc(using nes: ^NES, addr: u16) -> u8 {
 apu_write :: proc(using nes: ^NES, addr: u16, val: u8) {
 	using apu
 
+	// ddLC.VVVV
 	set_pulse_4000_4004 :: proc(val: u8, pulse: ^PulseChannel) {
-		switch (val & 0xC0) >> 6 {
+
+		// Duty
+		d := (val & 0xC0) >> 6
+
+		switch d {
 		// the 4 duty cycle modes.
 		case 0x00:
 			pulse.seq.sequence = 0b00000001
@@ -183,10 +188,11 @@ apu_write :: proc(using nes: ^NES, addr: u16, val: u8) {
 		l: bool = (val & 0x20) != 0
 		pulse.length_counter.halt = l
 
+		// Envelope constant volume flag, and volume set
 		c: bool = (val & 0x10) != 0
-		pulse.use_constant_volume = c
 		v: u8 = val & 0x0F
-		pulse.constant_volume = v
+
+		envelope_set(&pulse.envelope, c, v)
 	}
 
 	// EPPP.NSSS
@@ -208,17 +214,28 @@ apu_write :: proc(using nes: ^NES, addr: u16, val: u8) {
 		pulse.sweep.reload = true
 	}
 
+	// $4002 and $4006
+	// LLLL.LLLL
 	set_pulse_timer_low :: proc(val: u8, pulse: ^PulseChannel) {
-		pulse.seq.reload = (pulse.seq.reload & 0xFF00) | u16(val)
+		// pulse.seq.reload = (pulse.seq.reload & 0xFF00) | u16(val)
+		pulse_set_period(pulse, (pulse.real_period & 0xFF00) | u16(val))
 	}
 
+	// $4003 and $4007
+	// LLLL.Lttt
 	set_pulse_timer_high :: proc(val: u8, pulse: ^PulseChannel) {
 		// pulse1_seq.reload = (pulse1_seq.reload & 0xFF00) | u16(val)
-		pulse.seq.reload = (u16(val) & 0x07) << 8 | (pulse.seq.reload & 0x00FF)
+		t := val & 0x07
+
+		pulse_set_period(pulse, (u16(t) << 8) | (pulse.real_period & 0x00FF))
+
+		// reload sequencer
 		pulse.seq.timer = pulse.seq.reload
 
 		l := (val & 0xF8) >> 3
 		lc_load(&pulse.length_counter, l)
+
+		envelope_reset(&pulse.envelope)
 	}
 
 	switch addr {
@@ -384,6 +401,9 @@ apu_tick :: proc(using nes: ^NES) {
 
 		// Quater frame "beats" adjust the volume envelope
 		if quarter_frame_clock {
+			envelope_tick(&pulse1.envelope, pulse1.length_counter)
+			envelope_tick(&pulse2.envelope, pulse2.length_counter)
+
 			// pulse1_env.clock(pulse1_halt);
 			// pulse2_env.clock(pulse2_halt);
 			// noise_env.clock(noise_halt);
@@ -447,13 +467,13 @@ generate_sample :: proc(using apu: ^APU) {
 	triangle_s := triangle_sample(&triangle)
 
 	// formula for mixing
-	pulse_out: f64 = 95.88 / ((8128 / (pulse1_s * 5 + pulse2_s * 5)) + 100)
+	pulse_out: f64 = 95.88 / ((8128 / (pulse1_s + pulse2_s)) + 100)
 
 	if pulse1_s == 0 && pulse2_s == 0 {
 		pulse_out = 0
 	}
 
-	tnd_out: f64 = (159.79 / ((1 / (triangle_s / 8227)) + 100))
+	tnd_out: f64 = 159.79 / ((1 / (triangle_s / 8227)) + 100)
 
 	if triangle_s == 0 {
 		tnd_out = 0
@@ -474,12 +494,29 @@ generate_sample :: proc(using apu: ^APU) {
 	}
 }
 
+/// Sequencer
+
 Sequencer :: struct {
 	sequence: u32,
 	timer:    u16,
 	reload:   u16,
 	output:   u8,
 }
+
+sequencer_clock :: proc(using seq: ^Sequencer, enable: bool, seq_proc: SequencerProc) -> u8 {
+	if !enable do return output
+
+	timer -= 1
+	if timer == 0xFFFF {
+		timer = reload
+		seq_proc(&sequence)
+		output = u8(sequence) & 0x01
+	}
+
+	return output
+}
+
+/// / Sequencer
 
 SequencerProc :: proc(sequence: ^u32)
 
@@ -511,19 +548,6 @@ osc_sample :: proc(using pulse_osc: ^PulseOscilator, t: f64) -> f64 {
 	}
 
 	return (2.0 * amp / pi) * (a - b)
-}
-
-sequencer_clock :: proc(using seq: ^Sequencer, enable: bool, seq_proc: SequencerProc) -> u8 {
-	if !enable do return output
-
-	timer -= 1
-	if timer == 0xFFFF {
-		timer = reload
-		seq_proc(&sequence)
-		output = u8(sequence) & 0x01
-	}
-
-	return output
 }
 
 // -- Length Counter
@@ -600,6 +624,51 @@ lc_tick :: proc(using lc: ^LengthCounter) {
 
 // -- / Length Counter
 
+// -- Envelope
+
+Envelope :: struct {
+	use_constant_volume: bool,
+	volume:              u8,
+	start:               bool,
+	divider:             i8,
+	counter:             u8,
+}
+
+envelope_set :: proc(env: ^Envelope, c: bool, volume: u8) {
+	env.use_constant_volume = c
+	env.volume = volume
+}
+
+envelope_reset :: proc(env: ^Envelope) {
+	env.start = true
+}
+
+envelope_get_volume :: proc(env: Envelope, lc: LengthCounter) -> u32 {
+	if lc.counter > 0 {
+		return env.use_constant_volume ? u32(env.volume) : u32(env.counter)
+	} else {
+		return 0
+	}
+}
+
+envelope_tick :: proc(using env: ^Envelope, lc: LengthCounter) {
+	if !start {
+		divider -= 1
+		if divider < 0 {
+			divider = i8(volume)
+			if counter > 0 {
+				counter -= 1
+			} else if lc.halt {
+				counter = 15
+			}
+		}
+	} else {
+		start = false
+		counter = 15
+		divider = i8(volume)
+	}
+}
+
 // -- Sweep
 
 Sweep :: struct {
@@ -618,19 +687,19 @@ Sweep :: struct {
 // -- Pulse channel
 
 PulseChannel :: struct {
-	is_channel_one:      bool,
-	seq:                 Sequencer,
-	osc:                 PulseOscilator,
-	length_counter:      LengthCounter,
-	use_constant_volume: bool,
-	constant_volume:     u8,
-	real_period:         u16,
-	sweep:               Sweep,
+	is_channel_one: bool,
+	seq:            Sequencer,
+	osc:            PulseOscilator,
+	length_counter: LengthCounter,
+	real_period:    u16,
+	sweep:          Sweep,
+	envelope:       Envelope,
 }
 
 pulse_set_period :: proc(using pulse: ^PulseChannel, new_period: u16) {
 	real_period = new_period
-	seq.reload = (real_period) * 2 + 1
+	// seq.reload = (real_period * 2) + 1
+	seq.reload = real_period
 	// 	_timer.SetPeriod((_realPeriod * 2) + 1);
 	pulse_update_target_period(pulse)
 }
@@ -690,7 +759,8 @@ pulse_init :: proc(pulse: ^PulseChannel, is_channel_one: bool) {
 pulse_is_muted :: proc(using pulse: ^PulseChannel) -> bool {
 	// A period of t < 8, either set explicitly or via a sweep period update,
 	//   silences the corresponding pulse channel.
-	return (real_period < 8) || (!sweep.negate && sweep.target_period > 0x7FF)
+	condition := (real_period < 8) || (!sweep.negate && sweep.target_period > 0x7FF)
+	return condition
 }
 
 pulse_sample :: proc(using pulse: ^PulseChannel) -> f64 {
@@ -702,13 +772,10 @@ pulse_sample :: proc(using pulse: ^PulseChannel) -> f64 {
 		return 0
 	}
 
-	if pulse.use_constant_volume {
-		return f64(pulse.seq.output) * (f64(pulse.constant_volume) * 0.25)
-	}
-
 	if pulse_is_muted(pulse) do return 0
 
-	return f64(pulse.seq.output)
+	env_vol := envelope_get_volume(pulse.envelope, pulse.length_counter)
+	return f64(pulse.seq.output) * f64(env_vol)
 }
 
 // -- / Pulse channel

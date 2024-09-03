@@ -37,6 +37,7 @@ palette_file :: "palettes/Composite_wiki.pal"
 // rom_in_nes :: "roms/Duck Tales.nes"
 // rom_in_nes :: "roms/Castlevania.nes"
 rom_in_nes :: "roms/Metal Gear.nes"
+// rom_in_nes :: "roms/Silver Surfer.nes"
 // rom_in_nes :: "roms/IceClimber.nes"
 // rom_in_nes :: "roms/DonkeyKong.nes"
 // rom_in_nes :: "roms/Kung Fu.nes"
@@ -49,6 +50,12 @@ rom_in_nes :: "roms/Metal Gear.nes"
 // rom_in_nes :: "tests/full_palette.nes"
 // rom_in_nes :: "tests/color_test.nes"
 // rom_in_nes :: "nestest/nestest.nes"
+
+
+/// audio tests
+
+// rom_in_nes :: "tests/audio/clip_5b_nrom.nes"
+// rom_in_nes :: "tests/audio/sweep_5b_nrom.nes"
 
 PixelGrid :: struct {
 	pixels: []rl.Color,
