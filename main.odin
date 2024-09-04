@@ -248,7 +248,6 @@ NES :: struct {
 mutex: sync.Mutex
 ring_buffer: Buffer
 sema: sync.Sema
-sample_channel: chan.Chan(f32)
 
 nmi :: proc(using nes: ^NES) {
 

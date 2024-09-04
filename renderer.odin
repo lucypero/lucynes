@@ -25,8 +25,6 @@ target_fps :: 60
 // the CPU clockrate for NTSC systems is 1789773 Hz
 //    https://www.nesdev.org/wiki/Cycle_reference_chart
 
-effective_cpu_clockrate :: 1789773 * target_fps / 60.0988
-ppu_ticks_between_samples :: effective_cpu_clockrate * 3 / OUTPUT_SAMPLE_RATE
 
 // palette_file :: "palettes/ntscpalette.pal"
 palette_file :: "palettes/Composite_wiki.pal"
@@ -35,8 +33,8 @@ palette_file :: "palettes/Composite_wiki.pal"
 // rom_in_nes :: "roms/Mega Man.nes"
 // rom_in_nes :: "roms/Contra.nes"
 // rom_in_nes :: "roms/Duck Tales.nes"
-// rom_in_nes :: "roms/Castlevania.nes"
-rom_in_nes :: "roms/Metal Gear.nes"
+rom_in_nes :: "roms/Castlevania.nes"
+// rom_in_nes :: "roms/Metal Gear.nes"
 // rom_in_nes :: "roms/Silver Surfer.nes"
 // rom_in_nes :: "roms/IceClimber.nes"
 // rom_in_nes :: "roms/DonkeyKong.nes"

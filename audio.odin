@@ -18,22 +18,16 @@ import ma "vendor:miniaudio"
 OUTPUT_SAMPLE_RATE :: 44100
 
 OUTPUT_NUM_CHANNELS :: 1
-PREFERRED_BUFFER_SIZE :: 512
-OUTPUT_BUFFER_SIZE :: OUTPUT_SAMPLE_RATE * size_of(f32) * OUTPUT_NUM_CHANNELS
+PREFERRED_BUFFER_SIZE :: 512 * 2
 
-MAX_SAMPLES :: 512
-MAX_SAMPLES_PER_UPDATE :: 4096
-// Cycles per second (hz)
-frequency: f32 = 440
+SAMPLE_PACKET_SIZE :: PREFERRED_BUFFER_SIZE
+CHANNEL_BUFFER_SIZE :: 10
 
-// Audio frequency, for smoothing
-audio_frequency: f32 = 440
+effective_cpu_clockrate :: 1789773 * target_fps / 60.0988
+ppu_ticks_between_samples :: (effective_cpu_clockrate * 3 / OUTPUT_SAMPLE_RATE)
 
-// Previous value, used to test if sine needs to be rewritten, and to smoothly modulate frequency
-old_frequency: f32 = 1
-
-// Index for audio rendering
-sine_idx: f32 = 0
+SampleChannel :: chan.Chan([SAMPLE_PACKET_SIZE]f32)
+sample_channel: SampleChannel
 
 AudioDemo :: struct {
 	audio_data:   []i16,
@@ -50,7 +44,11 @@ AudioDemo :: struct {
 audio_demo_init :: proc(audio_demo: ^AudioDemo) {
 
 	err: runtime.Allocator_Error
-	sample_channel, err = chan.create_buffered(chan.Chan(f32), 100000, context.allocator)
+	sample_channel, err = chan.create_buffered(
+		SampleChannel,
+		CHANNEL_BUFFER_SIZE,
+		context.allocator,
+	)
 	if err != .None {
 		os.exit(1)
 	}
@@ -125,16 +123,18 @@ audio_callback :: proc(device: ^ma.device, output, input: rawptr, frame_count: u
 	// get device buffer
 	device_buffer := mem.slice_ptr((^f32)(output), int(frame_count))
 
-	for i in 0 ..< frame_count {
-		sample, ok := chan.try_recv(sample_channel)
-		if ok {
-			// fmt.println("got sample")
-			device_buffer[i] = sample * 0.1
-			last_sample = device_buffer[i]
-		} else {
-			fmt.println("did not got sample")
-			device_buffer[i] = last_sample
+	sample_packet, ok := chan.try_recv(sample_channel)
+	if !ok {
+		fmt.eprintfln("channel recv error")
+
+		for i in 0 ..< frame_count {
+			device_buffer[i] = 0
 		}
+		// os.exit(1)
+	}
+
+	for i in 0 ..< frame_count {
+		device_buffer[i] = sample_packet[i]
 	}
 }
 
@@ -147,7 +147,9 @@ APU :: struct {
 	pulse2:                      PulseChannel,
 	triangle:                    TriangleChannel,
 	global_time:                 f64,
-	ppu_ticks_since_last_sample: f64,
+	ppu_ticks_since_last_sample: int,
+	channel_buffer:              [SAMPLE_PACKET_SIZE]f32,
+	channel_buffer_i:            int,
 }
 
 apu_read :: proc(using nes: ^NES, addr: u16) -> u8 {
@@ -449,9 +451,12 @@ apu_tick :: proc(using nes: ^NES) {
 		})
 	}
 
-	ppu_ticks_since_last_sample += 1.0
-	if ppu_ticks_since_last_sample > ppu_ticks_between_samples {
-		ppu_ticks_since_last_sample -= ppu_ticks_between_samples
+	alala: int = int(math.trunc_f64(ppu_ticks_between_samples))
+
+	ppu_ticks_since_last_sample += 1
+	if ppu_ticks_since_last_sample > alala {
+		ppu_ticks_since_last_sample -= alala
+
 		generate_sample(&apu)
 	}
 
@@ -479,6 +484,7 @@ generate_sample :: proc(using apu: ^APU) {
 		tnd_out = 0
 	}
 
+	tnd_out = 0
 	sample = pulse_out + tnd_out
 
 	// sample = tnd_out
@@ -487,10 +493,26 @@ generate_sample :: proc(using apu: ^APU) {
 
 	// pulse1_osc.freq = 1789773.0 / (16.0 * f64(pulse1_seq.reload + 1))
 	// pulse1_sample = osc_sample(&pulse1_osc, global_time)
-	ok := chan.try_send(sample_channel, f32(sample))
 
-	if !ok {
-		fmt.printfln("not ok")
+	add_sample(apu, f32(sample))
+}
+
+// adds sample to current buffer. if buffer is filled, send it to the channel
+add_sample :: proc(using apu: ^APU, sample: f32) {
+
+	channel_buffer[channel_buffer_i] = sample
+
+	channel_buffer_i += 1
+
+	if channel_buffer_i >= len(channel_buffer) {
+		channel_buffer_i = 0
+
+		ok := chan.try_send(sample_channel, channel_buffer)
+
+		if !ok {
+			fmt.printfln("send not ok. buffer full")
+			os.exit(1)
+		}
 	}
 }
 
