@@ -29,7 +29,7 @@ ppu_ticks_between_samples :: (effective_cpu_clockrate * 3 / OUTPUT_SAMPLE_RATE)
 SampleChannel :: chan.Chan([SAMPLE_PACKET_SIZE]f32)
 sample_channel: SampleChannel
 
-record_wav :: false
+record_wav :: true
 wav_file_seconds :: 30
 
 AudioDemo :: struct {
@@ -450,12 +450,12 @@ apu_tick :: proc(using nes: ^NES) {
 	if clock_counter % 3 == 0 {
 		// Update Triangle channel
 
-		sequencer_clock(&triangle.seq, triangle.length_counter.enabled, proc(seq: ^u32) {
-			seq^ = seq^ + 1
-			if seq^ >= 32 {
-				seq^ = 0
-			}
-		})
+		// sequencer_clock(&triangle.seq, triangle.length_counter.enabled, proc(seq: ^u32) {
+		// 	seq^ = seq^ + 1
+		// 	if seq^ >= 32 {
+		// 		seq^ = 0
+		// 	}
+		// })
 	}
 
 	alala: int = int_from_float(ppu_ticks_between_samples)
@@ -560,22 +560,7 @@ Sequencer :: struct {
 	output:   u8,
 }
 
-sequencer_clock :: proc(using seq: ^Sequencer, enable: bool, seq_proc: SequencerProc) -> u8 {
-	if !enable do return output
-
-	timer -= 1
-	if timer == 0xFFFF {
-		timer = reload
-		seq_proc(&sequence)
-		output = u8(sequence) & 0x01
-	}
-
-	return output
-}
-
 /// / Sequencer
-
-SequencerProc :: proc(sequence: ^u32)
 
 PulseOscilator :: struct {
 	freq:       f64,

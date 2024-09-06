@@ -1,5 +1,7 @@
 package main
 
+import "core:fmt"
+
 // -- Sweep
 
 Sweep :: struct {
@@ -66,15 +68,21 @@ pulse_update_target_period :: proc(using pulse: ^PulseChannel) {
 	}
 }
 
-pulse_update :: proc(pulse: ^PulseChannel) {
-	sequencer_clock(
-		&pulse.seq,
-		pulse.length_counter.enabled,
-		proc(seq: ^u32) {
-			// Shift right by 1 bit, wrapping around
-			seq^ = ((seq^ & 0x0001) << 7) | ((seq^ & 0x00FE) >> 1)
-		},
-	)
+pulse_update :: proc(using pulse: ^PulseChannel) {
+	if !length_counter.enabled do return
+
+	// clocking sequence
+	// when timer triggers, you rotate the sequence
+
+	seq.timer -= 1
+	if seq.timer == 0xFFFF {
+		seq.timer = seq.reload
+		prev := seq.sequence
+		seq.sequence = ((seq.sequence & 0x0001) << 7) | ((seq.sequence & 0x00FE) >> 1)
+		// FIX THIS. IMPLEMENT AN INDEX. RN
+		// fmt.printfln("prev %b cur seq %b", prev, seq.sequence)
+		seq.output = u8(seq.sequence) & 0x01
+	}
 }
 
 pulse_init :: proc(pulse: ^PulseChannel, is_channel_one: bool) {
