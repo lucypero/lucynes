@@ -1,7 +1,11 @@
 package main
 
 import "base:runtime"
+import "core:bufio"
+import "core:bytes"
+import "core:encoding/endian"
 import "core:fmt"
+import "core:io"
 import "core:mem"
 import mv "core:mem/virtual"
 import "core:os"
@@ -10,6 +14,7 @@ import "core:strings"
 import "core:sync"
 import "core:sync/chan"
 import rl "vendor:raylib"
+import wt "wav_tools"
 
 // Allocators
 
@@ -1483,7 +1488,131 @@ _main :: proc() {
 	// union_test()
 
 
+	// write_sample_wav_file()
+
+	// if true {
+	// 	os.exit(0)
+	// }
+
 	window_main()
+}
+
+write_sample_wav_file_w_lib :: proc(the_samples: []f32) {
+
+	// Fill in the data.
+	file_name := "nes_apu_sample.wav"
+	path := "./"
+
+	wav_info, wav_error := wt.wav_info_create(file_name, path, 1, OUTPUT_SAMPLE_RATE, 16)
+
+	if wav_error.(wt.Error).type != .No_Error {
+		fmt.eprintln("err")
+		os.exit(1)
+	}
+
+	// Print the WavInfo struct.
+	wt.print_wav_info(&wav_info)
+
+	defer wt.wav_info_destroy(&wav_info)
+	// TODO: KEEP DOING THIS. WAKE UP AT 6 AM
+	// wt.set_buffer_d32_normalized()
+
+	wav_error = wt.set_buffer_d32_normalized(&wav_info, the_samples, nil)
+
+	if wav_error.(wt.Error).type != .No_Error {
+		fmt.eprintfln("err writing %v", wav_error.(wt.Error))
+
+		os.exit(1)
+	}
+
+	wav_error = wt.wav_write_file(&wav_info)
+	if wav_error.(wt.Error).type != .No_Error {
+		fmt.eprintln("err writing file")
+		os.exit(1)
+	}
+}
+
+write_sample_wav_file :: proc() -> bool {
+
+	write_u32 :: proc(buf: ^bytes.Buffer, val: u32) {
+		val_bytes: [4]u8
+		endian.put_u32(val_bytes[:], .Little, val)
+		bytes.buffer_write(buf, val_bytes[:])
+	}
+
+	write_u16 :: proc(buf: ^bytes.Buffer, val: u16) {
+		val_bytes: [2]u8
+		endian.put_u16(val_bytes[:], .Little, val)
+		bytes.buffer_write(buf, val_bytes[:])
+	}
+
+	buf: bytes.Buffer
+
+	bytes.buffer_init(&buf, {})
+	bits_per_sample :: 32
+	number_channels :: 1
+	header_size :: 44
+
+	data_size: u32 = 400
+	file_size: u32 = data_size + header_size - 8
+
+
+	// write wave header 
+
+	// bytes.buffer_write(&buf, {1,2,3})
+	bytes.buffer_write_string(&buf, "RIFF")
+
+	// write file size as a u32
+	write_u32(&buf, file_size)
+
+	bytes.buffer_write_string(&buf, "WAVEfmt")
+	bytes.buffer_write(&buf, {0x20})
+
+	// BlocSize        (4 bytes) : Chunk size minus 8 bytes, which is 16 bytes here  (0x10)
+	write_u32(&buf, bits_per_sample)
+
+	// AudioFormat
+	bytes.buffer_write(&buf, {0x00, 0x03}) // float
+
+	// NbrChannels (number of channels)
+	write_u16(&buf, number_channels)
+
+	// Frequence       (4 bytes) : Sample rate (in hertz)
+	write_u32(&buf, OUTPUT_SAMPLE_RATE)
+
+	// BytePerSec      (4 bytes) : Number of bytes to read per second (Frequence * BytePerBloc).
+	write_u32(&buf, OUTPUT_SAMPLE_RATE * (bits_per_sample / 8))
+
+	// BytePerBloc     (2 bytes) : Number of bytes per block (NbrChannels * BitsPerSample / 8).
+	write_u16(&buf, number_channels * bits_per_sample / 8)
+
+	// BitsPerSample   (2 bytes) : Number of bits per sample
+	write_u16(&buf, bits_per_sample)
+
+	// DataBlocID      (4 bytes) : Identifier « data »  (0x64, 0x61, 0x74, 0x61)
+	bytes.buffer_write_string(&buf, "data")
+
+	// DataSize        (4 bytes) : SampledData size
+	write_u32(&buf, data_size)
+
+
+	bytes.buffer_write(&buf, {1, 2, 3})
+	bytes.buffer_write(&buf, {1, 2, 3})
+	bytes.buffer_write(&buf, {1, 2, 3})
+	bytes.buffer_write(&buf, {1, 2, 3})
+	bytes.buffer_write(&buf, {1, 2, 3})
+
+	ok := os.write_entire_file("hello.txt", buf.buf[:])
+	if !ok {
+		fmt.eprintfln("could not write file")
+		os.exit(1)
+	}
+
+	// w: bufio.Writer
+	// bufio.writer_init(&w)
+
+
+	return true
 }
 
 // reads a pal file and converts it to [64]rl.Color

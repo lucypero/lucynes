@@ -107,3 +107,34 @@ https://forums.nesdev.org/viewtopic.php?t=24690
 
 ###
 
+
+APU structure - studying MESEN's APU
+
+// here is the frame counter tick
+
+void NesApu::FrameCounterTick(FrameType type)
+{
+	//Quarter & half frame clock envelope & linear counter
+	_square1->TickEnvelope();
+	_square2->TickEnvelope();
+	_triangle->TickLinearCounter();
+	_noise->TickEnvelope();
+
+	if(type == FrameType::HalfFrame) {
+		//Half frames clock length counter & sweep
+		_square1->TickLengthCounter();
+		_square2->TickLengthCounter();
+		_triangle->TickLengthCounter();
+		_noise->TickLengthCounter();
+
+		_square1->TickSweep();
+		_square2->TickSweep();
+	}
+}
+
+enum class FrameType
+{
+	None = 0,
+	QuarterFrame = 1,
+	HalfFrame = 2,
+};

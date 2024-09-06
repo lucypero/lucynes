@@ -29,6 +29,9 @@ ppu_ticks_between_samples :: (effective_cpu_clockrate * 3 / OUTPUT_SAMPLE_RATE)
 SampleChannel :: chan.Chan([SAMPLE_PACKET_SIZE]f32)
 sample_channel: SampleChannel
 
+record_wav :: false
+wav_file_seconds :: 30
+
 AudioDemo :: struct {
 	audio_data:   []i16,
 	write_buffer: []i16,
@@ -150,6 +153,8 @@ APU :: struct {
 	ppu_ticks_since_last_sample: int,
 	channel_buffer:              [SAMPLE_PACKET_SIZE]f32,
 	channel_buffer_i:            int,
+	samples_for_wav:             []f32,
+	samples_for_wav_i:           int,
 }
 
 apu_read :: proc(using nes: ^NES, addr: u16) -> u8 {
@@ -365,6 +370,8 @@ apu_init :: proc(using nes: ^NES) {
 	pulse_init(&pulse1, true)
 	pulse_init(&pulse2, false)
 	triangle_init(&triangle)
+
+	samples_for_wav = make([]f32, OUTPUT_SAMPLE_RATE * wav_file_seconds)
 }
 
 
@@ -451,7 +458,7 @@ apu_tick :: proc(using nes: ^NES) {
 		})
 	}
 
-	alala: int = int(math.trunc_f64(ppu_ticks_between_samples))
+	alala: int = int_from_float(ppu_ticks_between_samples)
 
 	ppu_ticks_since_last_sample += 1
 	if ppu_ticks_since_last_sample > alala {
@@ -463,11 +470,16 @@ apu_tick :: proc(using nes: ^NES) {
 	clock_counter += 1
 }
 
+int_from_float :: proc(f: f64) -> int {
+	return int(f)
+}
+
 generate_sample :: proc(using apu: ^APU) {
 	sample: f64
 
 	pulse1_s := pulse_sample(&pulse1)
-	pulse2_s := pulse_sample(&pulse2)
+	// pulse2_s := pulse_sample(&pulse2)
+	pulse2_s: f64 = 0
 
 	triangle_s := triangle_sample(&triangle)
 
@@ -495,6 +507,29 @@ generate_sample :: proc(using apu: ^APU) {
 	// pulse1_sample = osc_sample(&pulse1_osc, global_time)
 
 	add_sample(apu, f32(sample))
+
+
+	// filling wav buffer
+	when record_wav {
+		add_sample_to_wav_file(apu, f32(sample))
+	}
+}
+
+
+add_sample_to_wav_file :: proc(using apu: ^APU, sample: f32) {
+
+	if samples_for_wav_i >= len(samples_for_wav) do return
+
+	samples_for_wav[samples_for_wav_i] = sample
+
+	samples_for_wav_i += 1
+
+	if samples_for_wav_i >= len(samples_for_wav) {
+		// writing file
+		write_sample_wav_file_w_lib(samples_for_wav)
+		fmt.println("wrote wav file with apu samples.")
+		os.exit(0)
+	}
 }
 
 // adds sample to current buffer. if buffer is filled, send it to the channel
@@ -690,117 +725,6 @@ envelope_tick :: proc(using env: ^Envelope, lc: LengthCounter) {
 		divider = i8(volume)
 	}
 }
-
-// -- Sweep
-
-Sweep :: struct {
-	enabled:       bool,
-	reload:        bool,
-	negate:        bool,
-	shift_count:   u8,
-	period:        u8,
-	target_period: u32,
-	divider:       u8,
-}
-
-
-// -- / Sweep
-
-// -- Pulse channel
-
-PulseChannel :: struct {
-	is_channel_one: bool,
-	seq:            Sequencer,
-	osc:            PulseOscilator,
-	length_counter: LengthCounter,
-	real_period:    u16,
-	sweep:          Sweep,
-	envelope:       Envelope,
-}
-
-pulse_set_period :: proc(using pulse: ^PulseChannel, new_period: u16) {
-	real_period = new_period
-	// seq.reload = (real_period * 2) + 1
-	seq.reload = real_period
-	// 	_timer.SetPeriod((_realPeriod * 2) + 1);
-	pulse_update_target_period(pulse)
-}
-
-pulse_sweep_tick :: proc(using pulse: ^PulseChannel) {
-	sweep.divider -= 1
-
-	if sweep.divider == 0 {
-		if sweep.shift_count > 0 &&
-		   sweep.enabled &&
-		   real_period >= 8 &&
-		   sweep.target_period <= 0x7FF {
-			pulse_set_period(pulse, u16(sweep.target_period))
-		}
-		sweep.divider = sweep.period
-	}
-
-	if sweep.reload {
-		sweep.divider = sweep.period
-		sweep.reload = false
-	}
-}
-
-pulse_update_target_period :: proc(using pulse: ^PulseChannel) {
-	shift_result: u16 = (real_period >> sweep.shift_count)
-	if (sweep.negate) {
-		sweep.target_period = u32(real_period) - u32(shift_result)
-		if (is_channel_one) {
-			// As a result, a negative sweep on pulse channel 1 will subtract the shifted period value minus 1
-			sweep.target_period -= 1
-		}
-	} else {
-		sweep.target_period = u32(real_period) + u32(shift_result)
-	}
-}
-
-pulse_update :: proc(pulse: ^PulseChannel) {
-	sequencer_clock(
-		&pulse.seq,
-		pulse.length_counter.enabled,
-		proc(seq: ^u32) {
-			// Shift right by 1 bit, wrapping around
-			seq^ = ((seq^ & 0x0001) << 7) | ((seq^ & 0x00FE) >> 1)
-		},
-	)
-}
-
-pulse_init :: proc(pulse: ^PulseChannel, is_channel_one: bool) {
-	pulse.is_channel_one = is_channel_one
-	pulse.osc.amp = 1
-	pulse.osc.pi = 3.14159
-	pulse.osc.harmonics = 20
-
-	pulse.length_counter.enabled = true
-}
-
-pulse_is_muted :: proc(using pulse: ^PulseChannel) -> bool {
-	// A period of t < 8, either set explicitly or via a sweep period update,
-	//   silences the corresponding pulse channel.
-	condition := (real_period < 8) || (!sweep.negate && sweep.target_period > 0x7FF)
-	return condition
-}
-
-pulse_sample :: proc(using pulse: ^PulseChannel) -> f64 {
-	if !length_counter.enabled {
-		return 0
-	}
-
-	if length_counter.counter <= 0 {
-		return 0
-	}
-
-	if pulse_is_muted(pulse) do return 0
-
-	env_vol := envelope_get_volume(pulse.envelope, pulse.length_counter)
-	return f64(pulse.seq.output) * f64(env_vol)
-}
-
-// -- / Pulse channel
 
 // -- Triangle channel
 
