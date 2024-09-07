@@ -29,7 +29,7 @@ ppu_ticks_between_samples :: (effective_cpu_clockrate * 3 / OUTPUT_SAMPLE_RATE)
 SampleChannel :: chan.Chan([SAMPLE_PACKET_SIZE]f32)
 sample_channel: SampleChannel
 
-record_wav :: true
+record_wav :: false
 wav_file_seconds :: 30
 
 AudioDemo :: struct {
@@ -280,35 +280,8 @@ apu_write :: proc(using nes: ^NES, addr: u16, val: u8) {
 		set_pulse_timer_high(val, &pulse2)
 
 	/// TRIANGLE channel
-
-	// Triangle Length counter halt / linear counter control (C), linear counter load (R) 
-	//    CRRR RRRR
-	case 0x4008:
-		// fmt.printfln("write to 40008: %X", val)
-		// Getting R 
-		r := val & 0x7F
-		// Getting C
-		c := val & 0x80
-
-		triangle.length_counter.halt = c != 0
-		triangle.linear_counter_reload = int(r)
-
-	// Unused
-	case 0x4009:
-
-	// Triangle timer low
-	case 0x400A:
-		triangle.seq.reload = triangle.seq.reload & 0xFF00 | u16(val)
-
-	// Length counter load (L), timer high (T), set linear counter reload flag 
-	//   LLLL LTTT
-	case 0x400B:
-		triangle.seq.reload = (u16(val) & 0x07) << 8 | (triangle.seq.reload & 0x00FF)
-		triangle.seq.timer = triangle.seq.reload
-		triangle.linear_reload_flag = true
-
-		l := (val & 0xF8) >> 3
-		lc_load(&triangle.length_counter, l)
+	case 0x4008, 0x4009, 0x400A, 0x400B:
+		triangle_cpu_write(&triangle, addr, val)
 
 	/// NOISE channel
 
@@ -412,6 +385,7 @@ apu_tick :: proc(using nes: ^NES) {
 		if quarter_frame_clock {
 			envelope_tick(&pulse1.envelope, pulse1.length_counter)
 			envelope_tick(&pulse2.envelope, pulse2.length_counter)
+			linear_counter_tick(&triangle.lin_c)
 
 			// pulse1_env.clock(pulse1_halt);
 			// pulse2_env.clock(pulse2_halt);
@@ -449,13 +423,7 @@ apu_tick :: proc(using nes: ^NES) {
 
 	if clock_counter % 3 == 0 {
 		// Update Triangle channel
-
-		// sequencer_clock(&triangle.seq, triangle.length_counter.enabled, proc(seq: ^u32) {
-		// 	seq^ = seq^ + 1
-		// 	if seq^ >= 32 {
-		// 		seq^ = 0
-		// 	}
-		// })
+		triangle_update(&triangle)
 	}
 
 	alala: int = int_from_float(ppu_ticks_between_samples)
@@ -478,8 +446,8 @@ generate_sample :: proc(using apu: ^APU) {
 	sample: f64
 
 	pulse1_s := pulse_sample(&pulse1)
-	// pulse2_s := pulse_sample(&pulse2)
-	pulse2_s: f64 = 0
+	pulse2_s := pulse_sample(&pulse2)
+	// pulse2_s: f64 = 0
 
 	triangle_s := triangle_sample(&triangle)
 
@@ -490,15 +458,15 @@ generate_sample :: proc(using apu: ^APU) {
 		pulse_out = 0
 	}
 
-	tnd_out: f64 = 159.79 / ((1 / (triangle_s / 8227)) + 100)
+	tnd_out: f64 = 159.79 / ((1 / (f64(triangle_s) / 8227)) + 100)
 
 	if triangle_s == 0 {
 		tnd_out = 0
 	}
 
-	tnd_out = 0
+	// tnd_out = 0
+	// pulse_out = 0
 	sample = pulse_out + tnd_out
-
 	// sample = tnd_out
 
 	// sample = (pulse1_s - 0.5) * 0.5 + (pulse2_s - 0.5) * 0.5
@@ -542,11 +510,11 @@ add_sample :: proc(using apu: ^APU, sample: f32) {
 	if channel_buffer_i >= len(channel_buffer) {
 		channel_buffer_i = 0
 
-		ok := chan.try_send(sample_channel, channel_buffer)
+		ok := chan.send(sample_channel, channel_buffer)
 
 		if !ok {
-			fmt.printfln("send not ok. buffer full")
-			os.exit(1)
+			// fmt.printfln("send not ok. buffer full")
+			// os.exit(1)
 		}
 	}
 }
@@ -555,6 +523,7 @@ add_sample :: proc(using apu: ^APU, sample: f32) {
 
 Sequencer :: struct {
 	sequence: u32,
+	index:    u32,
 	timer:    u16,
 	reload:   u16,
 	output:   u8,
@@ -664,6 +633,16 @@ lc_tick :: proc(using lc: ^LengthCounter) {
 	}
 }
 
+lc_reload :: proc(using lc: ^LengthCounter) {
+	if reload_value != 0 {
+		if counter == previous_value {
+			counter = reload_value
+		}
+		reload_value = 0
+	}
+	halt = new_halt_value
+}
+
 // -- / Length Counter
 
 // -- Envelope
@@ -711,99 +690,3 @@ envelope_tick :: proc(using env: ^Envelope, lc: LengthCounter) {
 	}
 }
 
-// -- Triangle channel
-
-TriangleChannel :: struct {
-	seq:                   Sequencer,
-	seq_pos:               int,
-	// length_counter:        int,
-	// length_counter_halt:   bool,
-	linear_counter:        int,
-	linear_counter_reload: int,
-	linear_reload_flag:    bool,
-	linear_control_flag:   bool,
-	length_counter:        LengthCounter,
-}
-
-triangle_init :: proc(using triangle: ^TriangleChannel) {
-	length_counter.enabled = true
-}
-
-triangle_sample :: proc(using triangle: ^TriangleChannel) -> f64 {
-
-	if !length_counter.enabled do return 0
-	if length_counter.counter <= 0 do return 0
-
-	triangle_s: f64
-
-	switch seq.sequence {
-	case 0:
-		triangle_s = 15
-	case 1:
-		triangle_s = 14
-	case 2:
-		triangle_s = 13
-	case 3:
-		triangle_s = 12
-	case 4:
-		triangle_s = 11
-	case 5:
-		triangle_s = 10
-	case 6:
-		triangle_s = 9
-	case 7:
-		triangle_s = 8
-	case 8:
-		triangle_s = 7
-	case 9:
-		triangle_s = 6
-	case 10:
-		triangle_s = 5
-	case 11:
-		triangle_s = 4
-	case 12:
-		triangle_s = 3
-	case 13:
-		triangle_s = 2
-	case 14:
-		triangle_s = 1
-	case 15:
-		triangle_s = 0
-	case 16:
-		triangle_s = 0
-	case 17:
-		triangle_s = 1
-	case 18:
-		triangle_s = 2
-	case 19:
-		triangle_s = 3
-	case 20:
-		triangle_s = 4
-	case 21:
-		triangle_s = 5
-	case 22:
-		triangle_s = 6
-	case 23:
-		triangle_s = 7
-	case 24:
-		triangle_s = 8
-	case 25:
-		triangle_s = 9
-	case 26:
-		triangle_s = 10
-	case 27:
-		triangle_s = 11
-	case 28:
-		triangle_s = 12
-	case 29:
-		triangle_s = 13
-	case 30:
-		triangle_s = 14
-	case 31:
-		triangle_s = 15
-	}
-
-	return triangle_s
-}
-
-// -- / Triangle channel

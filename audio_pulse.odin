@@ -77,11 +77,8 @@ pulse_update :: proc(using pulse: ^PulseChannel) {
 	seq.timer -= 1
 	if seq.timer == 0xFFFF {
 		seq.timer = seq.reload
-		prev := seq.sequence
-		seq.sequence = ((seq.sequence & 0x0001) << 7) | ((seq.sequence & 0x00FE) >> 1)
-		// FIX THIS. IMPLEMENT AN INDEX. RN
-		// fmt.printfln("prev %b cur seq %b", prev, seq.sequence)
-		seq.output = u8(seq.sequence) & 0x01
+		seq.index = (seq.index - 1) & 0x7
+		seq.output = u8((seq.sequence & (0x1 << seq.index)) >> seq.index)
 	}
 }
 
