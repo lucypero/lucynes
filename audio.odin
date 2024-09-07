@@ -47,11 +47,7 @@ AudioDemo :: struct {
 audio_demo_init :: proc(audio_demo: ^AudioDemo) {
 
 	err: runtime.Allocator_Error
-	sample_channel, err = chan.create_buffered(
-		SampleChannel,
-		CHANNEL_BUFFER_SIZE,
-		context.allocator,
-	)
+	sample_channel, err = chan.create_buffered(SampleChannel, CHANNEL_BUFFER_SIZE, context.allocator)
 	if err != .None {
 		os.exit(1)
 	}
@@ -149,6 +145,7 @@ APU :: struct {
 	pulse1:                      PulseChannel,
 	pulse2:                      PulseChannel,
 	triangle:                    TriangleChannel,
+	noise: NoiseChannel,
 	global_time:                 f64,
 	ppu_ticks_since_last_sample: int,
 	channel_buffer:              [SAMPLE_PACKET_SIZE]f32,
@@ -284,21 +281,8 @@ apu_write :: proc(using nes: ^NES, addr: u16, val: u8) {
 		triangle_cpu_write(&triangle, addr, val)
 
 	/// NOISE channel
-
-	// NOISE Envelope loop / length counter halt (L), constant volume (C), volume/envelope (V) 
-	//   --LC VVVV
-	case 0x400C:
-
-	// Unused
-	case 0x400D:
-
-	// NOISE Loop noise (L), noise period (P) 
-	//   L--- PPPP
-	case 0x400E:
-
-	// NOISE Length counter load (L) 
-	//   LLLL L---
-	case 0x400F:
+	case 0x400C, 0x400D, 0x400E, 0x400F:
+		noise_cpu_write(&noise, addr, val)
 
 	/// DMC Channel
 
@@ -343,6 +327,7 @@ apu_init :: proc(using nes: ^NES) {
 	pulse_init(&pulse1, true)
 	pulse_init(&pulse2, false)
 	triangle_init(&triangle)
+	noise_init(&noise)
 
 	samples_for_wav = make([]f32, OUTPUT_SAMPLE_RATE * wav_file_seconds)
 }
@@ -385,11 +370,8 @@ apu_tick :: proc(using nes: ^NES) {
 		if quarter_frame_clock {
 			envelope_tick(&pulse1.envelope, pulse1.length_counter)
 			envelope_tick(&pulse2.envelope, pulse2.length_counter)
+			envelope_tick(&noise.envelope, noise.lc)
 			linear_counter_tick(&triangle.lin_c)
-
-			// pulse1_env.clock(pulse1_halt);
-			// pulse2_env.clock(pulse2_halt);
-			// noise_env.clock(noise_halt);
 		}
 
 		// Half frame "beats" adjust the note length and
@@ -398,6 +380,9 @@ apu_tick :: proc(using nes: ^NES) {
 			lc_tick(&pulse1.length_counter)
 			lc_tick(&pulse2.length_counter)
 			lc_tick(&triangle.length_counter)
+			lc_tick(&noise.lc)
+
+			// noise_lc.clock(noise_enable, noise_halt)
 
 			pulse_sweep_tick(&pulse1)
 			pulse_sweep_tick(&pulse2)
@@ -413,6 +398,8 @@ apu_tick :: proc(using nes: ^NES) {
 		pulse_update(&pulse1)
 		// Update Pulse 2 channel
 		pulse_update(&pulse2)
+
+		noise_update(&noise)
 
 		// for ring_buffer.written > len(ring_buffer.data) / 2 do sync.sema_wait(&sema)
 		// sync.lock(&mutex)
@@ -449,7 +436,6 @@ generate_sample :: proc(using apu: ^APU) {
 	pulse2_s := pulse_sample(&pulse2)
 	// pulse2_s: f64 = 0
 
-	triangle_s := triangle_sample(&triangle)
 
 	// formula for mixing
 	pulse_out: f64 = 95.88 / ((8128 / (pulse1_s + pulse2_s)) + 100)
@@ -458,9 +444,13 @@ generate_sample :: proc(using apu: ^APU) {
 		pulse_out = 0
 	}
 
-	tnd_out: f64 = 159.79 / ((1 / (f64(triangle_s) / 8227)) + 100)
+	triangle_s := triangle_sample(&triangle)
+	// triangle_s = 0
+	noise_s := noise_sample(&noise)
 
-	if triangle_s == 0 {
+	tnd_out: f64 = 159.79 / ((1 / ((f64(triangle_s) / 8227) + (f64(noise_s) / 12241)) + 100))
+
+	if triangle_s == 0 && noise_s == 0 {
 		tnd_out = 0
 	}
 
@@ -664,9 +654,9 @@ envelope_reset :: proc(env: ^Envelope) {
 	env.start = true
 }
 
-envelope_get_volume :: proc(env: Envelope, lc: LengthCounter) -> u32 {
+envelope_get_volume :: proc(env: Envelope, lc: LengthCounter) -> u8 {
 	if lc.counter > 0 {
-		return env.use_constant_volume ? u32(env.volume) : u32(env.counter)
+		return env.use_constant_volume ? env.volume : env.counter
 	} else {
 		return 0
 	}
@@ -689,4 +679,3 @@ envelope_tick :: proc(using env: ^Envelope, lc: LengthCounter) {
 		divider = i8(volume)
 	}
 }
-
