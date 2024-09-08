@@ -30,11 +30,11 @@ target_fps :: 60
 palette_file :: "palettes/Composite_wiki.pal"
 
 // rom_in_nes :: "roms/SuperMarioBros.nes"
-rom_in_nes :: "roms/Mega Man.nes"
+// rom_in_nes :: "roms/Mega Man.nes"
 // rom_in_nes :: "roms/Contra.nes"
 // rom_in_nes :: "roms/Duck Tales.nes"
 // rom_in_nes :: "roms/Castlevania.nes"
-// rom_in_nes :: "roms/Metal Gear.nes"
+rom_in_nes :: "roms/Metal Gear.nes"
 // rom_in_nes :: "roms/Silver Surfer.nes"
 // rom_in_nes :: "roms/IceClimber.nes"
 // rom_in_nes :: "roms/DonkeyKong.nes"
@@ -60,6 +60,8 @@ PixelGrid :: struct {
 	width:  int,
 	height: int,
 }
+
+send_samples:= true
 
 window_main :: proc() {
 
@@ -119,6 +121,10 @@ window_main :: proc() {
 		if rl.IsKeyDown(.ENTER) {
 			// reset nes
 			nes_reset(&nes, rom_in_nes)
+		}
+
+		if rl.IsKeyPressed(.P) {
+			send_samples = !send_samples
 		}
 
 		port_0_input: u8

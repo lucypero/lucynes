@@ -1495,6 +1495,11 @@ _main :: proc() {
 	// }
 
 	window_main()
+	fmt.printfln("--- Audio sync report ---")
+	// fmt.printfln(" Times that the channel buffer was over %v: %v", CHANNEL_BUFFER_SOFT_CAP, times_it_went_over)
+	fmt.printfln(" Times that the audio thread starved: %v", times_it_starved)
+	fmt.printfln(" Times that the main thread got blocked: %v", times_main_thread_got_blocked)
+	fmt.printfln("--- / Audio sync report ---")
 }
 
 write_sample_wav_file_w_lib :: proc(the_samples: []f32) {

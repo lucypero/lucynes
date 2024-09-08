@@ -18,10 +18,10 @@ import ma "vendor:miniaudio"
 OUTPUT_SAMPLE_RATE :: 44100
 
 OUTPUT_NUM_CHANNELS :: 1
-PREFERRED_BUFFER_SIZE :: 512 * 2
+PREFERRED_BUFFER_SIZE :: 512
 
 SAMPLE_PACKET_SIZE :: PREFERRED_BUFFER_SIZE
-CHANNEL_BUFFER_SIZE :: 10
+CHANNEL_BUFFER_SIZE :: 4
 
 effective_cpu_clockrate :: 1789773 * target_fps / 60.0988
 ppu_ticks_between_samples :: (effective_cpu_clockrate * 3 / OUTPUT_SAMPLE_RATE)
@@ -30,7 +30,7 @@ SampleChannel :: chan.Chan([SAMPLE_PACKET_SIZE]f32)
 sample_channel: SampleChannel
 
 record_wav :: false
-wav_file_seconds :: 30
+wav_file_seconds :: 60
 
 AudioDemo :: struct {
 	audio_data:   []i16,
@@ -114,6 +114,12 @@ sample_generator_thread_proc :: proc(data: rawptr) {
 }
 
 last_sample: f32
+times_it_went_over: int
+start_counting_starves: bool
+times_it_starved: int
+times_main_thread_got_blocked: int
+
+CHANNEL_BUFFER_SOFT_CAP :: 2
 
 audio_callback :: proc(device: ^ma.device, output, input: rawptr, frame_count: u32) {
 
@@ -124,13 +130,29 @@ audio_callback :: proc(device: ^ma.device, output, input: rawptr, frame_count: u
 
 	sample_packet, ok := chan.try_recv(sample_channel)
 	if !ok {
-		fmt.eprintfln("channel recv error")
+		// fmt.eprintfln("channel recv error")
+		if start_counting_starves {
+			times_it_starved += 1
+
+		}
 
 		for i in 0 ..< frame_count {
 			device_buffer[i] = 0
 		}
+		return
 		// os.exit(1)
 	}
+
+	// chan_len := chan.len(sample_channel)
+
+	// if chan_len > CHANNEL_BUFFER_SOFT_CAP {
+	// 	times_it_went_over += 1
+
+	// 	// dropping all packets and taking the last one
+	// 	for chan.can_recv(sample_channel) {
+	// 		sample_packet, ok = chan.recv(sample_channel)
+	// 	}
+	// }
 
 	for i in 0 ..< frame_count {
 		device_buffer[i] = sample_packet[i]
@@ -145,7 +167,7 @@ APU :: struct {
 	pulse1:                      PulseChannel,
 	pulse2:                      PulseChannel,
 	triangle:                    TriangleChannel,
-	noise: NoiseChannel,
+	noise:                       NoiseChannel,
 	global_time:                 f64,
 	ppu_ticks_since_last_sample: int,
 	channel_buffer:              [SAMPLE_PACKET_SIZE]f32,
@@ -464,7 +486,9 @@ generate_sample :: proc(using apu: ^APU) {
 	// pulse1_osc.freq = 1789773.0 / (16.0 * f64(pulse1_seq.reload + 1))
 	// pulse1_sample = osc_sample(&pulse1_osc, global_time)
 
-	add_sample(apu, f32(sample))
+	if send_samples {
+		add_sample(apu, f32(sample))
+	}
 
 
 	// filling wav buffer
@@ -500,7 +524,16 @@ add_sample :: proc(using apu: ^APU, sample: f32) {
 	if channel_buffer_i >= len(channel_buffer) {
 		channel_buffer_i = 0
 
+		// `can_send()` is broken in Odin. If you call it, the program will hang.
+		//   Uncomment this when they fix it.
+
+		// if times_main_thread_got_blocked == 0 && !chan.can_send(sample_channel) {
+		// 	times_main_thread_got_blocked += 1
+		// }
+
+		// Main thread will be blocked until the channel buffer has enough space.
 		ok := chan.send(sample_channel, channel_buffer)
+		start_counting_starves = true;
 
 		if !ok {
 			// fmt.printfln("send not ok. buffer full")
