@@ -4,6 +4,7 @@ import "core:c"
 import "core:fmt"
 import "core:math"
 import "core:os"
+import "core:mem"
 import rl "vendor:raylib"
 
 scale_factor :: 5
@@ -62,7 +63,7 @@ PixelGrid :: struct {
 	height: int,
 }
 
-send_samples:= true
+send_samples := true
 
 window_main :: proc() {
 
@@ -92,7 +93,7 @@ window_main :: proc() {
 	// rl.UnloadImage(checkedIm) // Unload CPU (RAM) image data (pixels)
 
 	// initting audio
-	audio_demo : AudioDemo
+	audio_demo: AudioDemo
 	audio_demo_init(&audio_demo)
 
 	run_nestest_test()
@@ -131,7 +132,13 @@ window_main :: proc() {
 		if rl.IsKeyPressed(.F1) {
 			// save
 
-			delete(save_states)
+			if len(save_states) > 0 {
+				delete(save_states[0].chr_rom)
+				delete(save_states[0].prg_rom)
+				delete(save_states[0].prg_ram)
+
+				delete(save_states)
+			}
 
 			save_states = make([]NES, 1)
 			save_states[0] = nes
@@ -148,7 +155,11 @@ window_main :: proc() {
 
 		if rl.IsKeyPressed(.F4) {
 			// load
-			nes = save_states[0]
+			// free_all(mem.tracking_allocator(&nes_allocator))
+
+			if len(save_states) > 0 {
+				nes = save_states[0]
+			}
 		}
 
 		port_0_input: u8
