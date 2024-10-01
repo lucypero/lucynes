@@ -527,9 +527,9 @@ add_sample :: proc(using apu: ^APU, sample: f32) {
 		// `can_send()` is broken in Odin. If you call it, the program will hang.
 		//   Uncomment this when they fix it.
 
-		// if times_main_thread_got_blocked == 0 && !chan.can_send(sample_channel) {
-		// 	times_main_thread_got_blocked += 1
-		// }
+		if times_main_thread_got_blocked == 0 && !chan.can_send(sample_channel) {
+			times_main_thread_got_blocked += 1
+		}
 
 		// Main thread will be blocked until the channel buffer has enough space.
 		ok := chan.send(sample_channel, channel_buffer)

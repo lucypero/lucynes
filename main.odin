@@ -146,6 +146,8 @@ OAMEntry :: struct {
 	x:         u8,
 }
 
+save_states : []NES
+
 NES :: struct {
 	using registers:                Registers, // CPU Registers
 	// TODO: this isn't ram, so it shouldn't even be memory. don't store this. it's a bus, it's not real ram.

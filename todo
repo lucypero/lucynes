@@ -1,3 +1,17 @@
+# todo
+
+
+- make bomberman run. it might be a NMI thing.
+	https://forums.nesdev.org/viewtopic.php?t=12222&sid=5198a50987eb742fe2fd2361ed224335&start=15
+
+- Wrap up audio
+	- Make Mario sound normal
+	- DMC channel
+
+
+- save states
+
+
 # odin stuff
 
 default_allocator :: heap_allocator
@@ -32,14 +46,6 @@ order of inputs:
 (highest bit) -> lowest bit
 
 A B Select Start Up Down Left Right
-
-
-bad one (when your game works)
-450b9ceae
-
-good one (when your game doesn't work)
-34247b2658063621fb97a68a35a7b96e459398e0
-
 
 # possible bug
 
@@ -102,39 +108,3 @@ and the branching instructions can touch that
 read this about cycles
 https://forums.nesdev.org/viewtopic.php?t=24690
 
-
-
-
-###
-
-
-APU structure - studying MESEN's APU
-
-// here is the frame counter tick
-
-void NesApu::FrameCounterTick(FrameType type)
-{
-	//Quarter & half frame clock envelope & linear counter
-	_square1->TickEnvelope();
-	_square2->TickEnvelope();
-	_triangle->TickLinearCounter();
-	_noise->TickEnvelope();
-
-	if(type == FrameType::HalfFrame) {
-		//Half frames clock length counter & sweep
-		_square1->TickLengthCounter();
-		_square2->TickLengthCounter();
-		_triangle->TickLengthCounter();
-		_noise->TickLengthCounter();
-
-		_square1->TickSweep();
-		_square2->TickSweep();
-	}
-}
-
-enum class FrameType
-{
-	None = 0,
-	QuarterFrame = 1,
-	HalfFrame = 2,
-};

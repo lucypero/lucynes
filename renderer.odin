@@ -29,12 +29,13 @@ target_fps :: 60
 // palette_file :: "palettes/ntscpalette.pal"
 palette_file :: "palettes/Composite_wiki.pal"
 
-// rom_in_nes :: "roms/SuperMarioBros.nes"
+rom_in_nes :: "roms/SuperMarioBros.nes"
 // rom_in_nes :: "roms/Mega Man.nes"
 // rom_in_nes :: "roms/Contra.nes"
 // rom_in_nes :: "roms/Duck Tales.nes"
 // rom_in_nes :: "roms/Castlevania.nes"
-rom_in_nes :: "roms/Metal Gear.nes"
+// rom_in_nes :: "roms/Metal Gear.nes"
+// rom_in_nes :: "roms/Bomberman.nes"
 // rom_in_nes :: "roms/Silver Surfer.nes"
 // rom_in_nes :: "roms/IceClimber.nes"
 // rom_in_nes :: "roms/DonkeyKong.nes"
@@ -125,6 +126,29 @@ window_main :: proc() {
 
 		if rl.IsKeyPressed(.P) {
 			send_samples = !send_samples
+		}
+
+		if rl.IsKeyPressed(.F1) {
+			// save
+
+			delete(save_states)
+
+			save_states = make([]NES, 1)
+			save_states[0] = nes
+
+			save_states[0].chr_rom = make([]u8, len(nes.chr_rom))
+			copy(save_states[0].chr_rom, nes.chr_rom)
+
+			save_states[0].prg_rom = make([]u8, len(nes.prg_rom))
+			copy(save_states[0].prg_rom, nes.prg_rom)
+
+			save_states[0].prg_ram = make([]u8, len(nes.prg_ram))
+			copy(save_states[0].prg_ram, nes.prg_ram)
+		}
+
+		if rl.IsKeyPressed(.F4) {
+			// load
+			nes = save_states[0]
 		}
 
 		port_0_input: u8
