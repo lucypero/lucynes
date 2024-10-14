@@ -146,7 +146,7 @@ OAMEntry :: struct {
 	x:         u8,
 }
 
-save_states : []NES
+save_states: []NES
 
 NES :: struct {
 	using registers:                Registers, // CPU Registers
@@ -161,6 +161,7 @@ NES :: struct {
 	chr_rom:                        []u8,
 	prg_ram:                        []u8,
 	mapper_data:                    MapperData,
+	nmi_triggered:                  int,
 
 	// input
 	port_0_register:                u8,
@@ -256,16 +257,17 @@ mutex: sync.Mutex
 ring_buffer: Buffer
 sema: sync.Sema
 
-nmi :: proc(using nes: ^NES) {
+nmi :: proc(using nes: ^NES, nmi_type: int) {
 
-	// fmt.println("nmi triggered!")
+	// from_2000 == true: from writing to 2000
+	// from_2000 == false: from ppu tick when hitting vblank
 
 	stack_push_u16(nes, program_counter)
 	flags += {.InterruptDisable, .NoEffect1}
 	flags -= {.NoEffectB}
 	stack_push(nes, transmute(u8)flags)
 
-	// read u16 memmory value at 0xFFFA
+	// read u16 memory value at 0xFFFA
 	nmi_mem: u16
 
 	low_byte := u16(read(nes, 0xFFFA))
@@ -273,7 +275,18 @@ nmi :: proc(using nes: ^NES) {
 
 	nmi_mem = high_byte << 8 | low_byte
 
+	old_pc := program_counter
+
 	program_counter = nmi_mem
+
+	fmt.printfln(
+		"nmi triggered! %v, jumping from %X to %X. ppu_cycle: %v scanline: %v",
+		nmi_type,
+		old_pc,
+		program_counter,
+		ppu_cycle_x,
+		ppu_scanline,
+	)
 
 	cycles += 7
 }
@@ -467,8 +480,7 @@ parse_log_file :: proc(log_file: string) -> (res: [dynamic]NesTestLog, ok: bool)
 		reg.cpu_registers.accumulator = u8(strconv.parse_int(line[50:][:2], 16) or_return)
 		reg.cpu_registers.index_x = u8(strconv.parse_int(line[55:][:2], 16) or_return)
 		reg.cpu_registers.index_y = u8(strconv.parse_int(line[60:][:2], 16) or_return)
-		reg.cpu_registers.flags =
-		transmute(RegisterFlags)u8(strconv.parse_int(line[65:][:2], 16) or_return)
+		reg.cpu_registers.flags = transmute(RegisterFlags)u8(strconv.parse_int(line[65:][:2], 16) or_return)
 		reg.cpu_registers.stack_pointer = u8(strconv.parse_int(line[71:][:2], 16) or_return)
 		reg.cpu_cycles = uint(strconv.parse_uint(line[90:], 10) or_return)
 		append(&res, reg)
@@ -528,23 +540,18 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 			return true
 		}
 
-		if res := compare_reg(nes.registers, nes.cycles, register_logs[instructions_ran]);
-		   res != 0 {
+		if res := compare_reg(nes.registers, nes.cycles, register_logs[instructions_ran]); res != 0 {
 			// test fail
 
 			logs_reg := register_logs[instructions_ran]
 
 			fmt.printfln("------------------")
 
-			fmt.printfln("Test failed after instruction: %v (starts at 1)", instructions_ran)
+			fmt.eprintfln("Test failed after instruction: %v (starts at 1)", instructions_ran)
 
 			switch res {
 			case 1:
-				fmt.printfln(
-					"PC: %X, TEST PC: %X",
-					program_counter,
-					logs_reg.cpu_registers.program_counter,
-				)
+				fmt.printfln("PC: %X, TEST PC: %X", program_counter, logs_reg.cpu_registers.program_counter)
 			case 2:
 				fmt.printfln("A: %X, TEST A: %X", accumulator, logs_reg.cpu_registers.accumulator)
 			case 3:
@@ -554,11 +561,7 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 			case 5:
 				fmt.printfln("P: %X, TEST P: %X", flags, logs_reg.cpu_registers.flags)
 			case 6:
-				fmt.printfln(
-					"SP: %X, TEST SP: %X",
-					stack_pointer,
-					logs_reg.cpu_registers.stack_pointer,
-				)
+				fmt.printfln("SP: %X, TEST SP: %X", stack_pointer, logs_reg.cpu_registers.stack_pointer)
 			case 7:
 				fmt.printfln("CYCLES: %v, TEST CYCLES: %v", nes.cycles, logs_reg.cpu_cycles)
 			}
@@ -578,11 +581,7 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 	return true
 }
 
-compare_reg :: proc(
-	current_register: Registers,
-	cpu_cycles: uint,
-	log_register: NesTestLog,
-) -> int {
+compare_reg :: proc(current_register: Registers, cpu_cycles: uint, log_register: NesTestLog) -> int {
 
 	if current_register.program_counter != log_register.cpu_registers.program_counter {
 		return 1
@@ -653,10 +652,18 @@ read_u16_le :: proc(nes: ^NES, addr: u16) -> u16 {
 }
 
 run_instruction :: proc(using nes: ^NES) {
+
 	// get first byte of instruction
 	instr := read(nes, program_counter)
 
-	// fmt.printfln("PC: %X OPCODE: %X A: %X", program_counter, instr, accumulator)
+	// nmi subroutine in bomberman
+	// if program_counter == 0xc01a {
+	// 	fmt.printfln("starting nmi subroutine. ppu cycle: %v, scanline: %v", ppu_cycle_x, ppu_scanline)
+	// }
+
+	// if program_counter != 0xc290 && program_counter != 0xc293 {
+	// 	fmt.printfln("PC: %X OPCODE: %X A: %X", program_counter, instr, accumulator)
+	// }
 
 	program_counter += 1
 	switch instr {
@@ -1448,11 +1455,7 @@ warn_leaks :: proc(allocator: ^mem.Tracking_Allocator, allocator_name: string) {
 		}
 	}
 	if len(allocator.bad_free_array) > 0 {
-		fmt.eprintf(
-			"=== %v incorrect frees from %v allocator: ===\n",
-			len(allocator.bad_free_array),
-			allocator_name,
-		)
+		fmt.eprintf("=== %v incorrect frees from %v allocator: ===\n", len(allocator.bad_free_array), allocator_name)
 		for entry in allocator.bad_free_array {
 			fmt.eprintf("- %p @ %v\n", entry.memory, entry.location)
 		}
@@ -1669,12 +1672,7 @@ union_test :: proc() {
 	fmt.printfln("%b", transmute(u8)ppu_ctrl)
 }
 
-tick_nes_till_vblank :: proc(
-	using nes: ^NES,
-	port_0_input: u8,
-	port_1_input: u8,
-	pixel_grid: ^PixelGrid,
-) {
+tick_nes_till_vblank :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8, pixel_grid: ^PixelGrid) {
 
 	vblank_hit := false
 
@@ -1682,8 +1680,18 @@ tick_nes_till_vblank :: proc(
 	for true {
 		// main NES loop
 		// catchup method
+
 		past_cycles := cycles
+
 		run_instruction(nes)
+
+		// If you run NMI after running the instruction normally,
+		//  then bomberman start screen works. it's weird.
+
+		if nmi_triggered != 0 {
+			nmi(nes, nmi_triggered)
+			nmi_triggered = 0
+		}
 
 		// Input
 		if poll_input {
@@ -1957,16 +1965,12 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 casting_test :: proc() {
 	hello: i8 = -4
 	positive: i8 = 4
-	fmt.printfln(
-		"-4 is %8b. -4 in u16 is %16b, 4 as i8 in u16 is %16b",
-		hello,
-		u16(hello),
-		u16(positive),
-	) // 46
+	fmt.printfln("-4 is %8b. -4 in u16 is %16b, 4 as i8 in u16 is %16b", hello, u16(hello), u16(positive)) // 46
 }
 
 run_nestest_test :: proc() {
 	nes: NES
+
 
 	context.allocator = context.temp_allocator
 	ok := run_nestest(&nes, "nestest/nestest.nes", "nestest/nestest.log")
@@ -1975,6 +1979,8 @@ run_nestest_test :: proc() {
 	if !ok {
 		fmt.eprintln("nes test failed somewhere. look into it!")
 		os.exit(1)
+	} else {
+		fmt.println("Ran nestest. All OK!")
 	}
 }
 
@@ -2034,11 +2040,8 @@ print_allocated :: proc() {
 
 print_allocated_temp :: proc() {
 	alloc := (^runtime.Arena)(context.temp_allocator.data)
-	fmt.printfln(
-		`--- Temp allocator: ---
-Total memory allocated: %v KB`,
-		f32(alloc.total_used) / 1000,
-	)
+	fmt.printfln(`--- Temp allocator: ---
+Total memory allocated: %v KB`, f32(alloc.total_used) / 1000)
 }
 
 print_allocator_features :: proc() {

@@ -19,7 +19,8 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 		// if vblank is set, and you change nmi flag from 0 to 1, trigger nmi now
 		if (ppu_status.vertical_blank == 1) && val & 0x80 != 0 && ppu_ctrl.v == 0 {
 			// trigger NMI immediately
-			nmi(nes)
+			nmi_triggered = 2
+			// nmi(nes,true)
 		}
 
 		ppu_ctrl.reg = val
@@ -536,10 +537,10 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) -> bool {
 		ppu_status.vertical_blank = 1
 		hit_vblank = true
 		if ppu_ctrl.v != 0 {
-			nmi(nes)
+			// nmi(nes, false)
+			nmi_triggered = 1
 		}
 	}
-
 
 	/// Rendering the current pixel
 	draw_pixel(nes, framebuffer)

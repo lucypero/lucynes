@@ -1,5 +1,45 @@
+# debugging bomberman
+
+i'm investigating NMI.
+
+NMI subroutine is at $C01A
+
+things I found so far:
+
+
+- Note 1:
+
+
+in my emu, bomberman goes to NMI from either $C293 or $C290.
+
+in mesen, it's going from:
+
+$CBFD, or
+$CBFB
+
+- Note 2:
+
+In mesen, when NMI subroutine is running, the ppu cycle is at between 25-33
+
+in my emu, when NMI subroutine starts, ppu cycle is at between 2-13
+
+
+- Proposed solution:
+
+when wanting to trigger an NMI, instead of just doing the thing right there (calling nmi()), just set a flag.
+when you run the next instruction, check for the flag, and call nmi() accordingly.
+
+update: i already did it. same results.
+
+
+update:
+
+If you run NMI after running the instruction normally, then bomberman start screen works. it's weird.
+
 # todo
 
+- an article on 6502 interrupts
+	http://wilsonminesco.com/6502interrupts/
 
 - make bomberman run. it might be a NMI thing.
 	https://forums.nesdev.org/viewtopic.php?t=12222&sid=5198a50987eb742fe2fd2361ed224335&start=15
@@ -10,27 +50,6 @@
 
 
 - save states
-
-
-# odin stuff
-
-default_allocator :: heap_allocator
-default_allocator_proc :: heap_allocator_proc
-
-heap allocator has no data of what is storing so u can't know what was allocated, and how many bytes were allocated
-
-
-	Default_Temp_Allocator :: struct {
-		arena: Arena,
-	}
-
-temp allocator is an arena
-core/mem/allocators.odin
-
-
-- figure out how to figure out how much allocators are allocating
-- does the temp allocator even exist if u don't init it?
-
 
 # Input
 
@@ -93,18 +112,22 @@ u are adding to x to a u8 so it will wrap. so sprites show up on the left when t
  the bus is a fake thing. it's not ram
  put actual ram in separate fields. it's easier.
 
+# odin stuff
 
-# cpu timing
+default_allocator :: heap_allocator
+default_allocator_proc :: heap_allocator_proc
 
-u gotta do the extra cycles on the addressing modes
+heap allocator has no data of what is storing so u can't know what was allocated, and how many bytes were allocated
 
-for relative, it's an instruction thing. depends if it succeeds or not
 
-so how do u do it
+	Default_Temp_Allocator :: struct {
+		arena: Arena,
+	}
 
-just havea variable in the nes that u set to 0 before running the instruction
-and the branching instructions can touch that
+temp allocator is an arena
+core/mem/allocators.odin
 
-read this about cycles
-https://forums.nesdev.org/viewtopic.php?t=24690
+
+- figure out how to figure out how much allocators are allocating
+- does the temp allocator even exist if u don't init it?
 
