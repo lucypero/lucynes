@@ -162,6 +162,7 @@ NES :: struct {
 	prg_ram:                        []u8,
 	mapper_data:                    MapperData,
 	nmi_triggered:                  int,
+	nmi_trigger_now: bool,
 
 	// input
 	port_0_register:                u8,
@@ -279,14 +280,14 @@ nmi :: proc(using nes: ^NES, nmi_type: int) {
 
 	program_counter = nmi_mem
 
-	fmt.printfln(
-		"nmi triggered! %v, jumping from %X to %X. ppu_cycle: %v scanline: %v",
-		nmi_type,
-		old_pc,
-		program_counter,
-		ppu_cycle_x,
-		ppu_scanline,
-	)
+	// fmt.printfln(
+	// 	"nmi triggered! %v, jumping from %X to %X. ppu_cycle: %v scanline: %v",
+	// 	nmi_type,
+	// 	old_pc,
+	// 	program_counter,
+	// 	ppu_cycle_x,
+	// 	ppu_scanline,
+	// )
 
 	cycles += 7
 }
@@ -1688,8 +1689,14 @@ tick_nes_till_vblank :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8
 		// If you run NMI after running the instruction normally,
 		//  then bomberman start screen works. it's weird.
 
-		if nmi_triggered != 0 {
+		// This delay makes "Spelunker" work.
+		if nmi_trigger_now {
 			nmi(nes, nmi_triggered)
+			nmi_trigger_now = false
+		}
+
+		if nmi_triggered != 0 {
+			nmi_trigger_now = true
 			nmi_triggered = 0
 		}
 

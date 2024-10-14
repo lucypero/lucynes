@@ -36,7 +36,53 @@ update:
 
 If you run NMI after running the instruction normally, then bomberman start screen works. it's weird.
 
+The entities don't move in gameplay. Work still needs to be done
+
+update 2:
+
+I noticed this in the "tricky to emulate games" article:
+
+Adventures of Lolo 2, Ms. Pac-Man (Tengen), and Spelunker
+    These rely on 1-cycle NMI delay when PPUSTATUS ($2002) bit 7 gets set inside vblank (if $2002 has not been read yet), in which PPUSTATUS bit 7 can be read as true.
+
+
+I tested Spelunker. I support its mapper. I get a black screen after the intro.
+
+If I fix Spelunker, I might fix Bomberman. Perhaps
+
+update 3:
+
+it's due to my emulator not being per-cycle accurate. i need that now.
+
+This is why you need per-cycle accuracy:
+
+i believe so. let me describe the case so we make sure i understand:
+
+- in bomberman, in my current emulation, before doing the NMI delay:
+
+CPU instruction run: runs $C290 (LDA PPUSTATUS). reads 0 from status
+PPU tick run: Vblank is reached. NMI is triggered.
+CPU instruction run: jumps to NMI. NMI proc clears vblank. back to 0. returns.
+CPU instruction run: runs $C293 (BPL $C290). it jumps to c290 because the negative flag is 0
+
+repeat
+
+- now in-cycle accurate emulation:
+
+CPU instruction run: runs $C290 (LDA PPUSTATUS). PPU tick is ran while this CPU instruction is being ran, and VBLANK is reached, and NMI is triggered. If this is done before the read to PPUSTATUS, then the instruction will still catch the vblank and store it in the CPU flags and accumulator.
+
+when jumping to NMI, the flags with bit 7 set will be stored in the stack. so when returning back to C293, BPL won't jump back, and the code won't be stuck
+
+so this only happens when NMI is triggered on the real NES when LDA is being executed, and the NMI proc reads PPU status.
+
 # todo
+
+- Look into turning your emulator more accurate by interleaving PPU calls in your cpu instructions and such.
+	https://www.nesdev.org/wiki/Catch-up
+
+	do this:
+
+	https://forums.nesdev.org/viewtopic.php?t=24939
 
 - an article on 6502 interrupts
 	http://wilsonminesco.com/6502interrupts/
@@ -131,3 +177,16 @@ core/mem/allocators.odin
 - figure out how to figure out how much allocators are allocating
 - does the temp allocator even exist if u don't init it?
 
+
+
+# Playable games list:
+
+SMB1
+Megaman 1
+Contra
+Duck Tales
+Castlevania
+Metal Gear
+Ice Climber
+Donkey Kong
+Kung Fu
