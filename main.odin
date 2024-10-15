@@ -163,6 +163,8 @@ NES :: struct {
 	mapper_data:                    MapperData,
 	nmi_triggered:                  int,
 
+	last_opcode: u8,
+
 	// input
 	port_0_register:                u8,
 	port_1_register:                u8,
@@ -679,6 +681,7 @@ run_instruction :: proc(using nes: ^NES) {
 	// if program_counter != 0xc290 && program_counter != 0xc293 {
 	// 	fmt.printfln("PC: %X OPCODE: %X A: %X", program_counter, instr, accumulator)
 	// }
+
 
 	program_counter += 1
 	switch instr {
@@ -1442,6 +1445,8 @@ run_instruction :: proc(using nes: ^NES) {
 
 	}
 
+	last_opcode = instr
+
 	flags += {.NoEffect1}
 }
 
@@ -1715,7 +1720,7 @@ tick_nes_till_vblank :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8
 		ppu_cycle_count_dt := ppu_cycle_count - past_ppu_cycles
 
 		if cpu_cycles_dt * 3 != ppu_cycle_count_dt {
-			fmt.printfln("inaccurate: cycles passed: %v ppu ticks passed: %v", cpu_cycles_dt, ppu_cycle_count_dt)
+			fmt.printfln("opcode: %X, inaccurate: cycles passed: %v ppu ticks passed: %v", last_opcode, cpu_cycles_dt, ppu_cycle_count_dt)
 		}
 
 		for i in 0 ..< cpu_cycles_dt * 3 {

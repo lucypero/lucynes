@@ -77,6 +77,10 @@ so this only happens when NMI is triggered on the real NES when LDA is being exe
 
 # todo
 
+- you have to understand cycles better. read the document
+
+	https://www.nesdev.org/6502_cpu.txt
+
 - Look into turning your emulator more accurate by interleaving PPU calls in your cpu instructions and such.
 	https://www.nesdev.org/wiki/Catch-up
 
