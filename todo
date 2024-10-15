@@ -81,6 +81,11 @@ so this only happens when NMI is triggered on the real NES when LDA is being exe
 
 	https://www.nesdev.org/6502_cpu.txt
 
+	i've been hard coding "cycles" per opcode. like a magic number. i see i don't need to do that anymore
+	i'll put in "dummy reads" into the addressing mode logic.
+	in the dummy reads i'll tick the PPU
+	then lucynes will be the most accurate NES emulator
+
 - Look into turning your emulator more accurate by interleaving PPU calls in your cpu instructions and such.
 	https://www.nesdev.org/wiki/Catch-up
 
