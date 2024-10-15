@@ -28,7 +28,6 @@ AddressMode :: enum {
 	IndirectY, // Indirect Indexed, aka (IND), Y
 }
 
-// do not use this
 get_mem :: proc(nes: ^NES, addr_mode: AddressMode) -> (u16, uint) {
 
 	mem: u16

@@ -94,7 +94,6 @@ so this only happens when NMI is triggered on the real NES when LDA is being exe
 	- Make Mario sound normal
 	- DMC channel
 
-
 - save states
 
 # Input
