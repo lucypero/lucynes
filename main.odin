@@ -162,7 +162,6 @@ NES :: struct {
 	prg_ram:                        []u8,
 	mapper_data:                    MapperData,
 	nmi_triggered:                  int,
-	nmi_trigger_now: bool,
 
 	// input
 	port_0_register:                u8,
@@ -176,6 +175,7 @@ NES :: struct {
 	ppu_oam_address:                u8,
 	ppu_cycle_x:                    int, // current ppu cycle horizontally in the scanline (0..=340)
 	ppu_scanline:                   int, // current ppu scanline (-1..=260)
+	ppu_cycle_count:                uint,
 
 	//NOTE: if everything is stored in loopy, then this is all redundant state, no?
 	// consider deleting all this
@@ -251,6 +251,10 @@ NES :: struct {
 
 	// APU state
 	apu:                            APU,
+
+
+	// For breaking loop, so we render
+	vblank_hit_for_render:          bool,
 }
 
 // sync stuff for passing data to audio thread
@@ -292,8 +296,16 @@ nmi :: proc(using nes: ^NES, nmi_type: int) {
 	cycles += 7
 }
 
+run_ppu_per_cpu_cycle :: proc(using nes: ^NES) {
+	for i in 0 ..< 3 {
+		ppu_tick(nes, &pixel_grid)
+	}
+}
+
 // cpu bus read
 read :: proc(using nes: ^NES, addr: u16) -> u8 {
+
+	run_ppu_per_cpu_cycle(nes)
 
 	switch addr {
 
@@ -380,6 +392,8 @@ read :: proc(using nes: ^NES, addr: u16) -> u8 {
 }
 
 write :: proc(using nes: ^NES, addr: u16, val: u8) {
+
+	run_ppu_per_cpu_cycle(nes)
 
 	switch addr {
 	// PPU registers
@@ -1675,28 +1689,18 @@ union_test :: proc() {
 
 tick_nes_till_vblank :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8, pixel_grid: ^PixelGrid) {
 
-	vblank_hit := false
-
 	// running instructions forever
 	for true {
 		// main NES loop
 		// catchup method
 
 		past_cycles := cycles
+		past_ppu_cycles := ppu_cycle_count
 
 		run_instruction(nes)
 
-		// If you run NMI after running the instruction normally,
-		//  then bomberman start screen works. it's weird.
-
-		// This delay makes "Spelunker" work.
-		if nmi_trigger_now {
-			nmi(nes, nmi_triggered)
-			nmi_trigger_now = false
-		}
-
 		if nmi_triggered != 0 {
-			nmi_trigger_now = true
+			nmi(nes, nmi_triggered)
 			nmi_triggered = 0
 		}
 
@@ -1708,15 +1712,21 @@ tick_nes_till_vblank :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8
 		}
 
 		cpu_cycles_dt := cycles - past_cycles
+		ppu_cycle_count_dt := ppu_cycle_count - past_ppu_cycles
+
+		if cpu_cycles_dt * 3 != ppu_cycle_count_dt {
+			fmt.printfln("inaccurate: cycles passed: %v ppu ticks passed: %v", cpu_cycles_dt, ppu_cycle_count_dt)
+		}
 
 		for i in 0 ..< cpu_cycles_dt * 3 {
-			if ppu_tick(nes, pixel_grid) {
-				vblank_hit = true
-			}
+			// if ppu_tick(nes, pixel_grid) {
+			// 	vblank_hit = true
+			// }
 			apu_tick(nes)
 		}
 
-		if vblank_hit {
+		if vblank_hit_for_render {
+			vblank_hit_for_render = false
 			return
 		}
 	}

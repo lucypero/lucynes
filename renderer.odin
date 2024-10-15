@@ -40,15 +40,15 @@ palette_file :: "palettes/Composite_wiki.pal"
 // rom_in_nes :: "roms/Metal Gear.nes"
 // rom_in_nes :: "roms/IceClimber.nes"
 // rom_in_nes :: "roms/DonkeyKong.nes"
-// rom_in_nes :: "roms/Kung Fu.nes"
+rom_in_nes :: "roms/Kung Fu.nes"
+// rom_in_nes :: "roms/Spelunker.nes"
 
 /// NON-WORKING GAMES: 
 
-rom_in_nes :: "roms/Bomberman.nes"
+// rom_in_nes :: "roms/Bomberman.nes"
 
 // rom_in_nes :: "roms/Adventures of Lolo II , The.nes"
 // rom_in_nes :: "roms/Ms. Pac Man (Tengen).nes"
-// rom_in_nes :: "roms/Spelunker.nes"
 // rom_in_nes :: "roms/Silver Surfer.nes"
 
 
@@ -84,6 +84,9 @@ PixelGrid :: struct {
 
 send_samples := true
 
+// TODO: TEMPORARY global for testing
+pixel_grid: PixelGrid
+
 window_main :: proc() {
 
 	rl.SetTraceLogLevel(.ERROR)
@@ -103,7 +106,7 @@ window_main :: proc() {
 
 	checked := rl.LoadTextureFromImage(checkedIm)
 
-	pixel_grid := PixelGrid {
+	pixel_grid = PixelGrid {
 		pixels = pixels,
 		width  = framebuffer_width,
 		height = framebuffer_height,
@@ -115,7 +118,7 @@ window_main :: proc() {
 	audio_demo: AudioDemo
 	audio_demo_init(&audio_demo)
 
-	run_nestest_test()
+	// run_nestest_test()
 
 	ok: bool
 	palette, ok = get_palette(palette_file)

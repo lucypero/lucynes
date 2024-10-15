@@ -459,19 +459,11 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) -> bool {
 			case 4:
 				// fetch the next background tile bitplane 1 (lsb)
 
-				addr: u16 =
-					(u16(ppu_ctrl.b) << 12) +
-					(u16(bg_next_tile_id) << 4) +
-					current_loopy.fine_y +
-					0
+				addr: u16 = (u16(ppu_ctrl.b) << 12) + (u16(bg_next_tile_id) << 4) + current_loopy.fine_y + 0
 
 				bg_next_tile_lsb = ppu_read(nes, addr)
 			case 6:
-				addr: u16 =
-					(u16(ppu_ctrl.b) << 12) +
-					(u16(bg_next_tile_id) << 4) +
-					current_loopy.fine_y +
-					8
+				addr: u16 = (u16(ppu_ctrl.b) << 12) + (u16(bg_next_tile_id) << 4) + current_loopy.fine_y + 8
 
 				// fetch the next background tile bitplane 2 (msb)
 				bg_next_tile_msb = ppu_read(nes, addr)
@@ -553,6 +545,12 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) -> bool {
 			ppu_scanline = -1
 		}
 	}
+
+	if hit_vblank {
+		vblank_hit_for_render = true
+	}
+
+	ppu_cycle_count += 1
 
 	return hit_vblank
 }
