@@ -21,13 +21,6 @@ readwrite_things :: proc(using nes: ^NES, addr: u16, val: u8, is_write: bool, is
 	// 	fmt.println("here.")
 	// }
 
-    if instr_info.reading_opcode && read_writes > 1 {
-		fmt.println("here.")
-    }
-
-	if instr_info.opcode == 0x78 {
-		fmt.println("here.")
-	}
 }
 
 dummy_read :: proc(using nes: ^NES) {
@@ -1059,8 +1052,6 @@ run_instruction :: proc(using nes: ^NES) {
 
 tick_nes_till_vblank :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8, pixel_grid: ^PixelGrid) {
 
-	vblank_hit := false
-
     reset_debugging_vars :: proc(using nes: ^NES) {
 		ppu_ran_ahead = 0
 		read_writes = 0
@@ -1101,8 +1092,13 @@ tick_nes_till_vblank :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8
 
         // ignoring oam bad impl for now
         // if u wanna not ignore it, remove the oam check
-		if cpu_cycles_dt * 3 != ppu_ran_ahead && !instr_info.wrote_oamdma {
-			faulty_ops[instr_info.opcode] = int(ppu_ran_ahead) - (int(cpu_cycles_dt) * 3)
+		if cpu_cycles_dt * 3 != ppu_ran_ahead && !instr_info.wrote_oamdma && !nmi_was_triggered {
+
+            faulty_op :FaultyOp
+            faulty_op.supposed_cycles = int(cpu_cycles_dt)
+            faulty_op.cycles_taken = int(read_writes)
+
+			faulty_ops[instr_info.opcode] = faulty_op
 		}
 
 		// if cpu_cycles_dt * 3 < ppu_ran_ahead {
@@ -1117,9 +1113,7 @@ tick_nes_till_vblank :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8
 		// }
 
 		for i in 0 ..< ppu_left_to_do {
-			if ppu_tick(nes, pixel_grid) {
-				vblank_hit = true
-			}
+			ppu_tick(nes, pixel_grid)
 		}
 
 		for i in 0 ..< cpu_cycles_dt * 3 {
@@ -1129,6 +1123,7 @@ tick_nes_till_vblank :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8
         reset_debugging_vars(nes)
 
 		if vblank_hit {
+            vblank_hit = false
 			return
 		}
 	}

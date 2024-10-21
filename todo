@@ -1,18 +1,28 @@
+# Todo
+
+- take care of the faulty ops (ppu is ticking 1 or 2 times less than it should)
+	- read the cpu document for this.
+
+- do a proper OAMDMA implementation.
+
+- figure out what to do on the NES init reads (should u tick the PPU?)
+
+- the hack u did to place sprites better causes problems.
+ u are adding to x to a u8 so it will wrap. so sprites show up on the left when they're off screen
+
+- don't allocate memory for the whole bus.
+ the bus is a fake thing. it's not ram
+ put actual ram in separate fields. it's easier.
+
 # faulty ops
 
-40 CA 4A E6 E8 68 10 90 9D 9A 29 38 60 6A 6 88 95 15 30 B0 BD D6 56 D8 8D A 8A 99 26 A8 B5 D0 F6 78 91 20 AD AA 2A B9 C6 48 C8 F0 18 98 A5 B4 B1
-
-->
-
-F6 8D 40 91 A5 78 C6 6 9D D0 90 10 B5 99 D6 56 AD 60 20 B1 B4 29 E6 26 BD 30 B0 F0 95 15 68 B9
-
-->
-
-15 95 29 78 91 D6 56 20 60 A5 B4 8D E6 26 30 B0 F0 B5 9D F6 40 99 68 AD C6 6 90 10 D0
-
--> (ignoring OAMDMA)
-
-91 60 20 F6 95 15 F0 30 B0 C6 6 99 68 A5 B4 40 9D D6 56 29 78 B5 90 10 D0 AD E6 26
+$99: CS: 5, CR: 4, DIFF: -1
+$68: CS: 4, CR: 3, DIFF: -1
+$9D: CS: 5, CR: 4, DIFF: -1
+$91: CS: 6, CR: 5, DIFF: -1
+$20: CS: 6, CR: 5, DIFF: -1
+$60: CS: 6, CR: 4, DIFF: -2
+$40: CS: 6, CR: 5, DIFF: -1
 
 found something:
 
@@ -192,14 +202,6 @@ see this for reference
 https://www.youtube.com/watch?v=7qirrV8w5SQ&t=344s
 
 
-# Todo
-
-- the hack u did to place sprites better causes problems.
-u are adding to x to a u8 so it will wrap. so sprites show up on the left when they're off screen
-
-- don't allocate memory for the whole bus.
- the bus is a fake thing. it's not ram
- put actual ram in separate fields. it's easier.
 
 # odin stuff
 

@@ -78,6 +78,7 @@ instr_asl :: proc(using nes: ^NES, mem: u16) {
 	set_flag(&flags, .Zero, (temp & 0xFF) == 0)
 	set_flag(&flags, .Negative, (temp & 0x80) != 0)
 
+	dummy_read(nes)
 	write(nes, mem, u8(temp & 0x00FF))
 }
 
@@ -106,12 +107,16 @@ instr_adc_inner :: proc(using nes: ^NES, value: u8) {
 	set_n(&flags, accumulator)
 }
 
+/// Branching instructions
+
 instr_bcc :: proc(using nes: ^NES, mem: u16) {
 	if .Carry not_in flags {
 		extra_instr_cycles += 1
+		dummy_read(nes)
 		if (program_counter & 0xFF00) != (mem & 0xFF00) {
 			// crossed pages
 			extra_instr_cycles += 1
+			dummy_read(nes)
 		}
 		program_counter = mem
 	}
@@ -120,9 +125,11 @@ instr_bcc :: proc(using nes: ^NES, mem: u16) {
 instr_bcs :: proc(using nes: ^NES, mem: u16) {
 	if .Carry in flags {
 		extra_instr_cycles += 1
+		dummy_read(nes)
 		if (program_counter & 0xFF00) != (mem & 0xFF00) {
 			// crossed pages
 			extra_instr_cycles += 1
+			dummy_read(nes)
 		}
 		program_counter = mem
 	}
@@ -131,13 +138,83 @@ instr_bcs :: proc(using nes: ^NES, mem: u16) {
 instr_beq :: proc(using nes: ^NES, mem: u16) {
 	if .Zero in flags {
 		extra_instr_cycles += 1
+		dummy_read(nes)
 		if (program_counter & 0xFF00) != (mem & 0xFF00) {
 			// crossed pages
 			extra_instr_cycles += 1
+			dummy_read(nes)
 		}
 		program_counter = mem
 	}
 }
+
+instr_bmi :: proc(using nes: ^NES, mem: u16) {
+	if .Negative in flags {
+		extra_instr_cycles += 1
+		dummy_read(nes)
+		if (program_counter & 0xFF00) != (mem & 0xFF00) {
+			// crossed pages
+			extra_instr_cycles += 1
+			dummy_read(nes)
+		}
+		program_counter = mem
+	}
+}
+
+instr_bne :: proc(using nes: ^NES, mem: u16) {
+	if .Zero not_in flags {
+		extra_instr_cycles += 1
+		dummy_read(nes)
+		if (program_counter & 0xFF00) != (mem & 0xFF00) {
+			// crossed pages
+			extra_instr_cycles += 1
+			dummy_read(nes)
+		}
+		program_counter = mem
+	}
+}
+
+instr_bpl :: proc(using nes: ^NES, mem: u16) {
+	if .Negative not_in flags {
+		extra_instr_cycles += 1
+		dummy_read(nes)
+		if (program_counter & 0xFF00) != (mem & 0xFF00) {
+			// crossed pages
+			extra_instr_cycles += 1
+			dummy_read(nes)
+		}
+		program_counter = mem
+	}
+}
+
+instr_bvc :: proc(using nes: ^NES, mem: u16) {
+	if .Overflow not_in flags {
+		extra_instr_cycles += 1
+		dummy_read(nes)
+		if (program_counter & 0xFF00) != (mem & 0xFF00) {
+			// crossed pages
+			extra_instr_cycles += 1
+			dummy_read(nes)
+		}
+		program_counter = mem
+	}
+}
+
+instr_bvs :: proc(using nes: ^NES, mem: u16) {
+	if .Overflow in flags {
+		extra_instr_cycles += 1
+		dummy_read(nes)
+		if (program_counter & 0xFF00) != (mem & 0xFF00) {
+			// crossed pages
+			extra_instr_cycles += 1
+			dummy_read(nes)
+		}
+		program_counter = mem
+	}
+}
+
+/// End - Branching instructions
+
 
 instr_bit :: proc(using nes: ^NES, mem: u16) {
 	// A & M, N = M7, V = M6
@@ -150,66 +227,11 @@ instr_bit :: proc(using nes: ^NES, mem: u16) {
 	set_flag(&flags, .Negative, (val & 0x80) != 0)
 }
 
-instr_bmi :: proc(using nes: ^NES, mem: u16) {
-	if .Negative in flags {
-		extra_instr_cycles += 1
-		if (program_counter & 0xFF00) != (mem & 0xFF00) {
-			// crossed pages
-			extra_instr_cycles += 1
-		}
-		program_counter = mem
-	}
-}
-
-instr_bne :: proc(using nes: ^NES, mem: u16) {
-	if .Zero not_in flags {
-		extra_instr_cycles += 1
-		if (program_counter & 0xFF00) != (mem & 0xFF00) {
-			// crossed pages
-			extra_instr_cycles += 1
-		}
-		program_counter = mem
-	}
-}
-
-instr_bpl :: proc(using nes: ^NES, mem: u16) {
-	if .Negative not_in flags {
-		extra_instr_cycles += 1
-		if (program_counter & 0xFF00) != (mem & 0xFF00) {
-			// crossed pages
-			extra_instr_cycles += 1
-		}
-		program_counter = mem
-	}
-}
 
 // TODO it does an interrupt. idk how to do this yet
 instr_brk :: proc(using nes: ^NES, mem: u16) {
 	fmt.printfln("calling BRK. pc is %X", program_counter)
 	flags += {.NoEffectB}
-}
-
-instr_bvc :: proc(using nes: ^NES, mem: u16) {
-	if .Overflow not_in flags {
-		extra_instr_cycles += 1
-		if (program_counter & 0xFF00) != (mem & 0xFF00) {
-			// crossed pages
-			extra_instr_cycles += 1
-		}
-		program_counter = mem
-	}
-}
-
-
-instr_bvs :: proc(using nes: ^NES, mem: u16) {
-	if .Overflow in flags {
-		extra_instr_cycles += 1
-		if (program_counter & 0xFF00) != (mem & 0xFF00) {
-			// crossed pages
-			extra_instr_cycles += 1
-		}
-		program_counter = mem
-	}
 }
 
 instr_clc :: proc(using nes: ^NES, mem: u16) {
@@ -293,6 +315,7 @@ instr_dec :: proc(using nes: ^NES, mem: u16) {
 	ignore_extra_addressing_cycles = true
 	val := read(nes, mem)
 	val -= 1
+	dummy_read(nes)
 	write(nes, mem, val)
 
 	set_flag(&flags, .Zero, val == 0)
@@ -329,6 +352,7 @@ instr_inc :: proc(using nes: ^NES, mem: u16) {
 	ignore_extra_addressing_cycles = true
 	val := read(nes, mem)
 	val += 1
+	dummy_read(nes)
 	write(nes, mem, val)
 	set_z(&flags, val)
 	set_n(&flags, val)
@@ -430,6 +454,7 @@ instr_lsr :: proc(using nes: ^NES, mem: u16) {
 	val := read(nes, mem)
 
 	res := val >> 1
+	dummy_read(nes)
 	write(nes, mem, res)
 
 	set_flag(&flags, .Carry, (val & 0x1) == 1)
@@ -510,6 +535,9 @@ instr_rol :: proc(using nes: ^NES, mem: u16) {
 	}
 
 	ignore_extra_addressing_cycles = true
+
+	// there's another write here according to cpu.txt. i'm not sure why. i'll do a dummy read here.
+	dummy_read(nes)
 	write(nes, mem, res)
 
 	set_flag(&flags, .Carry, (temp & 0x80) != 0)
@@ -546,6 +574,7 @@ instr_ror :: proc(using nes: ^NES, mem: u16) {
 	}
 
 	ignore_extra_addressing_cycles = true
+	dummy_read(nes)
 	write(nes, mem, res)
 
 	set_flag(&flags, .Carry, (temp & 0x01) == 1)

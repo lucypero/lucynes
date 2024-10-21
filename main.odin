@@ -149,6 +149,13 @@ OAMEntry :: struct {
 
 save_states: []NES
 
+FaultyOp :: struct {
+	supposed_cycles: int,
+	// cycles taken in reality (read/writes)
+	// which is when u tick the PPU * 3
+	cycles_taken: int
+}
+
 NES :: struct {
 	using registers:                Registers, // CPU Registers
 	// TODO: this isn't ram, so it shouldn't even be memory. don't store this. it's a bus, it's not real ram.
@@ -169,8 +176,11 @@ NES :: struct {
 	// DEBUGGING
 	instr_info : InstructionInfo,
 	nmi_was_triggered: bool,
-	faulty_ops:                     map[u8]int,
+	faulty_ops:                     map[u8]FaultyOp,
 	read_writes: uint,
+
+	// INSTRUMENTING FOR THE OUTSIDE WORLD
+	vblank_hit: bool,
 
 	// input
 	port_0_register:                u8,

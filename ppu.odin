@@ -393,12 +393,11 @@ transfer_address_y :: proc(using nes: ^NES) {
 }
 
 // returns true if it hit a vblank
-ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) -> bool {
+ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) {
 
 	// read "PPU Rendering"
 
 	// 262 scanlines
-	hit_vblank := false
 
 	// scanline guide:
 	// -1: pre-render scanline
@@ -537,7 +536,7 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) -> bool {
 	// Setting vblank
 	if ppu_scanline == 241 && ppu_cycle_x == 1 {
 		ppu_status.vertical_blank = 1
-		hit_vblank = true
+		vblank_hit = true
 		if ppu_ctrl.v != 0 {
 			// nmi(nes, false)
 			nmi_triggered = 1
@@ -555,8 +554,6 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) -> bool {
 			ppu_scanline = -1
 		}
 	}
-
-	return hit_vblank
 }
 
 // Does the sprite evaluation for the next ppu_scanline
