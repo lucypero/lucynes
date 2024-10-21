@@ -35,8 +35,10 @@ get_mem :: proc(nes: ^NES, addr_mode: AddressMode) -> (u16, uint) {
 
 	switch addr_mode {
 	case .Implicit:
+		dummy_read(nes)
 		return 0, 0
 	case .Accumulator:
+		dummy_read(nes)
 		mem = u16(nes.accumulator)
 	case .Immediate:
 		mem = u16(do_addrmode_immediate(nes))
@@ -139,6 +141,7 @@ do_addrmode_absolute_index :: proc(using nes: ^NES, index_register: u8) -> (u16,
 	extra_cycles: uint = 0
 	if (res & 0xFF00) != ((res + u16(index_register)) & 0xFF00) {
 		// It wrapped
+		dummy_read(nes)
 		extra_cycles = 1
 	}
 	res += u16(index_register)
@@ -231,6 +234,7 @@ do_addrmode_ind_y :: proc(using nes: ^NES) -> (u16, uint) {
 	extra_cycles: uint = 0
 	if (val & 0xFF00) != ((val + u16(index_y)) & 0xFF00) {
 		// It wrapped
+		dummy_read(nes)
 		extra_cycles = 1
 	}
 
