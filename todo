@@ -25,6 +25,11 @@ take care of that, u probably do it really badly.
 		return
 	} -->
 
+- you have to understand cycles better. read the document
+
+	https://www.nesdev.org/6502_cpu.txt
+
+
 # debugging bomberman
 
 i'm investigating NMI.
