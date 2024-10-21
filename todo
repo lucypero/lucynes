@@ -1,3 +1,30 @@
+# faulty ops
+
+F0 E6 C8 48 B4 B1 AA 2A 20 9D 78 D0 C6 B9 A8 A5 91 8A A F6 D8 30 B0 AD 26 99 88 6A 60 D6 56 38 B5 9A 10 90 8D 6 E8 68 CA 4A 40 BD 29 98 18 15 95
+
+found something:
+
+ppu was running like crazy sometimes.
+many more times than it should, in one instruction
+
+turns out it was because OAMDMA. it happens when you write to OAMDMA.
+
+take care of that, u probably do it really badly.
+
+<!-- //OAMDMA
+	case 0x4014:
+		// fmt.printfln("writing to OAMDMA")
+
+		start_addr: u16 = u16(val) << 8
+
+		for i in 0x0000 ..= 0x00FF {
+			v := read(nes, u16(i) + start_addr)
+			ppu_oam[i] = v
+		}
+
+		return
+	} -->
+
 # debugging bomberman
 
 i'm investigating NMI.

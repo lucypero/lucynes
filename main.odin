@@ -6,6 +6,7 @@ import "core:bytes"
 import "core:encoding/endian"
 import "core:fmt"
 import "core:io"
+import "core:math"
 import "core:mem"
 import mv "core:mem/virtual"
 import "core:os"
@@ -162,7 +163,13 @@ NES :: struct {
 	prg_ram:                        []u8,
 	mapper_data:                    MapperData,
 	nmi_triggered:                  int,
-	nmi_trigger_now: bool,
+	// Times the PPU ran ahead of time before the normal ppu_tick time
+	ppu_ran_ahead:                  uint,
+
+	// DEBUGGING
+	instr_info : InstructionInfo,
+	faulty_ops:                     map[u8]u8,
+	read_writes: uint,
 
 	// input
 	port_0_register:                u8,
@@ -292,8 +299,19 @@ nmi :: proc(using nes: ^NES, nmi_type: int) {
 	cycles += 7
 }
 
+readwrite_things :: proc(using nes: ^NES, addr: u16, val: u8, is_write: bool) {
+	advance_ppu(nes)
+	read_writes += 1
+
+	if instr_info.opcode == 0x8D && read_writes > 4 {
+		fmt.println("here.")
+	}
+}
+
 // cpu bus read
 read :: proc(using nes: ^NES, addr: u16) -> u8 {
+	
+	readwrite_things(nes, addr, 0, false)
 
 	switch addr {
 
@@ -380,6 +398,8 @@ read :: proc(using nes: ^NES, addr: u16) -> u8 {
 }
 
 write :: proc(using nes: ^NES, addr: u16, val: u8) {
+
+	readwrite_things(nes, addr, val, true)
 
 	switch addr {
 	// PPU registers
@@ -629,21 +649,6 @@ print_cpu_state :: proc(regs: NesTestLog) {
 	)
 }
 
-run_program :: proc(using nes: ^NES, rom: []u8) {
-
-	fmt.println("Running program...")
-
-	copy(ram[0x8000:], rom)
-	copy(ram[0xC000:], rom)
-
-	program_counter = 0xC000
-
-	for read(nes, program_counter) != 0x00 {
-		run_instruction(nes)
-	}
-
-	fmt.println("Program terminated successfully.")
-}
 
 // reads from byte slice a u16 in little endian mode
 read_u16_le :: proc(nes: ^NES, addr: u16) -> u16 {
@@ -652,10 +657,17 @@ read_u16_le :: proc(nes: ^NES, addr: u16) -> u16 {
 	return u16(high_b) << 8 | u16(low_b)
 }
 
+InstructionInfo :: struct {
+	running:bool,
+	opcode: u8,
+}
+
 run_instruction :: proc(using nes: ^NES) {
 
 	// get first byte of instruction
 	instr := read(nes, program_counter)
+	instr_info.opcode = instr
+	instr_info.running = true
 
 	// nmi subroutine in bomberman
 	// if program_counter == 0xc01a {
@@ -1501,6 +1513,7 @@ _main :: proc() {
 	// }
 
 	window_main()
+
 	fmt.printfln("--- Audio sync report ---")
 	// fmt.printfln(" Times that the channel buffer was over %v: %v", CHANNEL_BUFFER_SOFT_CAP, times_it_went_over)
 	fmt.printfln(" Times that the audio thread starved: %v", times_it_starved)
@@ -1689,15 +1702,12 @@ tick_nes_till_vblank :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8
 		// If you run NMI after running the instruction normally,
 		//  then bomberman start screen works. it's weird.
 
-		// This delay makes "Spelunker" work.
-		if nmi_trigger_now {
-			nmi(nes, nmi_triggered)
-			nmi_trigger_now = false
-		}
+		nmi_was_triggered := false
 
 		if nmi_triggered != 0 {
-			nmi_trigger_now = true
+			nmi(nes, nmi_triggered)
 			nmi_triggered = 0
+			nmi_was_triggered = true
 		}
 
 		// Input
@@ -1709,12 +1719,36 @@ tick_nes_till_vblank :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8
 
 		cpu_cycles_dt := cycles - past_cycles
 
-		for i in 0 ..< cpu_cycles_dt * 3 {
+		ppu_left_to_do := math.max(0, int(cpu_cycles_dt) * 3 - int(ppu_ran_ahead))
+
+		if cpu_cycles_dt * 3 > ppu_ran_ahead {
+			faulty_ops[instr_info.opcode] = 1
+		}
+
+		if cpu_cycles_dt * 3 < ppu_ran_ahead {
+			fmt.printfln(
+				"here ppu run ahead is more. what the fuck. %X ppu ran ahead: %v times, cycles dt: %v, nmi: %v, readwrites: %v",
+				instr_info.opcode,
+				ppu_ran_ahead / 3,
+				cpu_cycles_dt,
+				nmi_was_triggered,
+				read_writes
+			)
+		}
+
+		for i in 0 ..< ppu_left_to_do {
 			if ppu_tick(nes, pixel_grid) {
 				vblank_hit = true
 			}
+		}
+
+		for i in 0 ..< cpu_cycles_dt * 3 {
 			apu_tick(nes)
 		}
+
+		ppu_ran_ahead = 0
+		read_writes = 0
+		instr_info.running = false
 
 		if vblank_hit {
 			return

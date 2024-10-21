@@ -8,7 +8,16 @@ import "core:slice"
 import "core:strconv"
 import "core:strings"
 
+advance_ppu :: proc(using nes: ^NES) {
+	// running PPU 3 times
+	for i in 0 ..< 3 {
+		ppu_tick(nes, &pixel_grid)
+		ppu_ran_ahead += 1
+	}
+}
+
 write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
+
 	switch ppu_reg {
 
 	// PPUCTRL
@@ -86,6 +95,7 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 }
 
 read_ppu_register :: proc(using nes: ^NES, ppu_reg: u16) -> u8 {
+
 	switch ppu_reg {
 
 	// PPUCTRL
@@ -459,19 +469,11 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) -> bool {
 			case 4:
 				// fetch the next background tile bitplane 1 (lsb)
 
-				addr: u16 =
-					(u16(ppu_ctrl.b) << 12) +
-					(u16(bg_next_tile_id) << 4) +
-					current_loopy.fine_y +
-					0
+				addr: u16 = (u16(ppu_ctrl.b) << 12) + (u16(bg_next_tile_id) << 4) + current_loopy.fine_y + 0
 
 				bg_next_tile_lsb = ppu_read(nes, addr)
 			case 6:
-				addr: u16 =
-					(u16(ppu_ctrl.b) << 12) +
-					(u16(bg_next_tile_id) << 4) +
-					current_loopy.fine_y +
-					8
+				addr: u16 = (u16(ppu_ctrl.b) << 12) + (u16(bg_next_tile_id) << 4) + current_loopy.fine_y + 8
 
 				// fetch the next background tile bitplane 2 (msb)
 				bg_next_tile_msb = ppu_read(nes, addr)

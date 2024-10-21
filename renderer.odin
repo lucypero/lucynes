@@ -84,6 +84,8 @@ PixelGrid :: struct {
 
 send_samples := true
 
+pixel_grid : PixelGrid
+
 window_main :: proc() {
 
 	rl.SetTraceLogLevel(.ERROR)
@@ -103,7 +105,7 @@ window_main :: proc() {
 
 	checked := rl.LoadTextureFromImage(checkedIm)
 
-	pixel_grid := PixelGrid {
+	pixel_grid = PixelGrid {
 		pixels = pixels,
 		width  = framebuffer_width,
 		height = framebuffer_height,
@@ -115,7 +117,7 @@ window_main :: proc() {
 	audio_demo: AudioDemo
 	audio_demo_init(&audio_demo)
 
-	run_nestest_test()
+	// run_nestest_test()
 
 	ok: bool
 	palette, ok = get_palette(palette_file)
@@ -196,6 +198,12 @@ window_main :: proc() {
 
 		rl.EndDrawing()
 	}
+
+	fmt.printfln("faulty ops")
+	for i in nes.faulty_ops {
+		fmt.printf("%X ",i)
+	}
+	fmt.printfln("")
 
 }
 
