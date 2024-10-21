@@ -323,6 +323,8 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 
 	nes.registers = register_logs[0].cpu_registers
 
+	nes_reset(nes, program_file)
+
 	test_rom, ok_2 := os.read_entire_file(program_file)
 
 	if !ok_2 {
@@ -331,6 +333,7 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 	}
 
 	// read it from 0x10 because that's how the ROM format works.
+
 	copy(ram[0x8000:], test_rom[0x10:])
 	copy(ram[0xC000:], test_rom[0x10:])
 
@@ -342,7 +345,6 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 	instructions_ran := 0
 
 	for read(nes, program_counter) != 0x00 {
-
 
 		state_before_instr: NesTestLog
 		state_before_instr.cpu_registers = registers
