@@ -37,14 +37,14 @@ palette_file :: "palettes/Composite_wiki.pal"
 // rom_in_nes :: "roms/Contra.nes"
 // rom_in_nes :: "roms/Duck Tales.nes"
 // rom_in_nes :: "roms/Castlevania.nes"
-// rom_in_nes :: "roms/Metal Gear.nes"
+rom_in_nes :: "roms/Metal Gear.nes"
 // rom_in_nes :: "roms/IceClimber.nes"
 // rom_in_nes :: "roms/DonkeyKong.nes"
 // rom_in_nes :: "roms/Kung Fu.nes"
 
 /// NON-WORKING GAMES: 
 
-rom_in_nes :: "roms/Bomberman.nes"
+// rom_in_nes :: "roms/Bomberman.nes"
 
 // rom_in_nes :: "roms/Adventures of Lolo II , The.nes"
 // rom_in_nes :: "roms/Ms. Pac Man (Tengen).nes"
@@ -199,14 +199,7 @@ window_main :: proc() {
 		rl.EndDrawing()
 	}
 
-	fmt.printfln("faulty ops")
-	for i, val in nes.faulty_ops {
-		// diff is ppu_ran_ahead_ticks - (cpu_cycles_dt * 3)
-		fmt.printf("$%X: CS: %v, CR: %v, DIFF: %v. RAN OAM: %v, RAN NMI: %v", i, val.supposed_cycles, val.cycles_taken, val.cycles_taken - val.supposed_cycles, val.oam_ran, val.nmi_ran)
-		fmt.printfln("")
-	}
-	fmt.printfln("")
-
+	print_faulty_ops(&nes)
 }
 
 clear_pixels :: proc(pixels: []rl.Color, color: rl.Color) {

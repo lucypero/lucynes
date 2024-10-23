@@ -151,11 +151,11 @@ save_states: []NES
 
 FaultyOp :: struct {
 	supposed_cycles: int,
-	nmi_ran: bool,
-	oam_ran: bool,
+	nmi_ran:         bool,
+	oam_ran:         bool,
 	// cycles taken in reality (read/writes)
 	// which is when u tick the PPU * 3
-	cycles_taken: int
+	cycles_taken:    int,
 }
 
 NES :: struct {
@@ -166,7 +166,7 @@ NES :: struct {
 	cycles:                         uint,
 	extra_instr_cycles:             uint,
 	ignore_extra_addressing_cycles: bool,
-	instruction_type: InstructionType,
+	instruction_type:               InstructionType,
 	rom_info:                       RomInfo,
 	prg_rom:                        []u8,
 	chr_rom:                        []u8,
@@ -177,13 +177,13 @@ NES :: struct {
 	ppu_ran_ahead:                  uint,
 
 	// DEBUGGING
-	instr_info : InstructionInfo,
-	nmi_was_triggered: bool,
+	instr_info:                     InstructionInfo,
+	nmi_was_triggered:              bool,
 	faulty_ops:                     map[u8]FaultyOp,
-	read_writes: uint,
+	read_writes:                    uint,
 
 	// INSTRUMENTING FOR THE OUTSIDE WORLD
-	vblank_hit: bool,
+	vblank_hit:                     bool,
 
 	// input
 	port_0_register:                u8,
@@ -347,23 +347,33 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 
 	instructions_ran := 0
 
+	reset_debugging_vars(nes)
+	read_writes = 6
+	total_read_writes: uint = read_writes + 1
+
 	for read(nes, program_counter) != 0x00 {
 
 		state_before_instr: NesTestLog
 		state_before_instr.cpu_registers = registers
 		state_before_instr.cpu_cycles = nes.cycles
 
+		reset_debugging_vars(nes)
+
 		// fmt.printfln("running line %v", instructions_ran + 1)
 		// print_cpu_state(state_before_instr)
 
-		run_instruction(nes)
+		// run_instruction(nes)
+		instruction_tick(nes, 0, 0, &pixel_grid)
+		total_read_writes += read_writes
+
 		instructions_ran += 1
 
 		if instructions_ran >= len(register_logs) {
 			return true
 		}
 
-		if res := compare_reg(nes.registers, nes.cycles, register_logs[instructions_ran]); res != 0 {
+		if res := compare_reg(nes.registers, nes.cycles, total_read_writes, register_logs[instructions_ran]);
+		   res != 0 {
 			// test fail
 
 			logs_reg := register_logs[instructions_ran]
@@ -387,6 +397,8 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 				fmt.printfln("SP: %X, TEST SP: %X", stack_pointer, logs_reg.cpu_registers.stack_pointer)
 			case 7:
 				fmt.printfln("CYCLES: %v, TEST CYCLES: %v", nes.cycles, logs_reg.cpu_cycles)
+			case 8:
+				fmt.printfln("REAL CYCLES: %v, TEST CYCLES: %v", total_read_writes, logs_reg.cpu_cycles)
 			}
 
 			fmt.println("state before instr:")
@@ -399,12 +411,18 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 			print_cpu_state(state_before_instr)
 			return false
 		}
+
 	}
 
 	return true
 }
 
-compare_reg :: proc(current_register: Registers, cpu_cycles: uint, log_register: NesTestLog) -> int {
+compare_reg :: proc(
+	current_register: Registers,
+	cpu_cycles: uint,
+	real_cpu_cycles: uint,
+	log_register: NesTestLog,
+) -> int {
 
 	if current_register.program_counter != log_register.cpu_registers.program_counter {
 		return 1
@@ -434,6 +452,10 @@ compare_reg :: proc(current_register: Registers, cpu_cycles: uint, log_register:
 		return 7
 	}
 
+	if real_cpu_cycles != log_register.cpu_cycles {
+		return 8
+	}
+
 
 	return 0
 }
@@ -452,10 +474,10 @@ print_cpu_state :: proc(regs: NesTestLog) {
 }
 
 InstructionInfo :: struct {
-	reading_opcode:bool,
-	running:bool,
-	wrote_oamdma: bool,
-	opcode: u8,
+	reading_opcode: bool,
+	running:        bool,
+	wrote_oamdma:   bool,
+	opcode:         u8,
 }
 
 report_allocations :: proc(allocator: ^mem.Tracking_Allocator, allocator_name: string) {
@@ -505,10 +527,11 @@ main :: proc() {
 
 	_main()
 
-	fmt.printfln(`-------- Allocations report: -----------`)
-	report_allocations(&nes_allocator, "NES")
-	report_allocations(&forever_allocator, "Forever")
-	print_allocated_temp()
+	// Allocations report
+	// fmt.printfln(`-------- Allocations report: -----------`)
+	// report_allocations(&nes_allocator, "NES")
+	// report_allocations(&forever_allocator, "Forever")
+	// print_allocated_temp()
 }
 
 _main :: proc() {
@@ -529,11 +552,13 @@ _main :: proc() {
 
 	window_main()
 
-	fmt.printfln("--- Audio sync report ---")
-	// fmt.printfln(" Times that the channel buffer was over %v: %v", CHANNEL_BUFFER_SOFT_CAP, times_it_went_over)
-	fmt.printfln(" Times that the audio thread starved: %v", times_it_starved)
-	fmt.printfln(" Times that the main thread got blocked: %v", times_main_thread_got_blocked)
-	fmt.printfln("--- / Audio sync report ---")
+	// Audio sync report
+
+	// fmt.printfln("--- Audio sync report ---")
+	// // fmt.printfln(" Times that the channel buffer was over %v: %v", CHANNEL_BUFFER_SOFT_CAP, times_it_went_over)
+	// fmt.printfln(" Times that the audio thread starved: %v", times_it_starved)
+	// fmt.printfln(" Times that the main thread got blocked: %v", times_main_thread_got_blocked)
+	// fmt.printfln("--- / Audio sync report ---")
 }
 
 write_sample_wav_file_w_lib :: proc(the_samples: []f32) {
@@ -936,12 +961,7 @@ run_nestest_test :: proc() {
 	context.allocator = context.temp_allocator
 	ok := run_nestest(&nes, "nestest/nestest.nes", "nestest/nestest.log")
 
-	fmt.printfln("faulty ops")
-	for i, val in nes.faulty_ops {
-		// diff is ppu_ran_ahead_ticks - (cpu_cycles_dt * 3)
-		fmt.printf("$%X: CS: %v, CR: %v, DIFF: %v", i, val.supposed_cycles, val.cycles_taken, val.cycles_taken - val.supposed_cycles)
-		fmt.printfln("")
-	}
+	print_faulty_ops(&nes)
 
 	free_all(context.temp_allocator)
 

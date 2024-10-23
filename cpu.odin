@@ -10,9 +10,9 @@ import "core:os"
 
 readwrite_things :: proc(using nes: ^NES, addr: u16, val: u8, is_write: bool, is_dummy: bool) {
 
-    if instr_info.wrote_oamdma {
-        return
-    }
+	if instr_info.wrote_oamdma {
+		return
+	}
 
 	advance_ppu(nes)
 	read_writes += 1
@@ -24,12 +24,12 @@ readwrite_things :: proc(using nes: ^NES, addr: u16, val: u8, is_write: bool, is
 }
 
 dummy_read :: proc(using nes: ^NES) {
-    readwrite_things(nes, 0, 0, false, true)
+	readwrite_things(nes, 0, 0, false, true)
 }
 
 // cpu bus read
 read :: proc(using nes: ^NES, addr: u16) -> u8 {
-	
+
 	readwrite_things(nes, addr, 0, false, false)
 
 	switch addr {
@@ -141,7 +141,7 @@ write :: proc(using nes: ^NES, addr: u16, val: u8) {
 	//OAMDMA
 	case 0x4014:
 		// fmt.printfln("writing to OAMDMA")
-        instr_info.wrote_oamdma = true
+		instr_info.wrote_oamdma = true
 
 
 		start_addr: u16 = u16(val) << 8
@@ -251,7 +251,7 @@ nes_reset :: proc(nes: ^NES, rom_file: string) {
 }
 
 nes_init :: proc(using nes: ^NES) {
-    // TODO: look into these reads, what should the PPU do?
+	// TODO: look into these reads, what should the PPU do?
 	low_byte := u16(read(nes, 0xFFFC))
 	high_byte := u16(read(nes, 0xFFFC + 1))
 	program_counter = high_byte << 8 | low_byte
@@ -1053,86 +1053,112 @@ run_instruction :: proc(using nes: ^NES) {
 	flags += {.NoEffect1}
 }
 
+reset_debugging_vars :: proc(using nes: ^NES) {
+	ppu_ran_ahead = 0
+	read_writes = 0
+	nmi_was_triggered = false
+	instr_info = {}
+}
+
+instruction_tick :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8, pixel_grid: ^PixelGrid) {
+	// main NES loop
+	// catchup method
+
+	past_cycles := cycles
+
+	run_instruction(nes)
+
+	// If you run NMI after running the instruction normally,
+	//  then bomberman start screen works. it's weird.
+
+	if nmi_triggered != 0 {
+		nmi(nes, nmi_triggered)
+		nmi_triggered = 0
+		nmi_was_triggered = true
+	}
+
+	// Input
+	if poll_input {
+		// fill the registers with input
+		port_0_register = port_0_input
+		port_1_register = port_1_input
+	}
+
+	cpu_cycles_dt := cycles - past_cycles
+
+	ppu_left_to_do := math.max(0, int(cpu_cycles_dt) * 3 - int(ppu_ran_ahead))
+
+	// ignoring oam bad impl for now
+	// if u wanna not ignore it, remove the oam check
+	if cpu_cycles_dt != read_writes {
+
+		faulty_op: FaultyOp
+
+		faulty_op.nmi_ran = nmi_was_triggered
+		faulty_op.oam_ran = instr_info.wrote_oamdma
+
+		faulty_op.supposed_cycles = int(cpu_cycles_dt)
+		faulty_op.cycles_taken = int(read_writes)
+
+		faulty_ops[instr_info.opcode] = faulty_op
+	}
+
+	// if cpu_cycles_dt * 3 < ppu_ran_ahead {
+	// 	fmt.printfln(
+	// 		"here ppu run ahead is more. what the fuck. %X ppu ran ahead: %v times, cycles dt: %v, nmi: %v, readwrites: %v",
+	// 		instr_info.opcode,
+	// 		ppu_ran_ahead / 3,
+	// 		cpu_cycles_dt,
+	// 		nmi_was_triggered,
+	// 		read_writes
+	// 	)
+	// }
+
+	for i in 0 ..< ppu_left_to_do {
+		fmt.println("u still had ppu left to do. fix.")
+		ppu_tick(nes, pixel_grid)
+	}
+
+	for i in 0 ..< cpu_cycles_dt * 3 {
+		apu_tick(nes)
+	}
+
+}
+
 tick_nes_till_vblank :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8, pixel_grid: ^PixelGrid) {
 
-    reset_debugging_vars :: proc(using nes: ^NES) {
-		ppu_ran_ahead = 0
-		read_writes = 0
-        nmi_was_triggered = false
-		instr_info = {}
-    }
-
-    reset_debugging_vars(nes)
+	reset_debugging_vars(nes)
 
 	// running instructions forever
 	for true {
-		// main NES loop
-		// catchup method
-
-		past_cycles := cycles
-
-		run_instruction(nes)
-
-		// If you run NMI after running the instruction normally,
-		//  then bomberman start screen works. it's weird.
-
-		if nmi_triggered != 0 {
-			nmi(nes, nmi_triggered)
-			nmi_triggered = 0
-			nmi_was_triggered = true
-		}
-
-		// Input
-		if poll_input {
-			// fill the registers with input
-			port_0_register = port_0_input
-			port_1_register = port_1_input
-		}
-
-		cpu_cycles_dt := cycles - past_cycles
-
-		ppu_left_to_do := math.max(0, int(cpu_cycles_dt) * 3 - int(ppu_ran_ahead))
-
-        // ignoring oam bad impl for now
-        // if u wanna not ignore it, remove the oam check
-		if cpu_cycles_dt * 3 != ppu_ran_ahead {
-
-            faulty_op :FaultyOp
-
-			faulty_op.nmi_ran = nmi_was_triggered
-			faulty_op.oam_ran = instr_info.wrote_oamdma
-
-            faulty_op.supposed_cycles = int(cpu_cycles_dt)
-            faulty_op.cycles_taken = int(read_writes)
-
-			faulty_ops[instr_info.opcode] = faulty_op
-		}
-
-		// if cpu_cycles_dt * 3 < ppu_ran_ahead {
-		// 	fmt.printfln(
-		// 		"here ppu run ahead is more. what the fuck. %X ppu ran ahead: %v times, cycles dt: %v, nmi: %v, readwrites: %v",
-		// 		instr_info.opcode,
-		// 		ppu_ran_ahead / 3,
-		// 		cpu_cycles_dt,
-		// 		nmi_was_triggered,
-		// 		read_writes
-		// 	)
-		// }
-
-		for i in 0 ..< ppu_left_to_do {
-			fmt.println("u still had ppu left to do. fix.")
-			ppu_tick(nes, pixel_grid)
-		}
-
-		for i in 0 ..< cpu_cycles_dt * 3 {
-			apu_tick(nes)
-		}
-
-        reset_debugging_vars(nes)
+		instruction_tick(nes, port_0_input, port_1_input, pixel_grid)
+		reset_debugging_vars(nes)
 
 		if vblank_hit {
-            vblank_hit = false
+			vblank_hit = false
 			return
 		}
 	}
+}
+
+print_faulty_ops :: proc(nes: ^NES) {
+	if len(nes.faulty_ops) == 0 {
+		return
+	}
+
+	fmt.printfln("Faulty ops:")
+	for i, val in nes.faulty_ops {
+		// diff is ppu_ran_ahead_ticks - (cpu_cycles_dt * 3)
+		fmt.printf(
+			"$%X: CS: %v, CR: %v, DIFF: %v. RAN OAM: %v, RAN NMI: %v",
+			i,
+			val.supposed_cycles,
+			val.cycles_taken,
+			val.cycles_taken - val.supposed_cycles,
+			val.oam_ran,
+			val.nmi_ran,
+		)
+		fmt.printfln("")
+	}
+	fmt.printfln("")
 }
