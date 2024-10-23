@@ -202,7 +202,7 @@ window_main :: proc() {
 	fmt.printfln("faulty ops")
 	for i, val in nes.faulty_ops {
 		// diff is ppu_ran_ahead_ticks - (cpu_cycles_dt * 3)
-		fmt.printf("$%X: CS: %v, CR: %v, DIFF: %v", i, val.supposed_cycles, val.cycles_taken, val.cycles_taken - val.supposed_cycles)
+		fmt.printf("$%X: CS: %v, CR: %v, DIFF: %v. RAN OAM: %v, RAN NMI: %v", i, val.supposed_cycles, val.cycles_taken, val.cycles_taken - val.supposed_cycles, val.oam_ran, val.nmi_ran)
 		fmt.printfln("")
 	}
 	fmt.printfln("")

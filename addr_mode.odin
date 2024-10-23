@@ -12,6 +12,13 @@ import "core:fmt"
 
 // everything except immediate will return an address (index to nes.ram)
 
+InstructionType :: enum {
+	Read,
+	ReadModifyWrite,
+	Write,
+	Branch,
+}
+
 AddressMode :: enum {
 	Implicit,
 	Accumulator,
@@ -71,14 +78,25 @@ do_opcode :: proc(nes: ^NES, addr_mode: AddressMode, instruction: proc(_: ^NES, 
 	mem, extra_cycles := get_mem(nes, addr_mode)
 	nes.extra_instr_cycles = 0
 	nes.ignore_extra_addressing_cycles = false
+	// delete later
+	nes.instruction_type = .Branch
 	instruction(nes, mem)
 
+	// TODO(lucy): Get rid of this, use the new way of cycles
 	if nes.ignore_extra_addressing_cycles {
 		extra_cycles = 0
 	}
 
 	for i in 0 ..< extra_cycles {
 		dummy_read(nes)
+	}
+
+	#partial switch nes.instruction_type {
+	case .Write:
+		#partial switch addr_mode {
+		case .AbsoluteX, .AbsoluteY, .IndirectX, .IndirectY:
+			dummy_read(nes)
+		}
 	}
 
 	nes.cycles += cycles + extra_cycles + nes.extra_instr_cycles
@@ -110,7 +128,7 @@ do_addrmode_zp :: proc(using nes: ^NES) -> u16 {
 do_addrmode_zp_index :: proc(using nes: ^NES, index: u8) -> u16 {
 	addr_offset := (u16(read(nes, program_counter)) + u16(index)) % 0x100
 	program_counter += 1
- 	// address   R  read from address, add index register to it
+	// address   R  read from address, add index register to it
 	dummy_read(nes)
 	return addr_offset
 }
@@ -215,9 +233,8 @@ do_addrmode_ind_x :: proc(using nes: ^NES) -> u16 {
 	return res
 }
 
-// indexed indirect address mode
+// indirect indexed address mode
 // aka (IND), Y
-// TODO extra cycles
 // returns the address
 do_addrmode_ind_y :: proc(using nes: ^NES) -> (u16, uint) {
 	// get 16 bit value in arg

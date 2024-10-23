@@ -151,6 +151,8 @@ save_states: []NES
 
 FaultyOp :: struct {
 	supposed_cycles: int,
+	nmi_ran: bool,
+	oam_ran: bool,
 	// cycles taken in reality (read/writes)
 	// which is when u tick the PPU * 3
 	cycles_taken: int
@@ -164,6 +166,7 @@ NES :: struct {
 	cycles:                         uint,
 	extra_instr_cycles:             uint,
 	ignore_extra_addressing_cycles: bool,
+	instruction_type: InstructionType,
 	rom_info:                       RomInfo,
 	prg_rom:                        []u8,
 	chr_rom:                        []u8,
@@ -932,7 +935,18 @@ run_nestest_test :: proc() {
 
 	context.allocator = context.temp_allocator
 	ok := run_nestest(&nes, "nestest/nestest.nes", "nestest/nestest.log")
+
+	fmt.printfln("faulty ops")
+	for i, val in nes.faulty_ops {
+		// diff is ppu_ran_ahead_ticks - (cpu_cycles_dt * 3)
+		fmt.printf("$%X: CS: %v, CR: %v, DIFF: %v", i, val.supposed_cycles, val.cycles_taken, val.cycles_taken - val.supposed_cycles)
+		fmt.printfln("")
+	}
+
 	free_all(context.temp_allocator)
+
+
+	fmt.printfln("")
 
 	if !ok {
 		fmt.eprintln("nes test failed somewhere. look into it!")

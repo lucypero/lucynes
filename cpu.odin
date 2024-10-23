@@ -222,6 +222,9 @@ nmi :: proc(using nes: ^NES, nmi_type: int) {
 
 	program_counter = nmi_mem
 
+	dummy_read(nes)
+	dummy_read(nes)
+
 	// fmt.printfln(
 	// 	"nmi triggered! %v, jumping from %X to %X. ppu_cycle: %v scanline: %v",
 	// 	nmi_type,
@@ -1092,9 +1095,13 @@ tick_nes_till_vblank :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8
 
         // ignoring oam bad impl for now
         // if u wanna not ignore it, remove the oam check
-		if cpu_cycles_dt * 3 != ppu_ran_ahead && !instr_info.wrote_oamdma && !nmi_was_triggered {
+		if cpu_cycles_dt * 3 != ppu_ran_ahead {
 
             faulty_op :FaultyOp
+
+			faulty_op.nmi_ran = nmi_was_triggered
+			faulty_op.oam_ran = instr_info.wrote_oamdma
+
             faulty_op.supposed_cycles = int(cpu_cycles_dt)
             faulty_op.cycles_taken = int(read_writes)
 
@@ -1113,6 +1120,7 @@ tick_nes_till_vblank :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8
 		// }
 
 		for i in 0 ..< ppu_left_to_do {
+			fmt.println("u still had ppu left to do. fix.")
 			ppu_tick(nes, pixel_grid)
 		}
 

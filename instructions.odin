@@ -381,6 +381,8 @@ instr_jmp :: proc(using nes: ^NES, mem: u16) {
 instr_jsr :: proc(using nes: ^NES, mem: u16) {
 	program_counter -= 1
 
+	dummy_read(nes)
+
 	byte: u8 = u8((program_counter >> 8) & 0x00FF)
 	stack_push(nes, byte)
 
@@ -494,6 +496,7 @@ instr_php :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_pla :: proc(using nes: ^NES, mem: u16) {
+	dummy_read(nes)
 	accum := stack_pop(nes)
 
 	accumulator = accum
@@ -503,6 +506,7 @@ instr_pla :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_plp :: proc(using nes: ^NES, mem: u16) {
+	dummy_read(nes)
 	// void PLP(arg_t& src) { flags = cpu_pop8() | D5; }
 	// why are u ORing with D5...
 	new_flags := stack_pop(nes)
@@ -584,6 +588,7 @@ instr_ror :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_rti :: proc(using nes: ^NES, mem: u16) {
+	dummy_read(nes)
 	new_flags := stack_pop(nes)
 
 	flags = transmute(RegisterFlags)new_flags
@@ -595,7 +600,8 @@ instr_rti :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_rts :: proc(using nes: ^NES, mem: u16) {
-
+	dummy_read(nes)
+	dummy_read(nes)
 	pc_low := stack_pop(nes)
 	pc_high := stack_pop(nes)
 
@@ -629,16 +635,19 @@ instr_sei :: proc(using nes: ^NES, mem: u16) {
 
 instr_sta :: proc(using nes: ^NES, mem: u16) {
 	ignore_extra_addressing_cycles = true
+	instruction_type = .Write
 	write(nes, mem, accumulator)
 }
 
 instr_stx :: proc(using nes: ^NES, mem: u16) {
 	ignore_extra_addressing_cycles = true
+	instruction_type = .Write
 	write(nes, mem, index_x)
 }
 
 instr_sty :: proc(using nes: ^NES, mem: u16) {
 	ignore_extra_addressing_cycles = true
+	instruction_type = .Write
 	write(nes, mem, index_y)
 }
 
