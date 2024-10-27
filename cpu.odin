@@ -948,7 +948,7 @@ run_instruction :: proc(using nes: ^NES) {
 	case 0x44:
 		fallthrough
 	case 0x64:
-		do_opcode(nes, .ZeroPage, instr_nop, 3)
+		do_opcode(nes, .ZeroPage, instr_nop_zp, 3)
 
 	case 0x14:
 		fallthrough
@@ -961,10 +961,10 @@ run_instruction :: proc(using nes: ^NES) {
 	case 0xD4:
 		fallthrough
 	case 0xF4:
-		do_opcode(nes, .ZeroPageX, instr_nop, 4)
+		do_opcode(nes, .ZeroPageX, instr_nop_zpx, 4)
 
 	case 0x0C:
-		do_opcode(nes, .Absolute, instr_nop, 4)
+		do_opcode(nes, .Absolute, instr_nop_absolute, 4)
 
 	case 0x1C:
 		fallthrough
@@ -977,7 +977,7 @@ run_instruction :: proc(using nes: ^NES) {
 	case 0xDC:
 		fallthrough
 	case 0xFC:
-		do_opcode(nes, .AbsoluteX, instr_nop, 4)
+		do_opcode(nes, .AbsoluteX, instr_nop_absx, 4)
 
 	/// The really weird undocumented opcodes
 
@@ -1114,10 +1114,10 @@ instruction_tick :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8, pi
 	// 	)
 	// }
 
-	for i in 0 ..< ppu_left_to_do {
-		fmt.println("u still had ppu left to do. fix.")
-		ppu_tick(nes, pixel_grid)
-	}
+	// for i in 0 ..< ppu_left_to_do {
+	// 	fmt.println("u still had ppu left to do. fix.")
+	// 	ppu_tick(nes, pixel_grid)
+	// }
 
 	for i in 0 ..< cpu_cycles_dt * 3 {
 		apu_tick(nes)

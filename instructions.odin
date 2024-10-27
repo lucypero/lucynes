@@ -44,6 +44,7 @@ set_z :: proc(flags: ^RegisterFlags, value: u8) {
 }
 
 instr_and_value :: proc(using nes: ^NES, value: u16) {
+	instruction_type = .Read
 	// A, Z, N = A&M
 
 	temp: u16 = u16(nes.accumulator) & value
@@ -55,10 +56,12 @@ instr_and_value :: proc(using nes: ^NES, value: u16) {
 }
 
 instr_and :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Read
 	instr_and_value(nes, u16(read(nes, mem)))
 }
 
 instr_asl_accum :: proc(using nes: ^NES, _mem: u16) {
+	instruction_type = .ReadModifyWrite
 	temp := u16(accumulator) << 1
 
 	set_flag(&flags, .Carry, (accumulator & 0x80) != 0)
@@ -69,6 +72,7 @@ instr_asl_accum :: proc(using nes: ^NES, _mem: u16) {
 }
 
 instr_asl :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .ReadModifyWrite
 	ignore_extra_addressing_cycles = true
 	val := read(nes, mem)
 
@@ -91,6 +95,7 @@ instr_adc :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_adc_inner :: proc(using nes: ^NES, value: u8) {
+	instruction_type = .Read
 	val: u16 = u16(value)
 	temp: u16 = u16(nes.accumulator) + val
 
@@ -110,6 +115,7 @@ instr_adc_inner :: proc(using nes: ^NES, value: u8) {
 /// Branching instructions
 
 instr_bcc :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Branch
 	if .Carry not_in flags {
 		extra_instr_cycles += 1
 		dummy_read(nes)
@@ -123,6 +129,7 @@ instr_bcc :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_bcs :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Branch
 	if .Carry in flags {
 		extra_instr_cycles += 1
 		dummy_read(nes)
@@ -136,6 +143,7 @@ instr_bcs :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_beq :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Branch
 	if .Zero in flags {
 		extra_instr_cycles += 1
 		dummy_read(nes)
@@ -149,6 +157,7 @@ instr_beq :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_bmi :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Branch
 	if .Negative in flags {
 		extra_instr_cycles += 1
 		dummy_read(nes)
@@ -162,6 +171,7 @@ instr_bmi :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_bne :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Branch
 	if .Zero not_in flags {
 		extra_instr_cycles += 1
 		dummy_read(nes)
@@ -175,6 +185,7 @@ instr_bne :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_bpl :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Branch
 	if .Negative not_in flags {
 		extra_instr_cycles += 1
 		dummy_read(nes)
@@ -188,6 +199,7 @@ instr_bpl :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_bvc :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Branch
 	if .Overflow not_in flags {
 		extra_instr_cycles += 1
 		dummy_read(nes)
@@ -201,6 +213,7 @@ instr_bvc :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_bvs :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Branch
 	if .Overflow in flags {
 		extra_instr_cycles += 1
 		dummy_read(nes)
@@ -217,6 +230,7 @@ instr_bvs :: proc(using nes: ^NES, mem: u16) {
 
 
 instr_bit :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Read
 	// A & M, N = M7, V = M6
 	// fmt.printfln("accum %X, mem is %X", accumulator, mem)
 
@@ -230,6 +244,7 @@ instr_bit :: proc(using nes: ^NES, mem: u16) {
 
 // TODO it does an interrupt. idk how to do this yet
 instr_brk :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Other
 	fmt.printfln("calling BRK. pc is %X", program_counter)
 	flags += {.NoEffectB}
 }
@@ -263,6 +278,7 @@ instr_compare_helper :: proc(using nes: ^NES, register: u8, mem: u16) {
 }
 
 instr_cmp_value :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Read
 	val := u8(mem)
 
 	if accumulator >= val {
@@ -275,6 +291,7 @@ instr_cmp_value :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_cmp :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Read
 	instr_compare_helper(nes, accumulator, mem)
 }
 
@@ -312,6 +329,7 @@ instr_cpy :: proc(using nes: ^NES, mem: u16) {
 
 // TODO maybe do a decrement helper
 instr_dec :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .ReadModifyWrite
 	ignore_extra_addressing_cycles = true
 	val := read(nes, mem)
 	val -= 1
@@ -337,18 +355,21 @@ instr_dey :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_eor_value :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Read
 	accumulator = accumulator ~ u8(mem)
 	set_flag(&flags, .Zero, accumulator == 0)
 	set_n(&flags, accumulator)
 }
 
 instr_eor :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Read
 	accumulator = accumulator ~ read(nes, mem)
 	set_flag(&flags, .Zero, accumulator == 0)
 	set_n(&flags, accumulator)
 }
 
 instr_inc :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .ReadModifyWrite
 	ignore_extra_addressing_cycles = true
 	val := read(nes, mem)
 	val += 1
@@ -373,12 +394,14 @@ instr_iny :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_jmp :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Other
 	// todo: implement jmp bug
 
 	program_counter = mem
 }
 
 instr_jsr :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Other
 	program_counter -= 1
 
 	dummy_read(nes)
@@ -393,6 +416,7 @@ instr_jsr :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_lda_value :: proc(using nes: ^NES, val: u16) {
+	instruction_type = .Read
 	accumulator = u8(val)
 
 	// flags
@@ -401,6 +425,8 @@ instr_lda_value :: proc(using nes: ^NES, val: u16) {
 }
 
 instr_lda :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Read
+
 	accumulator = read(nes, mem)
 
 	// flags
@@ -409,6 +435,7 @@ instr_lda :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_ldx_value :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Read
 	index_x = u8(mem)
 
 	// flags
@@ -417,6 +444,7 @@ instr_ldx_value :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_ldx :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Read
 	index_x = read(nes, mem)
 
 	// flags
@@ -425,6 +453,7 @@ instr_ldx :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_ldy_value :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Read
 	index_y = u8(mem)
 
 	// flags
@@ -433,6 +462,7 @@ instr_ldy_value :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_ldy :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Read
 	index_y = read(nes, mem)
 
 	// flags
@@ -441,6 +471,7 @@ instr_ldy :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_lsr_accumulator :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .ReadModifyWrite
 	temp := accumulator
 
 	accumulator = accumulator >> 1
@@ -452,6 +483,7 @@ instr_lsr_accumulator :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_lsr :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .ReadModifyWrite
 	ignore_extra_addressing_cycles = true
 	val := read(nes, mem)
 
@@ -466,9 +498,35 @@ instr_lsr :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_nop :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Read
+}
+
+// undocumented NOP $64, $04, $44
+instr_nop_zp :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Read
+	dummy_read(nes)
+}
+
+// undocumented NOP $0C
+instr_nop_absolute :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Read
+	dummy_read(nes)
+}
+
+// undocumented NOP $14 $34 $54 $74 $D4 $F4
+instr_nop_zpx :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Read
+	dummy_read(nes)
+}
+
+// undocumented NOP $1C $3C $5C $7C $DC $FC
+instr_nop_absx :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Read
+	dummy_read(nes)
 }
 
 instr_ora_value :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Read
 	accumulator |= u8(mem)
 
 	set_z(&flags, accumulator)
@@ -476,6 +534,7 @@ instr_ora_value :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_ora :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Read
 	accumulator |= read(nes, mem)
 
 	set_z(&flags, accumulator)
@@ -483,10 +542,12 @@ instr_ora :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_pha :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Other
 	stack_push(nes, accumulator)
 }
 
 instr_php :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Other
 	// you set B to the flags you push to the stack
 	//  but you do not modify the flags themselves.
 	//  this is odd...
@@ -496,6 +557,7 @@ instr_php :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_pla :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Other
 	dummy_read(nes)
 	accum := stack_pop(nes)
 
@@ -506,6 +568,7 @@ instr_pla :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_plp :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Other
 	dummy_read(nes)
 	// void PLP(arg_t& src) { flags = cpu_pop8() | D5; }
 	// why are u ORing with D5...
@@ -515,6 +578,7 @@ instr_plp :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_rol_accumulator :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .ReadModifyWrite
 	temp := accumulator
 
 	accumulator = accumulator << 1
@@ -530,6 +594,7 @@ instr_rol_accumulator :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_rol :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .ReadModifyWrite
 	temp := read(nes, mem)
 
 	res := temp << 1
@@ -550,10 +615,8 @@ instr_rol :: proc(using nes: ^NES, mem: u16) {
 	set_n(&flags, res)
 }
 
-instr_ror_inner :: proc(using nes: ^NES, val: ^u8) {
-}
-
 instr_ror_accumulator :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .ReadModifyWrite
 	temp := accumulator
 
 	accumulator = accumulator >> 1
@@ -569,6 +632,7 @@ instr_ror_accumulator :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_ror :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .ReadModifyWrite
 	temp := read(nes, mem)
 
 	res := temp >> 1
@@ -588,6 +652,7 @@ instr_ror :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_rti :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Other
 	dummy_read(nes)
 	new_flags := stack_pop(nes)
 
@@ -600,6 +665,7 @@ instr_rti :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_rts :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Other
 	dummy_read(nes)
 	dummy_read(nes)
 	pc_low := stack_pop(nes)
@@ -610,6 +676,7 @@ instr_rts :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_sbc_inner :: proc(using nes: ^NES, mem: u8) {
+	instruction_type = .Read
 	instr_adc_inner(nes, ~mem)
 }
 
@@ -634,18 +701,21 @@ instr_sei :: proc(using nes: ^NES, mem: u16) {
 }
 
 instr_sta :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Write
 	ignore_extra_addressing_cycles = true
 	instruction_type = .Write
 	write(nes, mem, accumulator)
 }
 
 instr_stx :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Write
 	ignore_extra_addressing_cycles = true
 	instruction_type = .Write
 	write(nes, mem, index_x)
 }
 
 instr_sty :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Write
 	ignore_extra_addressing_cycles = true
 	instruction_type = .Write
 	write(nes, mem, index_y)
@@ -692,43 +762,214 @@ instr_tya :: proc(using nes: ^NES, mem: u16) {
 // undocumented instructions
 
 instr_aso :: proc(using nes: ^NES, mem: u16) {
-	instr_asl(nes, mem)
-	instr_ora(nes, mem)
+
+	// ASL
+
+	instruction_type = .ReadModifyWrite
+	ignore_extra_addressing_cycles = true
+	val := read(nes, mem)
+
+	temp := u16(val) << 1
+
+	set_flag(&flags, .Carry, (val & 0x80) != 0)
+	set_flag(&flags, .Zero, (temp & 0xFF) == 0)
+	set_flag(&flags, .Negative, (temp & 0x80) != 0)
+
+	write(nes, mem, u8(temp & 0x00FF))
+
+	// ORA
+
+	accumulator |= read(nes, mem)
+
+	set_z(&flags, accumulator)
+	set_n(&flags, accumulator)
 }
 
 instr_rla :: proc(using nes: ^NES, mem: u16) {
-	instr_rol(nes, mem)
-	instr_and(nes, mem)
+	// ROL
+	// instr_rol(nes, mem)
+
+	instruction_type = .ReadModifyWrite
+
+	{
+		temp := read(nes, mem)
+
+		res := temp << 1
+
+		if (.Carry in flags) {
+			res += 1
+		}
+
+		ignore_extra_addressing_cycles = true
+
+		// there's another write here according to cpu.txt. i'm not sure why. i'll do a dummy read here.
+		write(nes, mem, res)
+
+		set_flag(&flags, .Carry, (temp & 0x80) != 0)
+
+		set_z(&flags, res)
+		set_n(&flags, res)
+	}
+	
+	// AND
+
+	// A, Z, N = A&M
+
+	{
+		value := u16(read(nes, mem))
+
+		temp: u16 = u16(nes.accumulator) & value
+
+		set_flag(&flags, .Zero, temp == 0)
+		set_flag(&flags, .Negative, (temp & 0x80) != 0)
+
+		accumulator = u8(temp)
+	}
 }
 
 instr_lse :: proc(using nes: ^NES, mem: u16) {
-	instr_lsr(nes, mem)
-	instr_eor(nes, mem)
+	// instr_lsr(nes, mem)
+	// LSR
+
+
+	instruction_type = .ReadModifyWrite
+	ignore_extra_addressing_cycles = true
+	val := read(nes, mem)
+
+	res := val >> 1
+	write(nes, mem, res)
+
+	set_flag(&flags, .Carry, (val & 0x1) == 1)
+
+	set_z(&flags, res)
+	set_n(&flags, res)
+
+	// EOR
+
+	// instr_eor(nes, mem)
+
+	accumulator = accumulator ~ read(nes, mem)
+	set_flag(&flags, .Zero, accumulator == 0)
+	set_n(&flags, accumulator)
 }
 
 instr_rra :: proc(using nes: ^NES, mem: u16) {
-	instr_ror(nes, mem)
-	instr_adc(nes, mem)
+	// ROR
+	instruction_type = .ReadModifyWrite
+	{
+		temp := read(nes, mem)
+
+		res := temp >> 1
+
+		if (.Carry in flags) {
+			res = res | 0x80
+		}
+
+		ignore_extra_addressing_cycles = true
+		write(nes, mem, res)
+
+		set_flag(&flags, .Carry, (temp & 0x01) == 1)
+
+		set_z(&flags, res)
+		set_n(&flags, res)
+	}
+
+	// ADC
+	{
+		val: u16 = u16(read(nes, mem))
+		temp: u16 = u16(nes.accumulator) + val
+
+		if .Carry in nes.flags {
+			temp += 1
+		}
+
+		did_overflow := ((~(u16(accumulator) ~ val) & (u16(accumulator) ~ u16(temp))) & 0x0080) != 0
+		accumulator = u8(temp & 0x00FF)
+
+		set_flag(&flags, .Carry, temp > 255)
+		set_flag(&flags, .Overflow, did_overflow)
+		set_z(&flags, accumulator)
+		set_n(&flags, accumulator)
+	}
 }
 
 instr_axs :: proc(using nes: ^NES, mem: u16) {
+	instruction_type = .Write
 	ignore_extra_addressing_cycles = true
 	write(nes, mem, accumulator & index_x)
 }
 
 instr_lax :: proc(using nes: ^NES, mem: u16) {
-	instr_lda(nes, mem)
-	instr_ldx(nes, mem)
+	instruction_type = .Read
+
+	// LDA and LDX
+	val := read(nes, mem)
+
+	accumulator = val
+	index_x = val
+
+	// flags
+	set_z(&flags, index_x)
+	set_n(&flags, index_x)
 }
 
+// also known as DCP
 instr_dcm :: proc(using nes: ^NES, mem: u16) {
-	instr_dec(nes, mem)
-	instr_cmp(nes, mem)
+
+	// DEC and CMP
+	instruction_type = .ReadModifyWrite
+
+	ignore_extra_addressing_cycles = true
+	val := read(nes, mem)
+	val -= 1
+	dummy_read(nes)
+	write(nes, mem, val)
+
+	if accumulator >= val {
+		flags += {.Carry}
+	}
+
+	set_flag(&flags, .Carry, accumulator >= val)
+	set_flag(&flags, .Zero, accumulator == val)
+	set_flag(&flags, .Negative, ((accumulator - val) & 0x80) != 0)
 }
 
+// Also known as ISB
 instr_ins :: proc(using nes: ^NES, mem: u16) {
-	instr_inc(nes, mem)
-	instr_sbc(nes, mem)
+
+	// INC and SBC
+
+	instruction_type = .ReadModifyWrite
+	ignore_extra_addressing_cycles = true
+
+	val_keep := read(nes, mem)
+
+	{
+		val: = val_keep
+		val += 1
+		write(nes, mem, val)
+		set_z(&flags, val)
+		set_n(&flags, val)
+	}
+
+	// SBC
+
+	val_keep = read(nes, mem)
+
+	val: u16 = u16(~val_keep)
+	temp: u16 = u16(nes.accumulator) + val
+
+	if .Carry in nes.flags {
+		temp += 1
+	}
+
+	did_overflow := ((~(u16(accumulator) ~ val) & (u16(accumulator) ~ u16(temp))) & 0x0080) != 0
+	accumulator = u8(temp & 0x00FF)
+
+	set_flag(&flags, .Carry, temp > 255)
+	set_flag(&flags, .Overflow, did_overflow)
+	set_z(&flags, accumulator)
+	set_n(&flags, accumulator)
 }
 
 instr_alr :: proc(using nes: ^NES, mem: u16) {
@@ -754,6 +995,7 @@ instr_oal :: proc(using nes: ^NES, mem: u16) {
 
 instr_sax :: proc(using nes: ^NES, mem: u16) {
 	// TODO
+	instruction_type = .Write
 	fmt.eprintln("running SAX. not implemented!")
 }
 

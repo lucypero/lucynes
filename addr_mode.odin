@@ -17,6 +17,7 @@ InstructionType :: enum {
 	ReadModifyWrite,
 	Write,
 	Branch,
+	Other,
 }
 
 AddressMode :: enum {
@@ -97,6 +98,22 @@ do_opcode :: proc(nes: ^NES, addr_mode: AddressMode, instruction: proc(_: ^NES, 
 		case .AbsoluteX, .AbsoluteY, .IndirectX, .IndirectY:
 			dummy_read(nes)
 		}
+	case .Read:
+		#partial switch addr_mode {
+		case .IndirectX:
+			dummy_read(nes)
+		case .IndirectY:
+		}
+	case .ReadModifyWrite: {
+		#partial switch addr_mode {
+		case .AbsoluteX, .AbsoluteY:
+			dummy_read(nes)
+		case .IndirectX:
+			dummy_read(nes)
+		case .IndirectY:
+			dummy_read(nes)
+		}
+	}
 	}
 
 	nes.cycles += cycles + extra_cycles + nes.extra_instr_cycles
