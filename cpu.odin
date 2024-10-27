@@ -342,7 +342,7 @@ read_u16_le :: proc(nes: ^NES, addr: u16) -> u16 {
 	return u16(high_b) << 8 | u16(low_b)
 }
 
-print_instr :: proc(nes: NES, pc: u16) -> (b: strings.Builder, next_pc: u16) {
+get_instr_str_builder :: proc(nes: NES, pc: u16) -> (b: strings.Builder, next_pc: u16) {
 
 	b = strings.builder_make_len_cap(0, 10)
 	strings.write_int(&b, int(pc), 16)
@@ -353,46 +353,54 @@ print_instr :: proc(nes: NES, pc: u16) -> (b: strings.Builder, next_pc: u16) {
 
 	opcode := fake_read(nes, pc)
 
-	write_instr :: proc(using nes: NES, pc: u16, instr_name: string, addr_mode: AddressMode, b: ^strings.Builder) {
-
+	write_instr :: proc(using nes: NES, pc: u16, instr_name: string, addr_mode: AddressMode, b: ^strings.Builder) -> (pc_advance: u16) {
 		strings.write_string(b, instr_name)
 		switch addr_mode {
 		case .Implicit:
+			pc_advance += 1
 		case .Accumulator:
+			pc_advance += 1
 			strings.write_string(b, " A")
 		case .Immediate:
+			pc_advance += 2
 			// Immediate
 			strings.write_string(b, " #")
 			immediate_val := fake_read(nes, pc + 1)
 			strings.write_int(b, int(immediate_val), 16)
 		case .ZeroPage:
+			pc_advance += 2
 			// zp
 			strings.write_string(b, " $")
 			immediate_val := fake_read(nes, pc + 1)
 			strings.write_int(b, int(immediate_val), 16)
 		case .ZeroPageX:
+			pc_advance += 2
 			// zpx
 			strings.write_string(b, " $")
 			immediate_val := fake_read(nes, pc + 1)
 			strings.write_int(b, int(immediate_val), 16)
 			strings.write_string(b, ",X")
 		case .ZeroPageY:
+			pc_advance += 2
 			// zpx
 			strings.write_string(b, " $")
 			immediate_val := fake_read(nes, pc + 1)
 			strings.write_int(b, int(immediate_val), 16)
 			strings.write_string(b, ",Y")
 		case .Relative:
+			pc_advance += 2
 			strings.write_string(b, " ")
 			addr_1 := fake_read(nes, pc + 1)
 			strings.write_int(b, int(addr_1), 16)
 		case .Absolute:
+			pc_advance += 3
 			strings.write_string(b, " $")
 			addr_1 := fake_read(nes, pc + 1)
 			addr_2 := fake_read(nes, pc + 2)
 			strings.write_int(b, int(addr_2), 16)
 			strings.write_int(b, int(addr_1), 16)
 		case .AbsoluteX:
+			pc_advance += 3
 			// absolute, x
 			strings.write_string(b, " $")
 			addr_1 := fake_read(nes, pc + 1)
@@ -401,6 +409,7 @@ print_instr :: proc(nes: NES, pc: u16) -> (b: strings.Builder, next_pc: u16) {
 			strings.write_int(b, int(addr_1), 16)
 			strings.write_string(b, ",X")
 		case .AbsoluteY:
+			pc_advance += 3
 			strings.write_string(b, " $")
 			addr_1 := fake_read(nes, pc + 1)
 			addr_2 := fake_read(nes, pc + 2)
@@ -408,6 +417,7 @@ print_instr :: proc(nes: NES, pc: u16) -> (b: strings.Builder, next_pc: u16) {
 			strings.write_int(b, int(addr_1), 16)
 			strings.write_string(b, ",Y")
 		case .Indirect:
+			pc_advance += 3
 			strings.write_string(b, " ($")
 			addr_1 := fake_read(nes, pc + 1)
 			addr_2 := fake_read(nes, pc + 2)
@@ -415,19 +425,24 @@ print_instr :: proc(nes: NES, pc: u16) -> (b: strings.Builder, next_pc: u16) {
 			strings.write_int(b, int(addr_1), 16)
 			strings.write_string(b, ")")
 		case .IndirectX:
+			pc_advance += 2
 			strings.write_string(b, " ($")
 			addr_1 := fake_read(nes, pc + 1)
 			strings.write_int(b, int(addr_1), 16)
 			strings.write_string(b, ",X)")
 		case .IndirectY:
+			pc_advance += 2
 			strings.write_string(b, " ($")
 			addr_1 := fake_read(nes, pc + 1)
 			strings.write_int(b, int(addr_1), 16)
 			strings.write_string(b, "),Y")
 		}
+
+		return
 	}
 
 	instr_name := "AND"
+	pc_advance: u16
 
 	switch opcode {
 
@@ -435,459 +450,459 @@ print_instr :: proc(nes: NES, pc: u16) -> (b: strings.Builder, next_pc: u16) {
 	// AND
 
 	case 0x29:
-		write_instr(nes, pc, "AND", .Immediate, &b)
+		pc_advance = write_instr(nes, pc, "AND", .Immediate, &b)
 	case 0x25:
-		write_instr(nes, pc, "AND", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "AND", .ZeroPage, &b)
 	case 0x35:
-		write_instr(nes, pc, "AND", .ZeroPageX, &b)
+		pc_advance = write_instr(nes, pc, "AND", .ZeroPageX, &b)
 	case 0x2D:
-		write_instr(nes, pc, "AND", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "AND", .Absolute, &b)
 	case 0x3D:
-		write_instr(nes, pc, "AND", .AbsoluteX, &b)
+		pc_advance = write_instr(nes, pc, "AND", .AbsoluteX, &b)
 	case 0x39:
-		write_instr(nes, pc, "AND", .AbsoluteY, &b)
+		pc_advance = write_instr(nes, pc, "AND", .AbsoluteY, &b)
 	case 0x21:
-		write_instr(nes, pc, "AND", .IndirectX, &b)
+		pc_advance = write_instr(nes, pc, "AND", .IndirectX, &b)
 	case 0x31:
-		write_instr(nes, pc, "AND", .IndirectY, &b)
+		pc_advance = write_instr(nes, pc, "AND", .IndirectY, &b)
 
 	// ASL
 
 	case 0x0A:
-		write_instr(nes, pc, "ASL", .Accumulator, &b)
+		pc_advance = write_instr(nes, pc, "ASL", .Accumulator, &b)
 	case 0x06:
-		write_instr(nes, pc, "ASL", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "ASL", .ZeroPage, &b)
 	case 0x16:
-		write_instr(nes, pc, "ASL", .ZeroPageX, &b)
+		pc_advance = write_instr(nes, pc, "ASL", .ZeroPageX, &b)
 	case 0x0E:
-		write_instr(nes, pc, "ASL", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "ASL", .Absolute, &b)
 	case 0x1E:
-		write_instr(nes, pc, "ASL", .AbsoluteX, &b)
+		pc_advance = write_instr(nes, pc, "ASL", .AbsoluteX, &b)
 
 	// ADC
 	case 0x69:
-		write_instr(nes, pc, "ADC", .Immediate, &b)
+		pc_advance = write_instr(nes, pc, "ADC", .Immediate, &b)
 	case 0x65:
-		write_instr(nes, pc, "ADC", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "ADC", .ZeroPage, &b)
 	case 0x75:
-		write_instr(nes, pc, "ADC", .ZeroPageX, &b)
+		pc_advance = write_instr(nes, pc, "ADC", .ZeroPageX, &b)
 	case 0x6D:
-		write_instr(nes, pc, "ADC", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "ADC", .Absolute, &b)
 	case 0x7D:
-		write_instr(nes, pc, "ADC", .AbsoluteX, &b)
+		pc_advance = write_instr(nes, pc, "ADC", .AbsoluteX, &b)
 	case 0x79:
-		write_instr(nes, pc, "ADC", .AbsoluteY, &b)
+		pc_advance = write_instr(nes, pc, "ADC", .AbsoluteY, &b)
 	case 0x61:
-		write_instr(nes, pc, "ADC", .IndirectX, &b)
+		pc_advance = write_instr(nes, pc, "ADC", .IndirectX, &b)
 	case 0x71:
-		write_instr(nes, pc, "ADC", .IndirectY, &b)
+		pc_advance = write_instr(nes, pc, "ADC", .IndirectY, &b)
 
 	// BCC
 	case 0x90:
-		write_instr(nes, pc, "BCC", .Relative, &b)
+		pc_advance = write_instr(nes, pc, "BCC", .Relative, &b)
 
 	// BCS
 	case 0xB0:
-		write_instr(nes, pc, "BCS", .Relative, &b)
+		pc_advance = write_instr(nes, pc, "BCS", .Relative, &b)
 
 	// BEQ
 	case 0xF0:
-		write_instr(nes, pc, "BEQ", .Relative, &b)
+		pc_advance = write_instr(nes, pc, "BEQ", .Relative, &b)
 
 	// BIT
 	case 0x24:
-		write_instr(nes, pc, "BIT", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "BIT", .ZeroPage, &b)
 	case 0x2C:
-		write_instr(nes, pc, "BIT", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "BIT", .Absolute, &b)
 
 	// BMI
 	case 0x30:
-		write_instr(nes, pc, "BMI", .Relative, &b)
+		pc_advance = write_instr(nes, pc, "BMI", .Relative, &b)
 
 	// BNE
 	case 0xD0:
-		write_instr(nes, pc, "BNE", .Relative, &b)
+		pc_advance = write_instr(nes, pc, "BNE", .Relative, &b)
 
 	// BPL
 	case 0x10:
-		write_instr(nes, pc, "BPL", .Relative, &b)
+		pc_advance = write_instr(nes, pc, "BPL", .Relative, &b)
 
 	// BRK
 	case 0x00:
-		write_instr(nes, pc, "BRK", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "BRK", .Implicit, &b)
 
 	// BVC
 	case 0x50:
-		write_instr(nes, pc, "BVC", .Relative, &b)
+		pc_advance = write_instr(nes, pc, "BVC", .Relative, &b)
 
 	// BVS
 	case 0x70:
-		write_instr(nes, pc, "BVS", .Relative, &b)
+		pc_advance = write_instr(nes, pc, "BVS", .Relative, &b)
 
 	// CLC
 	case 0x18:
-		write_instr(nes, pc, "CLC", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "CLC", .Implicit, &b)
 
 	// CLD
 	case 0xD8:
-		write_instr(nes, pc, "CLD", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "CLD", .Implicit, &b)
 
 	// CLI
 	case 0x58:
-		write_instr(nes, pc, "CLI", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "CLI", .Implicit, &b)
 
 	// CLV
 	case 0xB8:
-		write_instr(nes, pc, "CLV", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "CLV", .Implicit, &b)
 
 	// CMP
 	case 0xC9:
-		write_instr(nes, pc, "CMP", .Immediate, &b)
+		pc_advance = write_instr(nes, pc, "CMP", .Immediate, &b)
 	case 0xC5:
-		write_instr(nes, pc, "CMP", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "CMP", .ZeroPage, &b)
 	case 0xD5:
-		write_instr(nes, pc, "CMP", .ZeroPageX, &b)
+		pc_advance = write_instr(nes, pc, "CMP", .ZeroPageX, &b)
 	case 0xCD:
-		write_instr(nes, pc, "CMP", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "CMP", .Absolute, &b)
 	case 0xDD:
-		write_instr(nes, pc, "CMP", .AbsoluteX, &b)
+		pc_advance = write_instr(nes, pc, "CMP", .AbsoluteX, &b)
 	case 0xD9:
-		write_instr(nes, pc, "CMP", .AbsoluteY, &b)
+		pc_advance = write_instr(nes, pc, "CMP", .AbsoluteY, &b)
 	case 0xC1:
-		write_instr(nes, pc, "CMP", .IndirectX, &b)
+		pc_advance = write_instr(nes, pc, "CMP", .IndirectX, &b)
 	case 0xD1:
-		write_instr(nes, pc, "CMP", .IndirectY, &b)
+		pc_advance = write_instr(nes, pc, "CMP", .IndirectY, &b)
 
 	// CPX
 
 	case 0xE0:
-		write_instr(nes, pc, "CPX", .Immediate, &b)
+		pc_advance = write_instr(nes, pc, "CPX", .Immediate, &b)
 	case 0xE4:
-		write_instr(nes, pc, "CPX", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "CPX", .ZeroPage, &b)
 	case 0xEC:
-		write_instr(nes, pc, "CPX", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "CPX", .Absolute, &b)
 
 	// CPY
 
 	case 0xC0:
-		write_instr(nes, pc, "CPY", .Immediate, &b)
+		pc_advance = write_instr(nes, pc, "CPY", .Immediate, &b)
 	case 0xC4:
-		write_instr(nes, pc, "CPY", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "CPY", .ZeroPage, &b)
 	case 0xCC:
-		write_instr(nes, pc, "CPY", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "CPY", .Absolute, &b)
 
 
 	// DEC
 	case 0xC6:
-		write_instr(nes, pc, "DEC", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "DEC", .ZeroPage, &b)
 	case 0xD6:
-		write_instr(nes, pc, "DEC", .ZeroPageX, &b)
+		pc_advance = write_instr(nes, pc, "DEC", .ZeroPageX, &b)
 	case 0xCE:
-		write_instr(nes, pc, "DEC", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "DEC", .Absolute, &b)
 	case 0xDE:
-		write_instr(nes, pc, "DEC", .AbsoluteX, &b)
+		pc_advance = write_instr(nes, pc, "DEC", .AbsoluteX, &b)
 
 	// DEX
 
 	case 0xCA:
-		write_instr(nes, pc, "DEX", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "DEX", .Implicit, &b)
 
 
 	// DEY
 
 	case 0x88:
-		write_instr(nes, pc, "DEY", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "DEY", .Implicit, &b)
 
 	// EOR
 
 	case 0x49:
-		write_instr(nes, pc, "EOR", .Immediate, &b)
+		pc_advance = write_instr(nes, pc, "EOR", .Immediate, &b)
 	case 0x45:
-		write_instr(nes, pc, "EOR", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "EOR", .ZeroPage, &b)
 	case 0x55:
-		write_instr(nes, pc, "EOR", .ZeroPageX, &b)
+		pc_advance = write_instr(nes, pc, "EOR", .ZeroPageX, &b)
 	case 0x4D:
-		write_instr(nes, pc, "EOR", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "EOR", .Absolute, &b)
 	case 0x5D:
-		write_instr(nes, pc, "EOR", .AbsoluteX, &b)
+		pc_advance = write_instr(nes, pc, "EOR", .AbsoluteX, &b)
 	case 0x59:
-		write_instr(nes, pc, "EOR", .AbsoluteY, &b)
+		pc_advance = write_instr(nes, pc, "EOR", .AbsoluteY, &b)
 	case 0x41:
-		write_instr(nes, pc, "EOR", .IndirectX, &b)
+		pc_advance = write_instr(nes, pc, "EOR", .IndirectX, &b)
 	case 0x51:
-		write_instr(nes, pc, "EOR", .IndirectY, &b)
+		pc_advance = write_instr(nes, pc, "EOR", .IndirectY, &b)
 
 	// INC
 
 	case 0xE6:
-		write_instr(nes, pc, "INC", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "INC", .ZeroPage, &b)
 	case 0xF6:
-		write_instr(nes, pc, "INC", .ZeroPageX, &b)
+		pc_advance = write_instr(nes, pc, "INC", .ZeroPageX, &b)
 	case 0xEE:
-		write_instr(nes, pc, "INC", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "INC", .Absolute, &b)
 	case 0xFE:
-		write_instr(nes, pc, "INC", .AbsoluteX, &b)
+		pc_advance = write_instr(nes, pc, "INC", .AbsoluteX, &b)
 
 	// INX
 
 	case 0xE8:
-		write_instr(nes, pc, "INX", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "INX", .Implicit, &b)
 
 	// INY
 
 	case 0xC8:
-		write_instr(nes, pc, "INY", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "INY", .Implicit, &b)
 
 	// JMP
 	case 0x4C:
-		write_instr(nes, pc, "JMP", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "JMP", .Absolute, &b)
 	case 0x6C:
-		write_instr(nes, pc, "JMP", .Indirect, &b)
+		pc_advance = write_instr(nes, pc, "JMP", .Indirect, &b)
 
 
 	// JSR
 
 	case 0x20:
-		write_instr(nes, pc, "JSR", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "JSR", .Absolute, &b)
 
 
 	// LDA
 
 	case 0xA9:
-		write_instr(nes, pc, "LDA", .Immediate, &b)
+		pc_advance = write_instr(nes, pc, "LDA", .Immediate, &b)
 	case 0xA5:
-		write_instr(nes, pc, "LDA", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "LDA", .ZeroPage, &b)
 	case 0xB5:
-		write_instr(nes, pc, "LDA", .ZeroPageX, &b)
+		pc_advance = write_instr(nes, pc, "LDA", .ZeroPageX, &b)
 	case 0xAD:
-		write_instr(nes, pc, "LDA", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "LDA", .Absolute, &b)
 	case 0xBD:
-		write_instr(nes, pc, "LDA", .AbsoluteX, &b)
+		pc_advance = write_instr(nes, pc, "LDA", .AbsoluteX, &b)
 	case 0xB9:
-		write_instr(nes, pc, "LDA", .AbsoluteY, &b)
+		pc_advance = write_instr(nes, pc, "LDA", .AbsoluteY, &b)
 	case 0xA1:
-		write_instr(nes, pc, "LDA", .IndirectX, &b)
+		pc_advance = write_instr(nes, pc, "LDA", .IndirectX, &b)
 	case 0xB1:
-		write_instr(nes, pc, "LDA", .IndirectY, &b)
+		pc_advance = write_instr(nes, pc, "LDA", .IndirectY, &b)
 
 
 	// LDX
 
 	case 0xA2:
-		write_instr(nes, pc, "LDX", .Immediate, &b)
+		pc_advance = write_instr(nes, pc, "LDX", .Immediate, &b)
 	case 0xA6:
-		write_instr(nes, pc, "LDX", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "LDX", .ZeroPage, &b)
 	case 0xB6:
-		write_instr(nes, pc, "LDX", .ZeroPageY, &b)
+		pc_advance = write_instr(nes, pc, "LDX", .ZeroPageY, &b)
 	case 0xAE:
-		write_instr(nes, pc, "LDX", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "LDX", .Absolute, &b)
 	case 0xBE:
-		write_instr(nes, pc, "LDX", .AbsoluteY, &b)
+		pc_advance = write_instr(nes, pc, "LDX", .AbsoluteY, &b)
 
 	// LDY
 
 	case 0xA0:
-		write_instr(nes, pc, "LDY", .Immediate, &b)
+		pc_advance = write_instr(nes, pc, "LDY", .Immediate, &b)
 	case 0xA4:
-		write_instr(nes, pc, "LDY", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "LDY", .ZeroPage, &b)
 	case 0xB4:
-		write_instr(nes, pc, "LDY", .ZeroPageX, &b)
+		pc_advance = write_instr(nes, pc, "LDY", .ZeroPageX, &b)
 	case 0xAC:
-		write_instr(nes, pc, "LDY", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "LDY", .Absolute, &b)
 	case 0xBC:
-		write_instr(nes, pc, "LDY", .AbsoluteX, &b)
+		pc_advance = write_instr(nes, pc, "LDY", .AbsoluteX, &b)
 
 
 	// LSR
 
 	case 0x4A:
-		write_instr(nes, pc, "LSR", .Accumulator, &b)
+		pc_advance = write_instr(nes, pc, "LSR", .Accumulator, &b)
 	case 0x46:
-		write_instr(nes, pc, "LSR", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "LSR", .ZeroPage, &b)
 	case 0x56:
-		write_instr(nes, pc, "LSR", .ZeroPageX, &b)
+		pc_advance = write_instr(nes, pc, "LSR", .ZeroPageX, &b)
 	case 0x4E:
-		write_instr(nes, pc, "LSR", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "LSR", .Absolute, &b)
 	case 0x5E:
-		write_instr(nes, pc, "LSR", .AbsoluteX, &b)
+		pc_advance = write_instr(nes, pc, "LSR", .AbsoluteX, &b)
 
 
 	// NOP
 
 	case 0xEA:
-		write_instr(nes, pc, "NOP", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "NOP", .Implicit, &b)
 
 	// ORA
 
 	case 0x09:
-		write_instr(nes, pc, "ORA", .Immediate, &b)
+		pc_advance = write_instr(nes, pc, "ORA", .Immediate, &b)
 	case 0x05:
-		write_instr(nes, pc, "ORA", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "ORA", .ZeroPage, &b)
 	case 0x15:
-		write_instr(nes, pc, "ORA", .ZeroPageX, &b)
+		pc_advance = write_instr(nes, pc, "ORA", .ZeroPageX, &b)
 	case 0x0D:
-		write_instr(nes, pc, "ORA", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "ORA", .Absolute, &b)
 	case 0x1D:
-		write_instr(nes, pc, "ORA", .AbsoluteX, &b)
+		pc_advance = write_instr(nes, pc, "ORA", .AbsoluteX, &b)
 	case 0x19:
-		write_instr(nes, pc, "ORA", .AbsoluteY, &b)
+		pc_advance = write_instr(nes, pc, "ORA", .AbsoluteY, &b)
 	case 0x01:
-		write_instr(nes, pc, "ORA", .IndirectX, &b)
+		pc_advance = write_instr(nes, pc, "ORA", .IndirectX, &b)
 	case 0x11:
-		write_instr(nes, pc, "ORA", .IndirectY, &b)
+		pc_advance = write_instr(nes, pc, "ORA", .IndirectY, &b)
 
 	// PHA
 
 	case 0x48:
-		write_instr(nes, pc, "PHA", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "PHA", .Implicit, &b)
 
 	// PHP
 
 	case 0x08:
-		write_instr(nes, pc, "PHP", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "PHP", .Implicit, &b)
 
 
 	// PLA
 
 	case 0x68:
-		write_instr(nes, pc, "PLA", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "PLA", .Implicit, &b)
 
 	// PLP
 	case 0x28:
-		write_instr(nes, pc, "PLP", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "PLP", .Implicit, &b)
 
 	// ROL
 
 	case 0x2A:
-		write_instr(nes, pc, "ROL", .Accumulator, &b)
+		pc_advance = write_instr(nes, pc, "ROL", .Accumulator, &b)
 	case 0x26:
-		write_instr(nes, pc, "ROL", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "ROL", .ZeroPage, &b)
 	case 0x36:
-		write_instr(nes, pc, "ROL", .ZeroPageX, &b)
+		pc_advance = write_instr(nes, pc, "ROL", .ZeroPageX, &b)
 	case 0x2E:
-		write_instr(nes, pc, "ROL", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "ROL", .Absolute, &b)
 	case 0x3E:
-		write_instr(nes, pc, "ROL", .AbsoluteX, &b)
+		pc_advance = write_instr(nes, pc, "ROL", .AbsoluteX, &b)
 
 	// ROR
 
 	case 0x6A:
-		write_instr(nes, pc, "ROR", .Accumulator, &b)
+		pc_advance = write_instr(nes, pc, "ROR", .Accumulator, &b)
 	case 0x66:
-		write_instr(nes, pc, "ROR", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "ROR", .ZeroPage, &b)
 	case 0x76:
-		write_instr(nes, pc, "ROR", .ZeroPageX, &b)
+		pc_advance = write_instr(nes, pc, "ROR", .ZeroPageX, &b)
 	case 0x6E:
-		write_instr(nes, pc, "ROR", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "ROR", .Absolute, &b)
 	case 0x7E:
-		write_instr(nes, pc, "ROR", .AbsoluteX, &b)
+		pc_advance = write_instr(nes, pc, "ROR", .AbsoluteX, &b)
 
 
 	// RTI
 
 	case 0x40:
-		write_instr(nes, pc, "RTI", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "RTI", .Implicit, &b)
 
 	// RTS
 
 	case 0x60:
-		write_instr(nes, pc, "RTS", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "RTS", .Implicit, &b)
 
 	// SBC
 
 	case 0xE9:
-		write_instr(nes, pc, "SBC", .Immediate, &b)
+		pc_advance = write_instr(nes, pc, "SBC", .Immediate, &b)
 	case 0xE5:
-		write_instr(nes, pc, "SBC", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "SBC", .ZeroPage, &b)
 	case 0xF5:
-		write_instr(nes, pc, "SBC", .ZeroPageX, &b)
+		pc_advance = write_instr(nes, pc, "SBC", .ZeroPageX, &b)
 	case 0xED:
-		write_instr(nes, pc, "SBC", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "SBC", .Absolute, &b)
 	case 0xFD:
-		write_instr(nes, pc, "SBC", .AbsoluteX, &b)
+		pc_advance = write_instr(nes, pc, "SBC", .AbsoluteX, &b)
 	case 0xF9:
-		write_instr(nes, pc, "SBC", .AbsoluteY, &b)
+		pc_advance = write_instr(nes, pc, "SBC", .AbsoluteY, &b)
 	case 0xE1:
-		write_instr(nes, pc, "SBC", .IndirectX, &b)
+		pc_advance = write_instr(nes, pc, "SBC", .IndirectX, &b)
 	case 0xF1:
-		write_instr(nes, pc, "SBC", .IndirectY, &b)
+		pc_advance = write_instr(nes, pc, "SBC", .IndirectY, &b)
 
 
 	// SEC
 
 	case 0x38:
-		write_instr(nes, pc, "SEC", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "SEC", .Implicit, &b)
 
 	// SED
 
 	case 0xF8:
-		write_instr(nes, pc, "SED", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "SED", .Implicit, &b)
 
 	// SEI
 
 	case 0x78:
-		write_instr(nes, pc, "SEI", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "SEI", .Implicit, &b)
 
 	// STA
 
 	case 0x85:
-		write_instr(nes, pc, "STA", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "STA", .ZeroPage, &b)
 	case 0x95:
-		write_instr(nes, pc, "STA", .ZeroPageX, &b)
+		pc_advance = write_instr(nes, pc, "STA", .ZeroPageX, &b)
 	case 0x8D:
-		write_instr(nes, pc, "STA", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "STA", .Absolute, &b)
 	case 0x9D:
-		write_instr(nes, pc, "STA", .AbsoluteX, &b)
+		pc_advance = write_instr(nes, pc, "STA", .AbsoluteX, &b)
 	case 0x99:
-		write_instr(nes, pc, "STA", .AbsoluteY, &b)
+		pc_advance = write_instr(nes, pc, "STA", .AbsoluteY, &b)
 	case 0x81:
-		write_instr(nes, pc, "STA", .IndirectX, &b)
+		pc_advance = write_instr(nes, pc, "STA", .IndirectX, &b)
 	case 0x91:
-		write_instr(nes, pc, "STA", .IndirectY, &b)
+		pc_advance = write_instr(nes, pc, "STA", .IndirectY, &b)
 
 	// STX
 
 	case 0x86:
-		write_instr(nes, pc, "STX", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "STX", .ZeroPage, &b)
 	case 0x96:
-		write_instr(nes, pc, "STX", .ZeroPageY, &b)
+		pc_advance = write_instr(nes, pc, "STX", .ZeroPageY, &b)
 	case 0x8E:
-		write_instr(nes, pc, "STX", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "STX", .Absolute, &b)
 
 	// STY
 
 	case 0x84:
-		write_instr(nes, pc, "STY", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "STY", .ZeroPage, &b)
 	case 0x94:
-		write_instr(nes, pc, "STY", .ZeroPageX, &b)
+		pc_advance = write_instr(nes, pc, "STY", .ZeroPageX, &b)
 	case 0x8C:
-		write_instr(nes, pc, "STY", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "STY", .Absolute, &b)
 
 
 	// TAX
 
 	case 0xAA:
-		write_instr(nes, pc, "TAX", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "TAX", .Implicit, &b)
 
 	// TAY
 	case 0xA8:
-		write_instr(nes, pc, "TAY", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "TAY", .Implicit, &b)
 
 	// TSX
 	case 0xBA:
-		write_instr(nes, pc, "TSX", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "TSX", .Implicit, &b)
 
 	// TXA
 	case 0x8A:
-		write_instr(nes, pc, "TXA", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "TXA", .Implicit, &b)
 
 	// TXS
 	case 0x9A:
-		write_instr(nes, pc, "TXS", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "TXS", .Implicit, &b)
 
 	// TYA
 	case 0x98:
-		write_instr(nes, pc, "TYA", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "TYA", .Implicit, &b)
 
 
 	/// Unofficial opcodes
@@ -909,154 +924,154 @@ print_instr :: proc(nes: NES, pc: u16) -> (b: strings.Builder, next_pc: u16) {
 
 	// ASO (ASL + ORA)
 	case 0x0F:
-		write_instr(nes, pc, "ASO", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "ASO", .Absolute, &b)
 	case 0x1F:
-		write_instr(nes, pc, "ASO", .AbsoluteX, &b)
+		pc_advance = write_instr(nes, pc, "ASO", .AbsoluteX, &b)
 	case 0x1B:
-		write_instr(nes, pc, "ASO", .AbsoluteY, &b)
+		pc_advance = write_instr(nes, pc, "ASO", .AbsoluteY, &b)
 	case 0x07:
-		write_instr(nes, pc, "ASO", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "ASO", .ZeroPage, &b)
 	case 0x17:
-		write_instr(nes, pc, "ASO", .ZeroPageX, &b)
+		pc_advance = write_instr(nes, pc, "ASO", .ZeroPageX, &b)
 	case 0x03:
-		write_instr(nes, pc, "ASO", .IndirectX, &b)
+		pc_advance = write_instr(nes, pc, "ASO", .IndirectX, &b)
 	case 0x13:
-		write_instr(nes, pc, "ASO", .IndirectY, &b)
+		pc_advance = write_instr(nes, pc, "ASO", .IndirectY, &b)
 
 	// RLA
 
 	case 0x2F:
-		write_instr(nes, pc, "RLA", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "RLA", .Absolute, &b)
 	case 0x3F:
-		write_instr(nes, pc, "RLA", .AbsoluteX, &b)
+		pc_advance = write_instr(nes, pc, "RLA", .AbsoluteX, &b)
 	case 0x3B:
-		write_instr(nes, pc, "RLA", .AbsoluteY, &b)
+		pc_advance = write_instr(nes, pc, "RLA", .AbsoluteY, &b)
 	case 0x27:
-		write_instr(nes, pc, "RLA", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "RLA", .ZeroPage, &b)
 	case 0x37:
-		write_instr(nes, pc, "RLA", .ZeroPageX, &b)
+		pc_advance = write_instr(nes, pc, "RLA", .ZeroPageX, &b)
 	case 0x23:
-		write_instr(nes, pc, "RLA", .IndirectX, &b)
+		pc_advance = write_instr(nes, pc, "RLA", .IndirectX, &b)
 	case 0x33:
-		write_instr(nes, pc, "RLA", .IndirectY, &b)
+		pc_advance = write_instr(nes, pc, "RLA", .IndirectY, &b)
 
 	// LSE
 	case 0x4F:
-		write_instr(nes, pc, "LSE", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "LSE", .Absolute, &b)
 	case 0x5F:
-		write_instr(nes, pc, "LSE", .AbsoluteX, &b)
+		pc_advance = write_instr(nes, pc, "LSE", .AbsoluteX, &b)
 	case 0x5B:
-		write_instr(nes, pc, "LSE", .AbsoluteY, &b)
+		pc_advance = write_instr(nes, pc, "LSE", .AbsoluteY, &b)
 	case 0x47:
-		write_instr(nes, pc, "LSE", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "LSE", .ZeroPage, &b)
 	case 0x57:
-		write_instr(nes, pc, "LSE", .ZeroPageX, &b)
+		pc_advance = write_instr(nes, pc, "LSE", .ZeroPageX, &b)
 	case 0x43:
-		write_instr(nes, pc, "LSE", .IndirectX, &b)
+		pc_advance = write_instr(nes, pc, "LSE", .IndirectX, &b)
 	case 0x53:
-		write_instr(nes, pc, "LSE", .IndirectY, &b)
+		pc_advance = write_instr(nes, pc, "LSE", .IndirectY, &b)
 
 	// RRA
 
 	case 0x6F:
-		write_instr(nes, pc, "RRA", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "RRA", .Absolute, &b)
 	case 0x7F:
-		write_instr(nes, pc, "RRA", .AbsoluteX, &b)
+		pc_advance = write_instr(nes, pc, "RRA", .AbsoluteX, &b)
 	case 0x7B:
-		write_instr(nes, pc, "RRA", .AbsoluteY, &b)
+		pc_advance = write_instr(nes, pc, "RRA", .AbsoluteY, &b)
 	case 0x67:
-		write_instr(nes, pc, "RRA", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "RRA", .ZeroPage, &b)
 	case 0x77:
-		write_instr(nes, pc, "RRA", .ZeroPageX, &b)
+		pc_advance = write_instr(nes, pc, "RRA", .ZeroPageX, &b)
 	case 0x63:
-		write_instr(nes, pc, "RRA", .IndirectX, &b)
+		pc_advance = write_instr(nes, pc, "RRA", .IndirectX, &b)
 	case 0x73:
-		write_instr(nes, pc, "RRA", .IndirectY, &b)
+		pc_advance = write_instr(nes, pc, "RRA", .IndirectY, &b)
 
 	// AXS
 
 	case 0x8F:
-		write_instr(nes, pc, "AXS", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "AXS", .Absolute, &b)
 	case 0x87:
-		write_instr(nes, pc, "AXS", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "AXS", .ZeroPage, &b)
 	case 0x97:
-		write_instr(nes, pc, "AXS", .ZeroPageY, &b)
+		pc_advance = write_instr(nes, pc, "AXS", .ZeroPageY, &b)
 	case 0x83:
-		write_instr(nes, pc, "AXS", .IndirectX, &b)
+		pc_advance = write_instr(nes, pc, "AXS", .IndirectX, &b)
 
 
 	// LAX
 
 	case 0xAF:
-		write_instr(nes, pc, "LAX", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "LAX", .Absolute, &b)
 	case 0xBF:
-		write_instr(nes, pc, "LAX", .AbsoluteY, &b)
+		pc_advance = write_instr(nes, pc, "LAX", .AbsoluteY, &b)
 	case 0xA7:
-		write_instr(nes, pc, "LAX", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "LAX", .ZeroPage, &b)
 	case 0xB7:
-		write_instr(nes, pc, "LAX", .ZeroPageY, &b)
+		pc_advance = write_instr(nes, pc, "LAX", .ZeroPageY, &b)
 	case 0xA3:
-		write_instr(nes, pc, "LAX", .IndirectX, &b)
+		pc_advance = write_instr(nes, pc, "LAX", .IndirectX, &b)
 	case 0xB3:
-		write_instr(nes, pc, "LAX", .IndirectY, &b)
+		pc_advance = write_instr(nes, pc, "LAX", .IndirectY, &b)
 
 	// DCM
 
 	case 0xCF:
-		write_instr(nes, pc, "DCM", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "DCM", .Absolute, &b)
 	case 0xDF:
-		write_instr(nes, pc, "DCM", .AbsoluteX, &b)
+		pc_advance = write_instr(nes, pc, "DCM", .AbsoluteX, &b)
 	case 0xDB:
-		write_instr(nes, pc, "DCM", .AbsoluteY, &b)
+		pc_advance = write_instr(nes, pc, "DCM", .AbsoluteY, &b)
 	case 0xC7:
-		write_instr(nes, pc, "DCM", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "DCM", .ZeroPage, &b)
 	case 0xD7:
-		write_instr(nes, pc, "DCM", .ZeroPageX, &b)
+		pc_advance = write_instr(nes, pc, "DCM", .ZeroPageX, &b)
 	case 0xC3:
-		write_instr(nes, pc, "DCM", .IndirectX, &b)
+		pc_advance = write_instr(nes, pc, "DCM", .IndirectX, &b)
 	case 0xD3:
-		write_instr(nes, pc, "DCM", .IndirectY, &b)
+		pc_advance = write_instr(nes, pc, "DCM", .IndirectY, &b)
 
 	// INS
 
 	case 0xEF:
-		write_instr(nes, pc, "INS", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "INS", .Absolute, &b)
 	case 0xFF:
-		write_instr(nes, pc, "INS", .AbsoluteX, &b)
+		pc_advance = write_instr(nes, pc, "INS", .AbsoluteX, &b)
 	case 0xFB:
-		write_instr(nes, pc, "INS", .AbsoluteY, &b)
+		pc_advance = write_instr(nes, pc, "INS", .AbsoluteY, &b)
 	case 0xE7:
-		write_instr(nes, pc, "INS", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "INS", .ZeroPage, &b)
 	case 0xF7:
-		write_instr(nes, pc, "INS", .ZeroPageX, &b)
+		pc_advance = write_instr(nes, pc, "INS", .ZeroPageX, &b)
 	case 0xE3:
-		write_instr(nes, pc, "INS", .IndirectX, &b)
+		pc_advance = write_instr(nes, pc, "INS", .IndirectX, &b)
 	case 0xF3:
-		write_instr(nes, pc, "INS", .IndirectY, &b)
+		pc_advance = write_instr(nes, pc, "INS", .IndirectY, &b)
 
 	// ALR
 
 	case 0x4B:
-		write_instr(nes, pc, "ALR", .Immediate, &b)
+		pc_advance = write_instr(nes, pc, "ALR", .Immediate, &b)
 
 	// ARR
 
 	case 0x6B:
-		write_instr(nes, pc, "ARR", .Immediate, &b)
+		pc_advance = write_instr(nes, pc, "ARR", .Immediate, &b)
 
 	// XAA
 
 	case 0x8B:
-		write_instr(nes, pc, "XAA", .Immediate, &b)
+		pc_advance = write_instr(nes, pc, "XAA", .Immediate, &b)
 
 	// OAL
 
 	case 0xAB:
-		write_instr(nes, pc, "OAL", .Immediate, &b)
+		pc_advance = write_instr(nes, pc, "OAL", .Immediate, &b)
 
 	// SAX
 	case 0xCB:
-		write_instr(nes, pc, "SAX", .Immediate, &b)
+		pc_advance = write_instr(nes, pc, "SAX", .Immediate, &b)
 
 	// NOP
 
@@ -1071,7 +1086,7 @@ print_instr :: proc(nes: NES, pc: u16) -> (b: strings.Builder, next_pc: u16) {
 	case 0xDA:
 		fallthrough
 	case 0xFA:
-		write_instr(nes, pc, "NOP*", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "NOP*", .Implicit, &b)
 
 	case 0x80:
 		fallthrough
@@ -1082,14 +1097,14 @@ print_instr :: proc(nes: NES, pc: u16) -> (b: strings.Builder, next_pc: u16) {
 	case 0xC2:
 		fallthrough
 	case 0xE2:
-		write_instr(nes, pc, "NOP*", .Immediate, &b)
+		pc_advance = write_instr(nes, pc, "NOP*", .Immediate, &b)
 
 	case 0x04:
 		fallthrough
 	case 0x44:
 		fallthrough
 	case 0x64:
-		write_instr(nes, pc, "NOP*", .ZeroPage, &b)
+		pc_advance = write_instr(nes, pc, "NOP*", .ZeroPage, &b)
 
 	case 0x14:
 		fallthrough
@@ -1102,10 +1117,10 @@ print_instr :: proc(nes: NES, pc: u16) -> (b: strings.Builder, next_pc: u16) {
 	case 0xD4:
 		fallthrough
 	case 0xF4:
-		write_instr(nes, pc, "NOP*", .ZeroPageX, &b)
+		pc_advance = write_instr(nes, pc, "NOP*", .ZeroPageX, &b)
 
 	case 0x0C:
-		write_instr(nes, pc, "NOP*", .Absolute, &b)
+		pc_advance = write_instr(nes, pc, "NOP*", .Absolute, &b)
 
 	case 0x1C:
 		fallthrough
@@ -1118,7 +1133,7 @@ print_instr :: proc(nes: NES, pc: u16) -> (b: strings.Builder, next_pc: u16) {
 	case 0xDC:
 		fallthrough
 	case 0xFC:
-		write_instr(nes, pc, "NOP*", .AbsoluteX, &b)
+		pc_advance = write_instr(nes, pc, "NOP*", .AbsoluteX, &b)
 
 	/// The really weird undocumented opcodes
 
@@ -1147,45 +1162,44 @@ print_instr :: proc(nes: NES, pc: u16) -> (b: strings.Builder, next_pc: u16) {
 	case 0xD2:
 		fallthrough
 	case 0xF2:
-		write_instr(nes, pc, "HLT", .Implicit, &b)
+		pc_advance = write_instr(nes, pc, "HLT", .Implicit, &b)
 
 	// TAS
 
 	case 0x9B:
-		write_instr(nes, pc, "TAS", .AbsoluteY, &b)
+		pc_advance = write_instr(nes, pc, "TAS", .AbsoluteY, &b)
 
 	// SAY
 
 	case 0x9C:
-		write_instr(nes, pc, "SAY", .AbsoluteX, &b)
+		pc_advance = write_instr(nes, pc, "SAY", .AbsoluteX, &b)
 
 	// XAS
 
 	case 0x9E:
-		write_instr(nes, pc, "XAS", .AbsoluteY, &b)
+		pc_advance = write_instr(nes, pc, "XAS", .AbsoluteY, &b)
 
 	// AXA
 
 	case 0x9F:
-		write_instr(nes, pc, "AXA", .AbsoluteY, &b)
+		pc_advance = write_instr(nes, pc, "AXA", .AbsoluteY, &b)
 	case 0x93:
-		write_instr(nes, pc, "AXA", .IndirectY, &b)
+		pc_advance = write_instr(nes, pc, "AXA", .IndirectY, &b)
 
 	// ANC
 	case 0x2B:
 		fallthrough
 	case 0x0B:
-		write_instr(nes, pc, "ANC", .Immediate, &b)
+		pc_advance = write_instr(nes, pc, "ANC", .Immediate, &b)
 
 
 	// LAS
 	case 0xBB:
-		write_instr(nes, pc, "LAS", .IndirectY, &b)
+		pc_advance = write_instr(nes, pc, "LAS", .IndirectY, &b)
 
 	// OPCODE EB
 	case 0xEB:
-		write_instr(nes, pc, "SBC", .Immediate, &b)
-
+		pc_advance = write_instr(nes, pc, "SBC", .Immediate, &b)
 
 	case:
 		was_written = false
@@ -1196,8 +1210,9 @@ print_instr :: proc(nes: NES, pc: u16) -> (b: strings.Builder, next_pc: u16) {
 	// 	fmt.println(strings.to_string(b))
 	// }
 
-	return b, 1
+	next_pc = pc + pc_advance
 
+	return
 }
 
 run_instruction :: proc(using nes: ^NES) {

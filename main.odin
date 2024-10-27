@@ -197,7 +197,7 @@ NES :: struct {
 	ppu_ran_ahead:                  uint,
 
 	// DEBUGGING
-	instr_history: RingThing(40, InstructionInfo),
+	instr_history: RingThing(20, InstructionInfo),
 
 	nmi_was_triggered:              bool,
 	faulty_ops:                     map[u8]FaultyOp,

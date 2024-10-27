@@ -231,19 +231,40 @@ window_main :: proc() {
 
 draw_debugger :: proc(nes : NES) {
 
-	// Start at the bottom, w the last ran instruction
-
 	context.allocator = context.temp_allocator
 
 	the_indx := nes.instr_history.last_placed
 	the_buf_len := len(nes.instr_history.buf)
 
-	for i in 0..<the_buf_len {
+	// retrace it back
+	for _ in 0..<the_buf_len - 1 {
+		the_indx -= 1
+		if the_indx < 0 {
+			the_indx = the_buf_len - 1
+		}
+	}
 
-		pos := the_buf_len - i
+	instr_info : InstructionInfo
+	builder: strings.Builder
+	next_pc: u16
 
-		instr_info := nes.instr_history.buf[the_indx]
-		builder, _ := print_instr(nes, instr_info.pc)
+	for i in 0..<the_buf_len + 20 {
+		// are we in the future?
+		if i >= the_buf_len {
+			// We're in the future.
+			builder, next_pc = get_instr_str_builder(nes, next_pc)
+		} else {
+			// We're in the past or present, looking at instructions already ran.
+			instr_info = nes.instr_history.buf[the_indx]
+			builder, next_pc = get_instr_str_builder(nes, instr_info.pc)
+
+			the_indx += 1
+
+			if the_indx >= the_buf_len {
+				the_indx = 0
+			}
+		}
+
 		the_str := strings.to_string(builder)
 		the_str = strings.to_upper(the_str)
 
@@ -251,17 +272,11 @@ draw_debugger :: proc(nes : NES) {
 
 		col := rl.WHITE
 
-		if i == 0 {
+		if i == the_buf_len - 1 {
 			col = rl.BLUE
 		}
 
-		rl.DrawText(c_str, nes_width * scale_factor + 5, 1 + i32(pos) * 26, 30, col)
-
-		the_indx -= 1
-
-		if the_indx < 0 {
-			the_indx = the_buf_len - 1
-		}
+		rl.DrawText(c_str, nes_width * scale_factor + 5, 1 + i32(i) * 26, 30, col)
 	}
 
 	// b, next_pc := print_instr(nes)
