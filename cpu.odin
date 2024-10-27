@@ -355,10 +355,9 @@ read_u16_le :: proc(nes: ^NES, addr: u16) -> u16 {
 	return u16(high_b) << 8 | u16(low_b)
 }
 
-print_instr :: proc(using nes: NES) {
+print_instr :: proc(using nes: NES) -> (b: strings.Builder, next_pc: u16) {
 
-	b := strings.builder_make()
-	strings.builder_init_len(&b, 40)
+	b = strings.builder_make_len_cap(0, 10)
 	was_written := true
 
 	// fake read
@@ -1204,9 +1203,11 @@ print_instr :: proc(using nes: NES) {
 		instr_name := ""
 	}
 
-	if was_written {
-		fmt.println(strings.to_string(b))
-	}
+	// if was_written {
+	// 	fmt.println(strings.to_string(b))
+	// }
+
+	return b, 1
 
 }
 
@@ -1228,12 +1229,20 @@ run_instruction :: proc(using nes: ^NES) {
 	// fmt.printfln("PC: %X OPCODE: %X A: %X", program_counter, instr, accumulator)
 	// }
 
-	print_instr(nes^)
+	b, next := print_instr(nes^)
+	free(&instr_history[instr_pointer])
+	instr_history[instr_pointer] = strings.to_string(b)
+	free(&b)
 
-
-	if program_counter == 0xBC50 {
-		os.exit(1)
+	instr_pointer += 1
+	if instr_pointer >= 20 {
+		instr_pointer = 0
 	}
+
+
+	// if program_counter == 0xBC50 {
+	// 	os.exit(1)
+	// }
 
 	program_counter += 1
 	switch instr {

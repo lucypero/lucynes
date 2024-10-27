@@ -5,6 +5,7 @@ import "core:fmt"
 import "core:math"
 import "core:os"
 import "core:mem"
+import "core:strings"
 import rl "vendor:raylib"
 
 scale_factor :: 5
@@ -15,7 +16,8 @@ nes_height :: 240
 // screen_width :: nes_width * scale_factor
 // screen_height :: nes_height * scale_factor // ntsc might only show 224 scan lines
 
-screen_width :: nes_width * scale_factor
+debug_width :: 300
+screen_width :: nes_width * scale_factor + debug_width
 screen_height :: nes_height * scale_factor
 
 framebuffer_width :: nes_width
@@ -33,7 +35,7 @@ palette_file :: "palettes/Composite_wiki.pal"
 /// FULLY WORKING GAMES:
 
 // rom_in_nes :: "roms/SuperMarioBros.nes"
-// rom_in_nes :: "roms/Mega Man.nes"
+rom_in_nes :: "roms/Mega Man.nes"
 // rom_in_nes :: "roms/Contra.nes"
 // rom_in_nes :: "roms/Duck Tales.nes"
 // rom_in_nes :: "roms/Castlevania.nes"
@@ -47,7 +49,7 @@ palette_file :: "palettes/Composite_wiki.pal"
 
 // rom_in_nes :: "roms/Adventures of Lolo II , The.nes"
 // rom_in_nes :: "roms/Ms. Pac Man (Tengen).nes"
-rom_in_nes :: "roms/Spelunker.nes"
+// rom_in_nes :: "roms/Spelunker.nes"
 // rom_in_nes :: "roms/Silver Surfer.nes"
 
 
@@ -129,14 +131,15 @@ window_main :: proc() {
 	nes: NES
 	nes_reset(&nes, rom_in_nes)
 
+	paused := false
 
 	for !rl.WindowShouldClose() {
 
 		rl.BeginDrawing()
 
-		// rl.ClearBackground(rl.RAYWHITE)
+		rl.ClearBackground(rl.BLACK)
 
-		clear_pixels(pixels, rl.BLACK)
+		// clear_pixels(pixels, rl.BLACK)
 
 		// doing input
 
@@ -146,7 +149,8 @@ window_main :: proc() {
 		}
 
 		if rl.IsKeyPressed(.P) {
-			send_samples = !send_samples
+			// send_samples = !send_samples
+			paused = !paused
 		}
 
 		if rl.IsKeyPressed(.F1) {
@@ -187,18 +191,54 @@ window_main :: proc() {
 		fill_input_port(&port_0_input)
 
 		// run nes till vblank
-		tick_nes_till_vblank(&nes, port_0_input, port_1_input, &pixel_grid)
+		if !paused {
+			tick_nes_till_vblank(&nes, port_0_input, port_1_input, &pixel_grid)
+		}
 
 		// here you modify the pixels (draw the frame)
 		// draw_frame(nes, &pixel_grid)
 
 		rl.UpdateTexture(checked, raw_data(pixels))
 		rl.DrawTextureEx(checked, {0, 0}, 0, scale_factor, rl.WHITE)
+		draw_debugger(nes)
 
 		rl.EndDrawing()
 	}
 
 	print_faulty_ops(&nes)
+}
+
+draw_debugger :: proc(nes : NES) {
+
+
+
+	the_indx := nes.instr_pointer
+
+	for i in 0..<20 {
+
+		pos := 20 - i
+
+		c_str := strings.clone_to_cstring(nes.instr_history[the_indx])
+		rl.DrawText(c_str, nes_width * scale_factor + 1, 1 + i32(pos) * 21, 20, rl.WHITE)
+		free(&c_str)
+
+		the_indx -= 1
+
+		if the_indx < 0 {
+			the_indx = 19 
+		}
+	}
+
+	// b, next_pc := print_instr(nes)
+	// fmt.println(strings.to_string(b))
+	
+	// the_str := strings.to_string(b)
+
+	// c_str := strings.clone_to_cstring(the_str)
+	// rl.DrawText(c_str, nes_width * scale_factor + 1, 20, 25, rl.WHITE)
+	// rl.DrawText("hello how are u", nes_width * scale_factor + 1, 100, 25, rl.WHITE)
+
+	// free(&b)
 }
 
 clear_pixels :: proc(pixels: []rl.Color, color: rl.Color) {

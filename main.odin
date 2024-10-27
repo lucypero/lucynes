@@ -177,6 +177,9 @@ NES :: struct {
 	ppu_ran_ahead:                  uint,
 
 	// DEBUGGING
+	instr_history: [20]string,
+	instr_pointer: int,
+
 	instr_info:                     InstructionInfo,
 	nmi_was_triggered:              bool,
 	faulty_ops:                     map[u8]FaultyOp,
@@ -528,10 +531,10 @@ main :: proc() {
 	_main()
 
 	// Allocations report
-	// fmt.printfln(`-------- Allocations report: -----------`)
-	// report_allocations(&nes_allocator, "NES")
-	// report_allocations(&forever_allocator, "Forever")
-	// print_allocated_temp()
+	fmt.printfln(`-------- Allocations report: -----------`)
+	report_allocations(&nes_allocator, "NES")
+	report_allocations(&forever_allocator, "Forever")
+	print_allocated_temp()
 }
 
 _main :: proc() {
