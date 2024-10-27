@@ -34,8 +34,8 @@ palette_file :: "palettes/Composite_wiki.pal"
 
 /// FULLY WORKING GAMES:
 
-// rom_in_nes :: "roms/SuperMarioBros.nes"
-rom_in_nes :: "roms/Mega Man.nes"
+rom_in_nes :: "roms/SuperMarioBros.nes"
+// rom_in_nes :: "roms/Mega Man.nes"
 // rom_in_nes :: "roms/Contra.nes"
 // rom_in_nes :: "roms/Duck Tales.nes"
 // rom_in_nes :: "roms/Castlevania.nes"
@@ -63,6 +63,16 @@ rom_in_nes :: "roms/Mega Man.nes"
 // rom_in_nes :: "tests/full_palette.nes"
 // rom_in_nes :: "tests/color_test.nes"
 // rom_in_nes :: "nestest/nestest.nes"
+
+/// VBL NMI TIMING
+
+// rom_in_nes :: "tests/vbl_nmi_timing/1.frame_basics.nes" // Fails. Fix it.
+// rom_in_nes :: "tests/vbl_nmi_timing/2.vbl_timing.nes"
+// rom_in_nes :: "tests/vbl_nmi_timing/3.even_odd_frames.nes"
+// rom_in_nes :: "tests/vbl_nmi_timing/4.vbl_clear_timing.nes"
+// rom_in_nes :: "tests/vbl_nmi_timing/5.nmi_suppression.nes"
+// rom_in_nes :: "tests/vbl_nmi_timing/6.nmi_disable.nes"
+// rom_in_nes :: "tests/vbl_nmi_timing/7.nmi_timing.nes"
 
 // NMI tests
 
@@ -151,6 +161,16 @@ window_main :: proc() {
 		if rl.IsKeyPressed(.P) {
 			// send_samples = !send_samples
 			paused = !paused
+
+		}
+
+		if rl.IsKeyPressed(.F10) {
+			// run one instruction
+			// send_samples = !send_samples
+			if paused {
+				instruction_tick(&nes, 0, 0, &pixel_grid)
+				reset_debugging_vars(&nes)
+			}
 		}
 
 		if rl.IsKeyPressed(.F1) {
@@ -203,6 +223,7 @@ window_main :: proc() {
 		draw_debugger(nes)
 
 		rl.EndDrawing()
+		free_all(context.temp_allocator)
 	}
 
 	print_faulty_ops(&nes)
@@ -210,22 +231,36 @@ window_main :: proc() {
 
 draw_debugger :: proc(nes : NES) {
 
+	// Start at the bottom, w the last ran instruction
 
+	context.allocator = context.temp_allocator
 
-	the_indx := nes.instr_pointer
+	the_indx := nes.instr_history.last_placed
+	the_buf_len := len(nes.instr_history.buf)
 
-	for i in 0..<20 {
+	for i in 0..<the_buf_len {
 
-		pos := 20 - i
+		pos := the_buf_len - i
 
-		c_str := strings.clone_to_cstring(nes.instr_history[the_indx])
-		rl.DrawText(c_str, nes_width * scale_factor + 1, 1 + i32(pos) * 21, 20, rl.WHITE)
-		free(&c_str)
+		instr_info := nes.instr_history.buf[the_indx]
+		builder, _ := print_instr(nes, instr_info.pc)
+		the_str := strings.to_string(builder)
+		the_str = strings.to_upper(the_str)
+
+		c_str := strings.clone_to_cstring(the_str)
+
+		col := rl.WHITE
+
+		if i == 0 {
+			col = rl.BLUE
+		}
+
+		rl.DrawText(c_str, nes_width * scale_factor + 5, 1 + i32(pos) * 26, 30, col)
 
 		the_indx -= 1
 
 		if the_indx < 0 {
-			the_indx = 19 
+			the_indx = the_buf_len - 1
 		}
 	}
 

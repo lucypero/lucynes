@@ -158,6 +158,26 @@ FaultyOp :: struct {
 	cycles_taken:    int,
 }
 
+InstructionInfo :: struct {
+	pc: u16,
+	// you can find out the rest from the PC.
+	// you can add other state later.
+}
+
+RingThing :: struct($ring_size: uint, $T: typeid) {
+	buf: [ring_size]T,
+	last_placed: int,
+}
+
+ringthing_add :: proc(using ringthing: ^$R/RingThing($N, $T), data: T) {
+	last_placed += 1
+	if last_placed >= len(buf) {
+		last_placed = 0
+	}
+
+	buf[last_placed] = data
+}
+
 NES :: struct {
 	using registers:                Registers, // CPU Registers
 	// TODO: this isn't ram, so it shouldn't even be memory. don't store this. it's a bus, it's not real ram.
@@ -177,10 +197,8 @@ NES :: struct {
 	ppu_ran_ahead:                  uint,
 
 	// DEBUGGING
-	instr_history: [20]string,
-	instr_pointer: int,
+	instr_history: RingThing(40, InstructionInfo),
 
-	instr_info:                     InstructionInfo,
 	nmi_was_triggered:              bool,
 	faulty_ops:                     map[u8]FaultyOp,
 	read_writes:                    uint,
@@ -474,13 +492,6 @@ print_cpu_state :: proc(regs: NesTestLog) {
 		regs.cpu_registers.stack_pointer,
 		regs.cpu_cycles,
 	)
-}
-
-InstructionInfo :: struct {
-	reading_opcode: bool,
-	running:        bool,
-	wrote_oamdma:   bool,
-	opcode:         u8,
 }
 
 report_allocations :: proc(allocator: ^mem.Tracking_Allocator, allocator_name: string) {
