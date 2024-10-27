@@ -32,6 +32,11 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 			// nmi(nes,true)
 		}
 
+		if val == 0x10 {
+			asd := 1
+			asd += 1
+		}
+
 		ppu_ctrl.reg = val
 		temp_loopy.nametable_x = u16(ppu_ctrl.n & 0b1) != 0 ? 1 : 0
 		temp_loopy.nametable_y = u16(ppu_ctrl.n & 0b10) != 0 ? 1 : 0

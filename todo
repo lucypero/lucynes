@@ -1,3 +1,11 @@
+# Fixing spelunker
+
+PC:
+
+BC50
+BC52
+
+
 # Todo
 
 - take care of the faulty ops (ppu is ticking 1 or 2 times less than it should)

@@ -41,14 +41,13 @@ palette_file :: "palettes/Composite_wiki.pal"
 // rom_in_nes :: "roms/IceClimber.nes"
 // rom_in_nes :: "roms/DonkeyKong.nes"
 // rom_in_nes :: "roms/Kung Fu.nes"
-rom_in_nes :: "roms/Bomberman.nes"
+// rom_in_nes :: "roms/Bomberman.nes"
 
 /// NON-WORKING GAMES: 
 
-
 // rom_in_nes :: "roms/Adventures of Lolo II , The.nes"
 // rom_in_nes :: "roms/Ms. Pac Man (Tengen).nes"
-// rom_in_nes :: "roms/Spelunker.nes"
+rom_in_nes :: "roms/Spelunker.nes"
 // rom_in_nes :: "roms/Silver Surfer.nes"
 
 
