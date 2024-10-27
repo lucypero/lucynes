@@ -150,6 +150,10 @@ so this only happens when NMI is triggered on the real NES when LDA is being exe
 
 - save states
 
+- PPUMASK
+	- greyscale, modification of colors, and all that
+	- test with color_test.nes
+
 # Input
 
 write 1 -> $4016: signal controller to poll its input
@@ -235,3 +239,4 @@ Metal Gear
 Ice Climber
 Donkey Kong
 Kung Fu
+Bomberman

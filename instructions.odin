@@ -245,7 +245,42 @@ instr_bit :: proc(using nes: ^NES, mem: u16) {
 // TODO it does an interrupt. idk how to do this yet
 instr_brk :: proc(using nes: ^NES, mem: u16) {
 	instruction_type = .Other
-	fmt.printfln("calling BRK. pc is %X", program_counter)
+
+	// fmt.printfln("calling BRK. pc is %X", program_counter)
+
+	// from_2000 == true: from writing to 2000
+	// from_2000 == false: from ppu tick when hitting vblank
+
+	stack_push_u16(nes, program_counter)
+	// flags += {.InterruptDisable, .NoEffect1}
+	// flags -= {.NoEffectB}
+	stack_push(nes, transmute(u8)flags)
+
+	// read u16 memory value at 0xFFFA
+	brk_mem: u16
+
+	low_byte := u16(read(nes, 0xFFFE))
+	high_byte := u16(read(nes, 0xFFFE + 1))
+
+	brk_mem = high_byte << 8 | low_byte
+
+	old_pc := program_counter
+
+	program_counter = brk_mem
+
+	// dummy_read(nes)
+	// dummy_read(nes)
+
+	// fmt.printfln(
+	// 	"nmi triggered! %v, jumping from %X to %X. ppu_cycle: %v scanline: %v",
+	// 	nmi_type,
+	// 	old_pc,
+	// 	program_counter,
+	// 	ppu_cycle_x,
+	// 	ppu_scanline,
+	// )
+
+	// cycles += 7
 	flags += {.NoEffectB}
 }
 

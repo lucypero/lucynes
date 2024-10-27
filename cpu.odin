@@ -1086,8 +1086,6 @@ instruction_tick :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8, pi
 
 	cpu_cycles_dt := cycles - past_cycles
 
-	ppu_left_to_do := math.max(0, int(cpu_cycles_dt) * 3 - int(ppu_ran_ahead))
-
 	// ignoring oam bad impl for now
 	// if u wanna not ignore it, remove the oam check
 	if cpu_cycles_dt != read_writes {
@@ -1113,6 +1111,8 @@ instruction_tick :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8, pi
 	// 		read_writes
 	// 	)
 	// }
+
+	// ppu_left_to_do := math.max(0, int(cpu_cycles_dt) * 3 - int(ppu_ran_ahead))
 
 	// for i in 0 ..< ppu_left_to_do {
 	// 	fmt.println("u still had ppu left to do. fix.")

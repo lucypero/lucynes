@@ -786,12 +786,12 @@ draw_pixel :: proc(using nes: ^NES, pixel_grid: ^PixelGrid) {
 			if ppu_mask.show_background != 0 && ppu_mask.show_sprites != 0 {
 
 				if ~(ppu_mask.show_left_background | ppu_mask.show_left_sprites) != 0 {
-					if ppu_cycle_x >= 9 && ppu_cycle_x < 255 {
+					if ppu_cycle_x >= 9 && ppu_cycle_x <= 255 {
 						ppu_status.sprite_zero_hit = 1
 					}
 
 				} else {
-					if ppu_cycle_x >= 1 && ppu_cycle_x < 255 {
+					if ppu_cycle_x >= 1 && ppu_cycle_x <= 255 {
 						ppu_status.sprite_zero_hit = 1
 					}
 				}
