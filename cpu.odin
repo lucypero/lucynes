@@ -1223,7 +1223,6 @@ run_instruction :: proc(using nes: ^NES) {
 
 	instr_inf : InstructionInfo
 	instr_inf.pc = program_counter
-	ringthing_add(&instr_history, instr_inf)
 
 	// if program_counter == 0xBC50 {
 	// 	os.exit(1)
@@ -1991,6 +1990,8 @@ run_instruction :: proc(using nes: ^NES) {
 
 	}
 
+	instr_inf.next_pc = program_counter
+	ringthing_add(&instr_history, instr_inf)
 	flags += {.NoEffect1}
 }
 

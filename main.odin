@@ -160,6 +160,7 @@ FaultyOp :: struct {
 
 InstructionInfo :: struct {
 	pc: u16,
+	next_pc: u16, // The next position of the PC like, for real
 	// you can find out the rest from the PC.
 	// you can add other state later.
 }
