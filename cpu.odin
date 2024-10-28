@@ -18,7 +18,6 @@ dummy_read :: proc(using nes: ^NES) {
 	readwrite_things(nes, 0, 0, false, true)
 }
 
-
 // fake read (no side effects at all)
 fake_read :: proc(using nes: NES, addr: u16) -> u8 {
 
@@ -220,7 +219,7 @@ write :: proc(using nes: ^NES, addr: u16, val: u8) {
 
 		for i in 0x0000 ..= 0x00FF {
 			v := read(nes, u16(i) + start_addr)
-			ppu_oam[i] = v
+			ppu.oam[i] = v
 		}
 
 		return
@@ -302,8 +301,8 @@ nmi :: proc(using nes: ^NES, nmi_type: int) {
 	// 	nmi_type,
 	// 	old_pc,
 	// 	program_counter,
-	// 	ppu_cycle_x,
-	// 	ppu_scanline,
+	// 	cycle_x,
+	// 	scanline,
 	// )
 
 	cycles += 7
@@ -327,7 +326,8 @@ nes_init :: proc(using nes: ^NES) {
 	low_byte := u16(read(nes, 0xFFFC))
 	high_byte := u16(read(nes, 0xFFFC + 1))
 	program_counter = high_byte << 8 | low_byte
-	ppu_status.vertical_blank = 1
+
+	ppu_init(&nes.ppu)
 
 	stack_pointer = 0xFD
 	cycles = 7
@@ -1122,7 +1122,6 @@ run_instruction :: proc(using nes: ^NES) {
 }
 
 reset_debugging_vars :: proc(using nes: ^NES) {
-	ppu_ran_ahead = 0
 	read_writes = 0
 	nmi_was_triggered = false
 }
@@ -1166,24 +1165,6 @@ instruction_tick :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8, pi
 		// faulty_ops[instr_info.opcode] = faulty_op
 	}
 
-	// if cpu_cycles_dt * 3 < ppu_ran_ahead {
-	// 	fmt.printfln(
-	// 		"here ppu run ahead is more. what the fuck. %X ppu ran ahead: %v times, cycles dt: %v, nmi: %v, readwrites: %v",
-	// 		instr_info.opcode,
-	// 		ppu_ran_ahead / 3,
-	// 		cpu_cycles_dt,
-	// 		nmi_was_triggered,
-	// 		read_writes
-	// 	)
-	// }
-
-	// ppu_left_to_do := math.max(0, int(cpu_cycles_dt) * 3 - int(ppu_ran_ahead))
-
-	// for i in 0 ..< ppu_left_to_do {
-	// 	fmt.println("u still had ppu left to do. fix.")
-	// 	ppu_tick(nes, pixel_grid)
-	// }
-
 	for i in 0 ..< cpu_cycles_dt * 3 {
 		apu_tick(nes)
 	}
@@ -1213,7 +1194,6 @@ print_faulty_ops :: proc(nes: ^NES) {
 
 	fmt.printfln("Faulty ops:")
 	for i, val in nes.faulty_ops {
-		// diff is ppu_ran_ahead_ticks - (cpu_cycles_dt * 3)
 		fmt.printf(
 			"$%X: CS: %v, CR: %v, DIFF: %v. RAN OAM: %v, RAN NMI: %v",
 			i,

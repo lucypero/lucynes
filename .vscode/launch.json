@@ -1,0 +1,14 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "cppvsdbg",
+            "request": "launch",
+            "preLaunchTask": "build debug",
+            "name": "Debug",
+            "program": "${workspaceFolder}/lucynes.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

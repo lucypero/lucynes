@@ -30,8 +30,9 @@ BC52
 	- test with color_test.nes
 
 - Debugger:
-	- display the relative addressing opcodes better. see how mesen does it.
 	- do something special for ppu and apu registers
+	- have some indication to when it got NMI'd. Maybe also when it jumped normally.
+	- PPU state display
 
 - Support controllers
 

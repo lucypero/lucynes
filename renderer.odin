@@ -34,7 +34,7 @@ palette_file :: "palettes/Composite_wiki.pal"
 
 /// FULLY WORKING GAMES:
 
-// rom_in_nes :: "roms/SuperMarioBros.nes"
+rom_in_nes :: "roms/SuperMarioBros.nes"
 // rom_in_nes :: "roms/Mega Man.nes"
 // rom_in_nes :: "roms/Contra.nes"
 // rom_in_nes :: "roms/Duck Tales.nes"
@@ -49,7 +49,7 @@ palette_file :: "palettes/Composite_wiki.pal"
 
 // rom_in_nes :: "roms/Adventures of Lolo II , The.nes"
 // rom_in_nes :: "roms/Ms. Pac Man (Tengen).nes"
-rom_in_nes :: "roms/Spelunker.nes"
+// rom_in_nes :: "roms/Spelunker.nes"
 // rom_in_nes :: "roms/Silver Surfer.nes"
 
 

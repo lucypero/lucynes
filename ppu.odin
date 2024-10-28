@@ -8,15 +8,101 @@ import "core:slice"
 import "core:strconv"
 import "core:strings"
 
-advance_ppu :: proc(using nes: ^NES) {
+PPU :: struct {
+	memory:                     [2 * 1024]u8, // stores 2 nametables
+	palette:                    [32]u8, // internal memory inside the PPU, stores palette data
+	oam:                        [256]u8, // OAM data, inside the PPU
+	oam_address:                u8,
+	cycle_x:                    int, // current ppu cycle horizontally in the scanline (0..=340)
+	scanline:                   int, // current ppu scanline (-1..=260)
+
+	//NOTE: if everything is stored in loopy, then this is all redundant state, no?
+	// consider deleting all this
+	ppu_ctrl:                   struct #raw_union {
+		// VPHB SINN
+		using flags: bit_field u8 {
+			n: u8 | 2,
+			i: u8 | 1,
+			s: u8 | 1, // sprite pattern table address for 8x8 sprites (0: $0000, 1: $1000)
+			b: u8 | 1, // bg pattern table address (0: $0000, 1: $1000)
+			h: u8 | 1, // sprite size (0: 8x8, 1: 8x16)
+			p: u8 | 1,
+			v: u8 | 1,
+		},
+		reg:         u8,
+	},
+	ppu_mask:                   struct #raw_union {
+		// BGRs bMmG
+		using flags: bit_field u8 {
+			greyscale:            u8 | 1,
+			show_left_background: u8 | 1,
+			show_left_sprites:    u8 | 1,
+			show_background:      u8 | 1,
+			show_sprites:         u8 | 1,
+			emphasize_red:        u8 | 1,
+			emphasize_green:      u8 | 1,
+			emphasize_blue:       u8 | 1,
+		},
+		reg:         u8,
+	},
+	ppu_status:                 struct #raw_union {
+		// VSO. ....
+		using flags: bit_field u8 {
+			open_bus:        u8 | 5,
+			sprite_overflow: u8 | 1,
+			sprite_zero_hit: u8 | 1,
+			vertical_blank:  u8 | 1,
+		},
+		reg:         u8,
+	},
+	ppu_buffer_read:            u8,
+
+	// ppu internals: new model: the ppu loopy model
+	current_loopy:              LoopyRegister,
+	temp_loopy:                 LoopyRegister,
+	ppu_x:                      u8, // fine x scroll (3 bits)
+	ppu_w:                      bool, // First or second write toggle (1 bit)
+
+
+	// data for rendering the next pixel
+	// TODO: what is this? i thought all the state required was the 4 variables above.
+	// idk look into it.
+	bg_next_tile_id:            u8,
+	bg_next_tile_attrib:        u8,
+	bg_next_tile_lsb:           u8, // bitplane of pattern tile
+	bg_next_tile_msb:           u8, // bitplane 2 of pattern tile
+
+	// background shift registers
+	bg_shifter_pattern_lo:      u16,
+	bg_shifter_pattern_hi:      u16,
+	bg_shifter_attrib_lo:       u16,
+	bg_shifter_attrib_hi:       u16,
+	sprite_scanline:            [8]OAMEntry, // the 8 possible sprites in a scanline
+	sprite_count:               u8, // to track how many sprites are in the next scanline
+
+	// sprite shift registers
+	sprite_shifter_pattern_lo:  [8]u8,
+	sprite_shifter_pattern_hi:  [8]u8,
+
+	// sprite zero collision flags
+	sprite_zero_hit_possible:   bool, // if a SZH is possible in the next scanline
+	sprite_zero_being_rendered: bool,
+}
+
+ppu_init :: proc(using ppu: ^PPU) {
+	ppu_status.vertical_blank = 1
+}
+
+advance_ppu :: proc(nes: ^NES) {
 	// running PPU 3 times
 	for i in 0 ..< 3 {
 		ppu_tick(nes, &pixel_grid)
-		ppu_ran_ahead += 1
 	}
 }
 
-write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
+write_ppu_register :: proc(nes: ^NES, ppu_reg: u16, val: u8) {
+
+	using nes.ppu
 
 	switch ppu_reg {
 
@@ -28,7 +114,7 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 		// if vblank is set, and you change nmi flag from 0 to 1, trigger nmi now
 		if (ppu_status.vertical_blank == 1) && val & 0x80 != 0 && ppu_ctrl.v == 0 {
 			// trigger NMI immediately
-			nmi_triggered = 2
+			nes.nmi_triggered = 2
 			// nmi(nes,true)
 		}
 
@@ -51,7 +137,7 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 
 	// OAMADDR
 	case 0x2003:
-		ppu_oam_address = val
+		oam_address = val
 
 
 	// OAMDATA
@@ -59,8 +145,8 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 		// TODO:  For emulation purposes, it is probably best to completely ignore writes during rendering.
 
 		// TODO: what do i do against possible out of bounds writes?
-		ppu_oam[ppu_oam_address] = val
-		ppu_oam_address += 1
+		oam[oam_address] = val
+		oam_address += 1
 
 	// PPUSCROLL
 	case 0x2005:
@@ -70,7 +156,7 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 		if !ppu_w {
 			ppu_x = val & 0x07
 			temp_loopy.coarse_x = u16(val) >> 3
-			// fmt.printfln("changing coarse x. at scanline %v cycle %v", ppu_scanline, ppu_cycle_x)
+			// fmt.printfln("changing coarse x. at scanline %v cycle %v", scanline, cycle_x)
 		} else // Second write
 		{
 			temp_loopy.fine_y = u16(val) & 0x07
@@ -95,11 +181,13 @@ write_ppu_register :: proc(using nes: ^NES, ppu_reg: u16, val: u8) {
 	//PPUDATA
 	case 0x2007:
 		ppu_write(nes, current_loopy.reg, val)
-		increment_current_loopy(nes)
+		increment_current_loopy(&nes.ppu)
 	}
 }
 
-read_ppu_register :: proc(using nes: ^NES, ppu_reg: u16) -> u8 {
+read_ppu_register :: proc(nes: ^NES, ppu_reg: u16) -> u8 {
+
+	using nes.ppu
 
 	switch ppu_reg {
 
@@ -136,7 +224,7 @@ read_ppu_register :: proc(using nes: ^NES, ppu_reg: u16) -> u8 {
 	// OAMDATA
 	case 0x2004:
 		// TODO: what do i do against possible out of bounds writes?
-		return ppu_oam[ppu_oam_address]
+		return oam[oam_address]
 
 	// PPUSCROLL
 	case 0x2005:
@@ -156,16 +244,16 @@ read_ppu_register :: proc(using nes: ^NES, ppu_reg: u16) -> u8 {
 			val = ppu_buffer_read
 		}
 
-		increment_current_loopy(nes)
+		increment_current_loopy(&nes.ppu)
 
 		return val
 
 	case:
-		return ram[ppu_reg]
+		return 0
 	}
 }
 
-increment_current_loopy :: proc(using nes: ^NES) {
+increment_current_loopy :: proc(using ppu: ^PPU) {
 	goDown: bool = ppu_ctrl.i != 0
 
 	if goDown {
@@ -175,11 +263,11 @@ increment_current_loopy :: proc(using nes: ^NES) {
 	}
 }
 
-ppu_read :: proc(using nes: ^NES, mem: u16) -> u8 {
+ppu_read :: proc(nes: ^NES, mem: u16) -> u8 {
 	return ppu_readwrite(nes, mem, 0, false)
 }
 
-ppu_write :: proc(using nes: ^NES, mem: u16, val: u8) {
+ppu_write :: proc(nes: ^NES, mem: u16, val: u8) {
 	ppu_readwrite(nes, mem, val, true)
 }
 
@@ -187,7 +275,9 @@ ppu_write :: proc(using nes: ^NES, mem: u16, val: u8) {
 // read PPU memory map in nesdev wiki
 // write == true then it will write
 // write == false then it will read
-ppu_readwrite :: proc(using nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
+ppu_readwrite :: proc(nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
+	using nes.ppu
+
 	temp_val: u8
 	the_val: ^u8 = &temp_val
 
@@ -205,7 +295,7 @@ ppu_readwrite :: proc(using nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 		// 	fmt.printfln("u are trying to read to cartridge's ROM... %X", mem)
 		// }
 
-		the_val = &chr_rom[mem]
+		the_val = &nes.chr_rom[mem]
 	// nametable data (it's in ppu memory)
 	case 0x2000 ..< 0x3000:
 		index_in_vram := mem - 0x2000
@@ -257,7 +347,7 @@ ppu_readwrite :: proc(using nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 
 		// fmt.printfln("is horizontal arrangement %v. %X -> %X", nes.rom_info.is_horizontal_arrangement, mem, index_in_vram + 0x2000)
 
-		the_val = &ppu_memory[index_in_vram]
+		the_val = &memory[index_in_vram]
 	case 0x3000 ..= 0x3EFF:
 		// unused addresses... return bus
 		return 0
@@ -275,7 +365,7 @@ ppu_readwrite :: proc(using nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 
 		palette_mem -= 0x3F00
 
-		the_val = &ppu_palette[palette_mem]
+		the_val = &palette[palette_mem]
 	case:
 		if write {
 			fmt.eprintfln("idk what u writing here at ppu bus %X", mem)
@@ -294,7 +384,8 @@ ppu_readwrite :: proc(using nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 
 
 // loads the background shifters with data of the next tile, on the least significant byte
-load_bg_shifters :: proc(using nes: ^NES) {
+load_bg_shifters :: proc(using ppu: ^PPU) {
+
 	// patterns
 
 	// loading first bitplane of pattern tile
@@ -314,7 +405,7 @@ load_bg_shifters :: proc(using nes: ^NES) {
 }
 
 // shifts the bg shifter registers by 1 bit to the left
-shift_bg_shifters :: proc(using nes: ^NES) {
+shift_bg_shifters :: proc(using ppu: ^PPU) {
 	if ppu_mask.show_background != 0 {
 		bg_shifter_pattern_lo <<= 1
 		bg_shifter_pattern_hi <<= 1
@@ -325,11 +416,11 @@ shift_bg_shifters :: proc(using nes: ^NES) {
 
 // shifts the fg shifter registers by 1 bit to the left
 //  when some conditions are hit
-shift_fg_shifters :: proc(using nes: ^NES) {
+shift_fg_shifters :: proc(using ppu: ^PPU) {
 	// shifting sprite shifters (only when they hit the cycle)
-	if ppu_mask.show_sprites != 0 && ppu_cycle_x >= 0 && ppu_cycle_x < 258 {
+	if ppu_mask.show_sprites != 0 && cycle_x >= 0 && cycle_x < 258 {
 		for i in 0 ..< sprite_count {
-			if int(sprite_scanline[i].x) < ppu_cycle_x - 1 {
+			if int(sprite_scanline[i].x) < cycle_x - 1 {
 				sprite_shifter_pattern_lo[i] <<= 1
 				sprite_shifter_pattern_hi[i] <<= 1
 			}
@@ -337,7 +428,7 @@ shift_fg_shifters :: proc(using nes: ^NES) {
 	}
 }
 
-increment_scroll_x :: proc(using nes: ^NES) {
+increment_scroll_x :: proc(using ppu: ^PPU) {
 	if !(ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0) {
 		return
 	}
@@ -351,7 +442,7 @@ increment_scroll_x :: proc(using nes: ^NES) {
 	}
 }
 
-increment_scroll_y :: proc(using nes: ^NES) {
+increment_scroll_y :: proc(using ppu: ^PPU) {
 	if !(ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0) {
 		return
 	}
@@ -377,7 +468,7 @@ increment_scroll_y :: proc(using nes: ^NES) {
 }
 
 // what does this do? when does this get called?
-transfer_address_x :: proc(using nes: ^NES) {
+transfer_address_x :: proc(using ppu: ^PPU) {
 
 	if !(ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0) {
 		return
@@ -387,7 +478,7 @@ transfer_address_x :: proc(using nes: ^NES) {
 	current_loopy.coarse_x = temp_loopy.coarse_x
 }
 
-transfer_address_y :: proc(using nes: ^NES) {
+transfer_address_y :: proc(using ppu: ^PPU) {
 	if !(ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0) {
 		return
 	}
@@ -398,7 +489,9 @@ transfer_address_y :: proc(using nes: ^NES) {
 }
 
 // returns true if it hit a vblank
-ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) {
+ppu_tick :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
+
+	using nes.ppu
 
 	// read "PPU Rendering"
 
@@ -418,8 +511,8 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) {
 	// 337..=340: fetching nametable bytes but it is unused
 
 	// pre-render scanline
-	if ppu_scanline == -1 {
-		if ppu_cycle_x == 1 {
+	if scanline == -1 {
+		if cycle_x == 1 {
 			ppu_status.vertical_blank = 0
 			ppu_status.sprite_overflow = 0
 			ppu_status.sprite_zero_hit = 0
@@ -430,18 +523,18 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) {
 			}
 		}
 
-		if ppu_cycle_x >= 280 && ppu_cycle_x < 305 {
-			transfer_address_y(nes)
+		if cycle_x >= 280 && cycle_x < 305 {
+			transfer_address_y(&nes.ppu)
 		}
 	}
 
 	// doing all the background data loading
-	if ppu_scanline >= -1 && ppu_scanline < 240 {
-		if (ppu_cycle_x > 0 && ppu_cycle_x < 258) || (ppu_cycle_x >= 321 && ppu_cycle_x <= 336) {
-			shift_bg_shifters(nes)
-			switch (ppu_cycle_x - 1) % 8 {
+	if scanline >= -1 && scanline < 240 {
+		if (cycle_x > 0 && cycle_x < 258) || (cycle_x >= 321 && cycle_x <= 336) {
+			shift_bg_shifters(&nes.ppu)
+			switch (cycle_x - 1) % 8 {
 			case 0:
-				load_bg_shifters(nes)
+				load_bg_shifters(&nes.ppu)
 
 				// fetch the next background tile ID
 
@@ -483,101 +576,101 @@ ppu_tick :: proc(using nes: ^NES, framebuffer: ^PixelGrid) {
 				bg_next_tile_msb = ppu_read(nes, addr)
 			case 7:
 				// increment scroll x
-				increment_scroll_x(nes)
+				increment_scroll_x(&nes.ppu)
 			}
 		}
 
-		if ppu_cycle_x == 256 {
-			increment_scroll_y(nes)
+		if cycle_x == 256 {
+			increment_scroll_y(&nes.ppu)
 		}
 
-		if ppu_cycle_x == 257 {
-			load_bg_shifters(nes)
-			transfer_address_x(nes)
+		if cycle_x == 257 {
+			load_bg_shifters(&nes.ppu)
+			transfer_address_x(&nes.ppu)
 		}
 
 		// Superfluous reads of tile id at end of scanline
-		if (ppu_cycle_x == 338 || ppu_cycle_x == 340) {
+		if (cycle_x == 338 || cycle_x == 340) {
 			addr: u16 = 0x2000 | (current_loopy.reg & 0x0FFF)
 			bg_next_tile_id = ppu_read(nes, addr)
 		}
 
-		if (ppu_scanline == -1 && ppu_cycle_x >= 280 && ppu_cycle_x < 305) {
+		if (scanline == -1 && cycle_x >= 280 && cycle_x < 305) {
 			// End of vertical blank period so reset the Y address ready for rendering
-			transfer_address_y(nes)
+			transfer_address_y(&nes.ppu)
 		}
 
 		// Foreground rendering
 
-		shift_fg_shifters(nes)
+		shift_fg_shifters(&nes.ppu)
 
 		// doing it at all visible scanlines, at cycle 257 (non visible)
-		// evaluating sprites at next ppu_scanline
+		// evaluating sprites at next scanline
 
 		// This is the correct way to do it but it doesn't work
 
 		// well it seems like it works except
 		// the scroll split in smb is done 1 pixel too early
 
-		if ppu_scanline < 239 && ppu_cycle_x == 257 {
-			evaluate_sprites(nes, ppu_scanline + 1)
+		if scanline < 239 && cycle_x == 257 {
+			evaluate_sprites(&nes.ppu, scanline + 1)
 		}
 
-		if ppu_scanline < 239 && ppu_cycle_x == 340 {
-			update_sprite_shift_registers(nes, ppu_scanline + 1)
+		if scanline < 239 && cycle_x == 340 {
+			update_sprite_shift_registers(nes, scanline + 1)
 		}
 
 		// this is javidx's way and it's wrong. it's evaluating the current scanline 
 		//   but that one is already rendered!
-		// if ppu_scanline >= 0 && ppu_cycle_x == 257 {
-		// 	evaluate_sprites(nes, ppu_scanline)
+		// if scanline >= 0 && cycle_x == 257 {
+		// 	evaluate_sprites(nes, scanline)
 		// }
 
-		// if ppu_scanline <= 239 && ppu_cycle_x == 340 {
-		// 	update_sprite_shift_registers(nes, ppu_scanline)
+		// if scanline <= 239 && cycle_x == 340 {
+		// 	update_sprite_shift_registers(nes, scanline)
 		// }
 	}
 
 	// Setting vblank
-	if ppu_scanline == 241 && ppu_cycle_x == 1 {
+	if scanline == 241 && cycle_x == 1 {
 		ppu_status.vertical_blank = 1
-		vblank_hit = true
+		nes.vblank_hit = true
 		if ppu_ctrl.v != 0 {
 			// nmi(nes, false)
-			nmi_triggered = 1
+			nes.nmi_triggered = 1
 		}
 	}
 
 	/// Rendering the current pixel
-	draw_pixel(nes, framebuffer)
+	draw_pixel(&nes.ppu, framebuffer)
 
-	ppu_cycle_x += 1
-	if ppu_cycle_x >= 341 {
-		ppu_cycle_x = 0
-		ppu_scanline += 1
-		if ppu_scanline >= 261 {
-			ppu_scanline = -1
+	cycle_x += 1
+	if cycle_x >= 341 {
+		cycle_x = 0
+		scanline += 1
+		if scanline >= 261 {
+			scanline = -1
 		}
 	}
 }
 
-// Does the sprite evaluation for the next ppu_scanline
-evaluate_sprites :: proc(using nes: ^NES, current_scanline: int) {
-	// clear sprite ppu_scanline array to 0xFF
+// Does the sprite evaluation for the next scanline
+evaluate_sprites :: proc(using ppu: ^PPU, current_scanline: int) {
+	// clear sprite scanline array to 0xFF
 	slice.fill(slice.to_bytes(sprite_scanline[:]), 0xFF)
 	sprite_count = 0
 
 	oam_entry: u8
 	sprite_zero_hit_possible = false
 
-	oam_entries := slice.reinterpret([]OAMEntry, ppu_oam[:])
+	oam_entries := slice.reinterpret([]OAMEntry, oam[:])
 
 	for oam_entry < 64 && sprite_count < 9 {
 
-		// figuring out if the sprite is going to be visible on the next ppu_scanline
+		// figuring out if the sprite is going to be visible on the next scanline
 		//  by looking at the Y position and the height of the sprite
 
-		// TODO: this is like evaluating the current ppu_scanline
+		// TODO: this is like evaluating the current scanline
 		// .  but u should evaluate the next one. what's going on?
 
 		diff: u16 = u16(current_scanline) - (u16(oam_entries[oam_entry].y) + 1)
@@ -590,7 +683,7 @@ evaluate_sprites :: proc(using nes: ^NES, current_scanline: int) {
 					sprite_zero_hit_possible = true
 				}
 
-				// copy sprite to sprite ppu_scanline array
+				// copy sprite to sprite scanline array
 				sprite_scanline[sprite_count] = oam_entries[oam_entry]
 				sprite_scanline[sprite_count].y += 1
 			}
@@ -608,7 +701,9 @@ evaluate_sprites :: proc(using nes: ^NES, current_scanline: int) {
 	}
 }
 
-update_sprite_shift_registers :: proc(using nes: ^NES, current_scanline: int) {
+update_sprite_shift_registers :: proc(nes: ^NES, current_scanline: int) {
+
+	using nes.ppu
 
 	for i in 0 ..< sprite_count {
 
@@ -700,7 +795,7 @@ update_sprite_shift_registers :: proc(using nes: ^NES, current_scanline: int) {
 }
 
 // Writes a pixel in the pixel grid if it's on a visible slot
-draw_pixel :: proc(using nes: ^NES, pixel_grid: ^PixelGrid) {
+draw_pixel :: proc(using ppu: ^PPU, pixel_grid: ^PixelGrid) {
 	// checks before bothering to draw a pixel
 
 	// checks if renderer is on
@@ -709,7 +804,7 @@ draw_pixel :: proc(using nes: ^NES, pixel_grid: ^PixelGrid) {
 	}
 
 	// checks if it's on a visible pixel
-	if !(ppu_scanline >= 0 && ppu_scanline <= 239 && ppu_cycle_x > 0 && ppu_cycle_x <= 256) {
+	if !(scanline >= 0 && scanline <= 239 && cycle_x > 0 && cycle_x <= 256) {
 		return
 	}
 
@@ -739,7 +834,7 @@ draw_pixel :: proc(using nes: ^NES, pixel_grid: ^PixelGrid) {
 
 		for i in 0 ..< sprite_count {
 
-			if int(sprite_scanline[i].x) > ppu_cycle_x - 1 {
+			if int(sprite_scanline[i].x) > cycle_x - 1 {
 				continue
 			}
 
@@ -763,27 +858,27 @@ draw_pixel :: proc(using nes: ^NES, pixel_grid: ^PixelGrid) {
 	// combining background pixel and foreground pixel
 
 	pixel: u8
-	palette: u8
+	palette_final: u8
 
 	if bg_pixel == 0 && fg_pixel == 0 {
 		pixel = 0
-		palette = 0
+		palette_final = 0
 	} else if bg_pixel == 0 && fg_pixel > 0 {
 		pixel = fg_pixel
-		palette = fg_palette
+		palette_final = fg_palette
 	} else if bg_pixel > 0 && fg_pixel == 0 {
 		pixel = bg_pixel
-		palette = bg_palette
+		palette_final = bg_palette
 	} else if bg_pixel > 0 && fg_pixel > 0 {
 
 		// both bg and fg are visible.
 
 		if fg_priority != 0 {
 			pixel = fg_pixel
-			palette = fg_palette
+			palette_final = fg_palette
 		} else {
 			pixel = bg_pixel
-			palette = bg_palette
+			palette_final = bg_palette
 		}
 
 		// sprite zero hit detection
@@ -791,12 +886,12 @@ draw_pixel :: proc(using nes: ^NES, pixel_grid: ^PixelGrid) {
 			if ppu_mask.show_background != 0 && ppu_mask.show_sprites != 0 {
 
 				if ~(ppu_mask.show_left_background | ppu_mask.show_left_sprites) != 0 {
-					if ppu_cycle_x >= 9 && ppu_cycle_x <= 255 {
+					if cycle_x >= 9 && cycle_x <= 255 {
 						ppu_status.sprite_zero_hit = 1
 					}
 
 				} else {
-					if ppu_cycle_x >= 1 && ppu_cycle_x <= 255 {
+					if cycle_x >= 1 && cycle_x <= 255 {
 						ppu_status.sprite_zero_hit = 1
 					}
 				}
@@ -804,22 +899,22 @@ draw_pixel :: proc(using nes: ^NES, pixel_grid: ^PixelGrid) {
 		}
 	}
 
-	nes_color := get_color_from_palettes(nes^, pixel, palette)
+	nes_color := get_color_from_palettes(ppu^, pixel, palette_final)
 	real_color := color_map_from_nes_to_real(nes_color)
 
 	// position of pixel
-	pos_x := ppu_cycle_x - 1
-	pos_y := ppu_scanline
+	pos_x := cycle_x - 1
+	pos_y := scanline
 
 	pixel_grid.pixels[pos_y * 256 + pos_x] = real_color
 }
 
 // Gets color byte in palette, given a bg palette and a color inside the palette
-get_color_from_palettes :: proc(using nes: NES, pixel: u8, palette: u8) -> u8 {
+get_color_from_palettes :: proc(using ppu: PPU, pixel: u8, palette_idx: u8) -> u8 {
 
 	palette_start: u16
 
-	switch palette {
+	switch palette_idx {
 	case 0:
 		palette_start = 0x3F01
 	case 1:
@@ -842,8 +937,8 @@ get_color_from_palettes :: proc(using nes: NES, pixel: u8, palette: u8) -> u8 {
 
 	switch pixel {
 	case 0:
-		return nes.ppu_palette[0]
+		return palette[0]
 	case:
-		return nes.ppu_palette[palette_start + u16(pixel) - 1]
+		return palette[palette_start + u16(pixel) - 1]
 	}
 }

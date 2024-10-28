@@ -276,8 +276,8 @@ instr_brk :: proc(using nes: ^NES, mem: u16) {
 	// 	nmi_type,
 	// 	old_pc,
 	// 	program_counter,
-	// 	ppu_cycle_x,
-	// 	ppu_scanline,
+	// 	cycle_x,
+	// 	scanline,
 	// )
 
 	// cycles += 7

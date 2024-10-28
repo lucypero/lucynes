@@ -159,18 +159,18 @@ FaultyOp :: struct {
 }
 
 InstructionInfo :: struct {
-	pc: u16,
+	pc:      u16,
 	next_pc: u16, // The next position of the PC like, for real
 	// you can find out the rest from the PC.
 	// you can add other state later.
 }
 
 RingThing :: struct($ring_size: uint, $T: typeid) {
-	buf: [ring_size]T,
+	buf:         [ring_size]T,
 	last_placed: int,
 }
 
-ringthing_add :: proc(using ringthing: ^$R/RingThing($N, $T), data: T) {
+ringthing_add :: proc(using ringthing: ^RingThing($N, $T), data: T) {
 	last_placed += 1
 	if last_placed >= len(buf) {
 		last_placed = 0
@@ -194,12 +194,9 @@ NES :: struct {
 	prg_ram:                        []u8,
 	mapper_data:                    MapperData,
 	nmi_triggered:                  int,
-	// Times the PPU ran ahead of time before the normal ppu_tick time
-	ppu_ran_ahead:                  uint,
 
 	// DEBUGGING
-	instr_history: RingThing(prev_instructions_count, InstructionInfo),
-
+	instr_history:                  RingThing(prev_instructions_count, InstructionInfo),
 	nmi_was_triggered:              bool,
 	faulty_ops:                     map[u8]FaultyOp,
 	read_writes:                    uint,
@@ -213,84 +210,7 @@ NES :: struct {
 	poll_input:                     bool,
 
 	// PPU stuff
-	ppu_memory:                     [2 * 1024]u8, // stores 2 nametables
-	ppu_palette:                    [32]u8, // internal memory inside the PPU, stores palette data
-	ppu_oam:                        [256]u8, // OAM data, inside the PPU
-	ppu_oam_address:                u8,
-	ppu_cycle_x:                    int, // current ppu cycle horizontally in the scanline (0..=340)
-	ppu_scanline:                   int, // current ppu scanline (-1..=260)
-
-	//NOTE: if everything is stored in loopy, then this is all redundant state, no?
-	// consider deleting all this
-	ppu_ctrl:                       struct #raw_union {
-		// VPHB SINN
-		using flags: bit_field u8 {
-			n: u8 | 2,
-			i: u8 | 1,
-			s: u8 | 1, // sprite pattern table address for 8x8 sprites (0: $0000, 1: $1000)
-			b: u8 | 1, // bg pattern table address (0: $0000, 1: $1000)
-			h: u8 | 1, // sprite size (0: 8x8, 1: 8x16)
-			p: u8 | 1,
-			v: u8 | 1,
-		},
-		reg:         u8,
-	},
-	ppu_mask:                       struct #raw_union {
-		// BGRs bMmG
-		using flags: bit_field u8 {
-			greyscale:            u8 | 1,
-			show_left_background: u8 | 1,
-			show_left_sprites:    u8 | 1,
-			show_background:      u8 | 1,
-			show_sprites:         u8 | 1,
-			emphasize_red:        u8 | 1,
-			emphasize_green:      u8 | 1,
-			emphasize_blue:       u8 | 1,
-		},
-		reg:         u8,
-	},
-	ppu_status:                     struct #raw_union {
-		// VSO. ....
-		using flags: bit_field u8 {
-			open_bus:        u8 | 5,
-			sprite_overflow: u8 | 1,
-			sprite_zero_hit: u8 | 1,
-			vertical_blank:  u8 | 1,
-		},
-		reg:         u8,
-	},
-	ppu_buffer_read:                u8,
-
-	// ppu internals: new model: the ppu loopy model
-	current_loopy:                  LoopyRegister,
-	temp_loopy:                     LoopyRegister,
-	ppu_x:                          u8, // fine x scroll (3 bits)
-	ppu_w:                          bool, // First or second write toggle (1 bit)
-
-
-	// data for rendering the next pixel
-	// TODO: what is this? i thought all the state required was the 4 variables above.
-	// idk look into it.
-	bg_next_tile_id:                u8,
-	bg_next_tile_attrib:            u8,
-	bg_next_tile_lsb:               u8, // bitplane of pattern tile
-	bg_next_tile_msb:               u8, // bitplane 2 of pattern tile
-
-	// background shift registers
-	bg_shifter_pattern_lo:          u16,
-	bg_shifter_pattern_hi:          u16,
-	bg_shifter_attrib_lo:           u16,
-	bg_shifter_attrib_hi:           u16,
-	sprite_scanline:                [8]OAMEntry, // the 8 possible sprites in a scanline
-	sprite_count:                   u8, // to track how many sprites are in the next scanline
-
-	// sprite shift registers
-	sprite_shifter_pattern_lo:      [8]u8,
-	sprite_shifter_pattern_hi:      [8]u8,
-
-	// sprite zero collision flags
-	sprite_zero_hit_possible:       bool, // if a SZH is possible in the next scanline
-	sprite_zero_being_rendered:     bool,
+	ppu:                            PPU,
 
 	// APU state
 	apu:                            APU,

@@ -16,7 +16,7 @@ debug_text_color := rl.WHITE
 debug_text_active_color := rl.SKYBLUE
 vertical_spacing := font.baseSize - 5
 
-draw_cpu_thing :: proc(nes: NES, b: ^strings.Builder, ypos: f32, name: string, thing_value: u16, draw_base_10: bool) {
+draw_cpu_thing :: proc(b: ^strings.Builder, ypos: f32, name: string, thing_value: u16, draw_base_10: bool) {
 	strings.builder_reset(b)
 	strings.write_string(b, name)
 	strings.write_string(b, ": $")
@@ -30,6 +30,16 @@ draw_cpu_thing :: proc(nes: NES, b: ^strings.Builder, ypos: f32, name: string, t
 	the_str = strings.to_upper(the_str)
 	the_cstr := strings.clone_to_cstring(the_str)
 	rl.DrawTextEx(font, the_cstr, {debug_x_start, ypos}, f32(font.baseSize), 0, debug_text_color)
+}
+
+
+draw_ppu_state :: proc(nes: NES, ypos: f32) -> f32 {
+    ypos := ypos
+
+
+
+
+    return ypos
 }
 
 draw_cpu_state :: proc(nes: NES) -> f32 {
@@ -117,23 +127,23 @@ draw_cpu_state :: proc(nes: NES) -> f32 {
 	ypos += f32(vertical_spacing)
 
 	// PC
-	draw_cpu_thing(nes, &b, ypos, "PC", nes.program_counter, false)
+	draw_cpu_thing(&b, ypos, "PC", nes.program_counter, false)
 	ypos += f32(vertical_spacing)
 
 	// A
-	draw_cpu_thing(nes, &b, ypos, "A", u16(nes.accumulator), true)
+	draw_cpu_thing(&b, ypos, "A", u16(nes.accumulator), true)
 	ypos += f32(vertical_spacing)
 
 	// X
-	draw_cpu_thing(nes, &b, ypos, "X", u16(nes.index_x), true)
+	draw_cpu_thing(&b, ypos, "X", u16(nes.index_x), true)
 	ypos += f32(vertical_spacing)
 
 	// Y
-	draw_cpu_thing(nes, &b, ypos, "Y", u16(nes.index_y), true)
+	draw_cpu_thing(&b, ypos, "Y", u16(nes.index_y), true)
 	ypos += f32(vertical_spacing)
 
 	// Stack P
-	draw_cpu_thing(nes, &b, ypos, "Stack P", u16(nes.stack_pointer), false)
+	draw_cpu_thing(&b, ypos, "Stack P", u16(nes.stack_pointer), false)
 	ypos += f32(vertical_spacing)
 
 
@@ -149,6 +159,20 @@ draw_debugger :: proc(nes: NES) {
 
 	// Drawing CPU State
 	ypos = draw_cpu_state(nes)
+
+	// Line
+
+	rl.DrawLine(
+		debug_x_start,
+		c.int(ypos + (f32(vertical_spacing) / 2)),
+		debug_x_start + debug_width - 10,
+		c.int(ypos + (f32(vertical_spacing) / 2)),
+		debug_text_color,
+	)
+	ypos += f32(vertical_spacing)
+
+    // Draw PPU State
+    ypos = draw_ppu_state(nes, ypos)
 
 	// Line
 
