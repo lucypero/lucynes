@@ -140,18 +140,8 @@ so this only happens when NMI is triggered on the real NES when LDA is being exe
 
 # todo
 
-- Look into turning your emulator more accurate by interleaving PPU calls in your cpu instructions and such.
-	https://www.nesdev.org/wiki/Catch-up
-
-	do this:
-
-	https://forums.nesdev.org/viewtopic.php?t=24939
-
 - an article on 6502 interrupts
 	http://wilsonminesco.com/6502interrupts/
-
-- make bomberman run. it might be a NMI thing.
-	https://forums.nesdev.org/viewtopic.php?t=12222&sid=5198a50987eb742fe2fd2361ed224335&start=15
 
 - Wrap up audio
 	- Make Mario sound normal

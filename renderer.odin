@@ -107,7 +107,7 @@ window_main :: proc() {
 	rl.SetWindowPosition(20, 50)
 	rl.SetTargetFPS(target_fps)
 
-	font = rl.LoadFontEx("fonts/JetBrainsMono-Medium.ttf", font_size, nil, 250)
+	font = rl.LoadFontEx("fonts/JetBrainsMono-Bold.ttf", font_size, nil, 250)
 
 	pixels := make([]rl.Color, framebuffer_width * framebuffer_height)
 
