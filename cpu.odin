@@ -345,6 +345,7 @@ read_u16_le :: proc(nes: ^NES, addr: u16) -> u16 {
 get_instr_str_builder :: proc(nes: NES, pc: u16) -> (b: strings.Builder, next_pc: u16) {
 
 	b = strings.builder_make_len_cap(0, 10)
+	strings.write_string(&b, "$")
 	strings.write_int(&b, int(pc), 16)
 	strings.write_string(&b, ": ")
 	was_written := true

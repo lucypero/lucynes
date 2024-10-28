@@ -97,12 +97,17 @@ send_samples := true
 
 pixel_grid : PixelGrid
 
+font : rl.Font
+font_size :: 30
+
 window_main :: proc() {
 
 	rl.SetTraceLogLevel(.ERROR)
 	rl.InitWindow(screen_width, screen_height, "lucynes")
 	rl.SetWindowPosition(20, 50)
 	rl.SetTargetFPS(target_fps)
+
+	font = rl.LoadFontEx("fonts/JetBrainsMono-Medium.ttf", font_size, nil, 250)
 
 	pixels := make([]rl.Color, framebuffer_width * framebuffer_height)
 
@@ -273,22 +278,16 @@ draw_debugger :: proc(nes : NES) {
 		col := rl.WHITE
 
 		if i == the_buf_len - 1 {
-			col = rl.BLUE
+			col = rl.SKYBLUE
 		}
 
-		rl.DrawText(c_str, nes_width * scale_factor + 5, 1 + i32(i) * 26, 30, col)
+		rl.DrawTextEx(
+				font, c_str, {nes_width * scale_factor + 5, f32(1 + i32(i) * (font.baseSize - 5))},
+		 		f32(font.baseSize),
+				0,
+				col
+			)
 	}
-
-	// b, next_pc := print_instr(nes)
-	// fmt.println(strings.to_string(b))
-	
-	// the_str := strings.to_string(b)
-
-	// c_str := strings.clone_to_cstring(the_str)
-	// rl.DrawText(c_str, nes_width * scale_factor + 1, 20, 25, rl.WHITE)
-	// rl.DrawText("hello how are u", nes_width * scale_factor + 1, 100, 25, rl.WHITE)
-
-	// free(&b)
 }
 
 clear_pixels :: proc(pixels: []rl.Color, color: rl.Color) {
