@@ -16,37 +16,97 @@ debug_text_color := rl.WHITE
 debug_text_active_color := rl.SKYBLUE
 vertical_spacing := font.baseSize - 5
 
-draw_cpu_thing :: proc(b: ^strings.Builder, ypos: f32, name: string, thing_value: u16, draw_base_10: bool) {
+PaddingType :: enum {
+	ShowTwo,
+	ShowFour,
+}
+
+// Assuming base 16
+write_with_padding :: proc(b: ^strings.Builder, thing_value: int, digits_count: PaddingType) {
+
+	switch digits_count {
+	case .ShowTwo:
+		if thing_value <= 0xF {
+			strings.write_string(b, "0")
+		}
+	case .ShowFour:
+		if thing_value <= 0xF {
+			strings.write_string(b, "000")
+		} else if thing_value <= 0xFF {
+			strings.write_string(b, "00")
+		} else if thing_value <= 0xFFF {
+			strings.write_string(b, "0")
+		}
+	}
+
+	strings.write_int(b, thing_value, 16)
+}
+
+NumberDisplay :: enum {
+	Base10,
+	Base16,
+	Base16With10,
+}
+
+draw_cpu_thing :: proc(
+	b: ^strings.Builder,
+	ypos: f32,
+	name: string,
+	thing_value: int,
+	number_display: NumberDisplay,
+	digits_count: PaddingType = .ShowTwo,
+	x_offset: f32 = 0,
+) {
 	strings.builder_reset(b)
 	strings.write_string(b, name)
-	strings.write_string(b, ": $")
-	strings.write_uint(b, uint(thing_value), 16)
-	if draw_base_10 {
+	strings.write_string(b, ": ")
+
+	switch number_display {
+	case .Base10:
+		strings.write_int(b, thing_value)
+	case .Base16:
+		strings.write_string(b, "$")
+		write_with_padding(b, thing_value, digits_count)
+	case .Base16With10:
+		strings.write_string(b, "$")
+		write_with_padding(b, thing_value, digits_count)
 		strings.write_string(b, " [")
-		strings.write_uint(b, uint(thing_value))
+		strings.write_int(b, thing_value)
 		strings.write_string(b, "]")
 	}
+
 	the_str := strings.to_string(b^)
 	the_str = strings.to_upper(the_str)
 	the_cstr := strings.clone_to_cstring(the_str)
-	rl.DrawTextEx(font, the_cstr, {debug_x_start, ypos}, f32(font.baseSize), 0, debug_text_color)
+	rl.DrawTextEx(font, the_cstr, {debug_x_start + x_offset, ypos}, f32(font.baseSize), 0, debug_text_color)
 }
-
 
 draw_ppu_state :: proc(nes: NES, ypos: f32) -> f32 {
-    ypos := ypos
+	ypos := ypos
 
+	using nes.ppu
 
+	// rl.DrawTextEx(font, "CYCLE: ", {debug_x_start, ypos}, f32(font.baseSize), 0, debug_text_color)
 
+	b := strings.builder_make_len_cap(0, 10)
+	draw_cpu_thing(&b, ypos, "CYC", cycle_x, .Base10, x_offset = 0)
+	draw_cpu_thing(&b, ypos, "SCN", scanline, .Base10, x_offset = 150)
+	ypos += f32(vertical_spacing)
+	draw_cpu_thing(&b, ypos, "PPUCTRL", int(ppu_ctrl.reg), .Base16, x_offset = 0)
+	ypos += f32(vertical_spacing)
+	draw_cpu_thing(&b, ypos, "PPUMASK", int(ppu_mask.reg), .Base16, x_offset = 0)
+	ypos += f32(vertical_spacing)
+	draw_cpu_thing(&b, ypos, "PPUSTATUS", int(ppu_status.reg), .Base16, x_offset = 0)
+	ypos += f32(vertical_spacing)
 
-    return ypos
+	return ypos
 }
 
-draw_cpu_state :: proc(nes: NES) -> f32 {
+draw_cpu_state :: proc(ypos: f32, nes: NES) -> f32 {
+
+	ypos := ypos
 
 	// Status
-
-	ypos: f32 = 1
 
 	rl.DrawTextEx(font, "STATUS: ", {debug_x_start, ypos}, f32(font.baseSize), 0, debug_text_color)
 
@@ -127,23 +187,23 @@ draw_cpu_state :: proc(nes: NES) -> f32 {
 	ypos += f32(vertical_spacing)
 
 	// PC
-	draw_cpu_thing(&b, ypos, "PC", nes.program_counter, false)
+	draw_cpu_thing(&b, ypos, "PC", int(nes.program_counter), .Base16, digits_count = .ShowFour)
 	ypos += f32(vertical_spacing)
 
 	// A
-	draw_cpu_thing(&b, ypos, "A", u16(nes.accumulator), true)
+	draw_cpu_thing(&b, ypos, "A", int(nes.accumulator), .Base16With10)
 	ypos += f32(vertical_spacing)
 
 	// X
-	draw_cpu_thing(&b, ypos, "X", u16(nes.index_x), true)
+	draw_cpu_thing(&b, ypos, "X", int(nes.index_x), .Base16With10)
 	ypos += f32(vertical_spacing)
 
 	// Y
-	draw_cpu_thing(&b, ypos, "Y", u16(nes.index_y), true)
+	draw_cpu_thing(&b, ypos, "Y", int(nes.index_y), .Base16With10)
 	ypos += f32(vertical_spacing)
 
 	// Stack P
-	draw_cpu_thing(&b, ypos, "Stack P", u16(nes.stack_pointer), false)
+	draw_cpu_thing(&b, ypos, "SP", int(nes.stack_pointer), .Base16)
 	ypos += f32(vertical_spacing)
 
 
@@ -155,10 +215,10 @@ draw_debugger :: proc(nes: NES) {
 	context.allocator = context.temp_allocator
 	vertical_spacing = font.baseSize - 5
 
-	ypos: f32
+	ypos: f32 = 1
 
 	// Drawing CPU State
-	ypos = draw_cpu_state(nes)
+	ypos = draw_cpu_state(ypos, nes)
 
 	// Line
 
@@ -171,8 +231,8 @@ draw_debugger :: proc(nes: NES) {
 	)
 	ypos += f32(vertical_spacing)
 
-    // Draw PPU State
-    ypos = draw_ppu_state(nes, ypos)
+	// Draw PPU State
+	ypos = draw_ppu_state(nes, ypos)
 
 	// Line
 
@@ -231,14 +291,7 @@ draw_debugger :: proc(nes: NES) {
 			col = debug_text_active_color
 		}
 
-		rl.DrawTextEx(
-			font,
-			c_str,
-			{debug_x_start, ypos},
-			f32(font.baseSize),
-			0,
-			col,
-		)
+		rl.DrawTextEx(font, c_str, {debug_x_start, ypos}, f32(font.baseSize), 0, col)
 
 		ypos += f32(vertical_spacing)
 	}
@@ -248,7 +301,7 @@ get_instr_str_builder :: proc(nes: NES, pc: u16) -> (b: strings.Builder, next_pc
 
 	b = strings.builder_make_len_cap(0, 10)
 	strings.write_string(&b, "$")
-	strings.write_int(&b, int(pc), 16)
+	write_with_padding(&b, int(pc), .ShowFour)
 	strings.write_string(&b, ": ")
 	was_written := true
 
@@ -256,7 +309,15 @@ get_instr_str_builder :: proc(nes: NES, pc: u16) -> (b: strings.Builder, next_pc
 
 	opcode := fake_read(nes, pc)
 
-	write_instr :: proc(nes: NES, pc: u16, instr_name: string, addr_mode: AddressMode, b: ^strings.Builder) -> (pc_advance: u16) {
+	write_instr :: proc(
+		nes: NES,
+		pc: u16,
+		instr_name: string,
+		addr_mode: AddressMode,
+		b: ^strings.Builder,
+	) -> (
+		pc_advance: u16,
+	) {
 		strings.write_string(b, instr_name)
 		switch addr_mode {
 		case .Implicit:
@@ -269,76 +330,76 @@ get_instr_str_builder :: proc(nes: NES, pc: u16) -> (b: strings.Builder, next_pc
 			// Immediate
 			strings.write_string(b, " #")
 			immediate_val := fake_read(nes, pc + 1)
-			strings.write_int(b, int(immediate_val), 16)
+			write_with_padding(b, int(immediate_val), .ShowTwo)
 		case .ZeroPage:
 			pc_advance += 2
 			// zp
 			strings.write_string(b, " $")
 			immediate_val := fake_read(nes, pc + 1)
-			strings.write_int(b, int(immediate_val), 16)
+			write_with_padding(b, int(immediate_val), .ShowTwo)
 		case .ZeroPageX:
 			pc_advance += 2
 			// zpx
 			strings.write_string(b, " $")
 			immediate_val := fake_read(nes, pc + 1)
-			strings.write_int(b, int(immediate_val), 16)
+			write_with_padding(b, int(immediate_val), .ShowTwo)
 			strings.write_string(b, ",X")
 		case .ZeroPageY:
 			pc_advance += 2
 			// zpx
 			strings.write_string(b, " $")
 			immediate_val := fake_read(nes, pc + 1)
-			strings.write_int(b, int(immediate_val), 16)
+			write_with_padding(b, int(immediate_val), .ShowTwo)
 			strings.write_string(b, ",Y")
 		case .Relative:
 			pc_advance += 2
 			strings.write_string(b, " -> $")
 			addr_1 := i8(fake_read(nes, pc + 1))
-            jumped_to_pc := pc + u16(addr_1) + 2
-			strings.write_uint(b, uint(jumped_to_pc), 16)
+			jumped_to_pc := pc + u16(addr_1) + 2
+			write_with_padding(b, int(jumped_to_pc), .ShowFour)
 		case .Absolute:
 			pc_advance += 3
 			strings.write_string(b, " $")
 			addr_1 := fake_read(nes, pc + 1)
 			addr_2 := fake_read(nes, pc + 2)
-			strings.write_int(b, int(addr_2), 16)
-			strings.write_int(b, int(addr_1), 16)
+			write_with_padding(b, int(addr_2), .ShowTwo)
+			write_with_padding(b, int(addr_1), .ShowTwo)
 		case .AbsoluteX:
 			pc_advance += 3
 			// absolute, x
 			strings.write_string(b, " $")
 			addr_1 := fake_read(nes, pc + 1)
 			addr_2 := fake_read(nes, pc + 2)
-			strings.write_int(b, int(addr_2), 16)
-			strings.write_int(b, int(addr_1), 16)
+			write_with_padding(b, int(addr_2), .ShowTwo)
+			write_with_padding(b, int(addr_1), .ShowTwo)
 			strings.write_string(b, ",X")
 		case .AbsoluteY:
 			pc_advance += 3
 			strings.write_string(b, " $")
 			addr_1 := fake_read(nes, pc + 1)
 			addr_2 := fake_read(nes, pc + 2)
-			strings.write_int(b, int(addr_2), 16)
-			strings.write_int(b, int(addr_1), 16)
+			write_with_padding(b, int(addr_2), .ShowTwo)
+			write_with_padding(b, int(addr_1), .ShowTwo)
 			strings.write_string(b, ",Y")
 		case .Indirect:
 			pc_advance += 3
 			strings.write_string(b, " -> ($")
 			addr_1 := fake_read(nes, pc + 1)
 			addr_2 := fake_read(nes, pc + 2)
-			strings.write_int(b, int(addr_2), 16)
-			strings.write_int(b, int(addr_1), 16)
+			write_with_padding(b, int(addr_2), .ShowTwo)
+			write_with_padding(b, int(addr_1), .ShowTwo)
 			strings.write_string(b, ")")
 		case .IndirectX:
 			pc_advance += 2
 			strings.write_string(b, " ($")
 			addr_1 := fake_read(nes, pc + 1)
-			strings.write_int(b, int(addr_1), 16)
+			write_with_padding(b, int(addr_1), .ShowTwo)
 			strings.write_string(b, ",X)")
 		case .IndirectY:
 			pc_advance += 2
 			strings.write_string(b, " ($")
 			addr_1 := fake_read(nes, pc + 1)
-			strings.write_int(b, int(addr_1), 16)
+			write_with_padding(b, int(addr_1), .ShowTwo)
 			strings.write_string(b, "),Y")
 		}
 
