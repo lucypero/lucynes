@@ -271,6 +271,11 @@ draw_debugger :: proc(nes: NES) {
 			// We're in the past or present, looking at instructions already ran.
 			instr_info = nes.instr_history.buf[the_indx]
 			builder, _ = get_instr_str_builder(nes, instr_info.pc)
+
+			if instr_info.triggered_nmi {
+				strings.write_string(&builder, " - [NMI!]")
+			}
+
 			next_pc = instr_info.next_pc
 
 			the_indx += 1

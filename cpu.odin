@@ -1117,13 +1117,13 @@ run_instruction :: proc(using nes: ^NES) {
 	}
 
 	instr_inf.next_pc = program_counter
+	instr_inf.triggered_nmi = nmi_triggered != 0
 	ringthing_add(&instr_history, instr_inf)
 	flags += {.NoEffect1}
 }
 
 reset_debugging_vars :: proc(using nes: ^NES) {
 	read_writes = 0
-	nmi_was_triggered = false
 }
 
 instruction_tick :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8, pixel_grid: ^PixelGrid) {
@@ -1140,7 +1140,6 @@ instruction_tick :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8, pi
 	if nmi_triggered != 0 {
 		nmi(nes, nmi_triggered)
 		nmi_triggered = 0
-		nmi_was_triggered = true
 	}
 
 	// Input

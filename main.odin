@@ -161,6 +161,7 @@ FaultyOp :: struct {
 InstructionInfo :: struct {
 	pc:      u16,
 	next_pc: u16, // The next position of the PC like, for real
+	triggered_nmi: bool
 	// you can find out the rest from the PC.
 	// you can add other state later.
 }
@@ -197,7 +198,6 @@ NES :: struct {
 
 	// DEBUGGING
 	instr_history:                  RingThing(prev_instructions_count, InstructionInfo),
-	nmi_was_triggered:              bool,
 	faulty_ops:                     map[u8]FaultyOp,
 	read_writes:                    uint,
 
