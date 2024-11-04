@@ -6,6 +6,7 @@ import "core:math"
 import "core:os"
 import "core:mem"
 import "core:strings"
+import "core:strconv"
 import rl "vendor:raylib"
 
 scale_factor :: 5
@@ -100,7 +101,28 @@ pixel_grid: PixelGrid
 font: rl.Font
 font_size :: 30
 
+AppState :: struct {
+	paused:              bool, // Is NES emulation paused?
+	in_menu:             bool, // Showing HUD?
+
+	// Menu state
+	item_selected:       int,
+	item_count:          int,
+	break_on_nmi:        bool,
+	break_on_game_start: bool, // not used
+	break_on_given_pc:   bool,
+	given_pc_b:          strings.Builder,
+	given_pc_str:        string,
+	given_pc:            u16,
+}
+
+app_state: AppState
+
 window_main :: proc() {
+
+	app_state = {}
+	app_state.given_pc_b = strings.builder_make_len_cap(0, 10)
+	app_state.item_count = 3
 
 	rl.SetTraceLogLevel(.ERROR)
 	rl.InitWindow(screen_width, screen_height, "lucynes")
@@ -158,21 +180,17 @@ window_main :: proc() {
 		// clear_pixels(pixels, rl.BLACK)
 
 		// doing input
-
 		if rl.IsKeyDown(.ENTER) {
 			// reset nes
 			nes_reset(&nes, rom_in_nes)
 		}
 
 		if rl.IsKeyPressed(.P) {
-			// send_samples = !send_samples
 			paused = !paused
-
 		}
 
 		if rl.IsKeyPressed(.F10) {
 			// run one instruction
-			// send_samples = !send_samples
 			if paused {
 				instruction_tick(&nes, 0, 0, &pixel_grid)
 				reset_debugging_vars(&nes)
@@ -218,7 +236,10 @@ window_main :: proc() {
 
 		// run nes till vblank
 		if !paused {
-			tick_nes_till_vblank(&nes, port_0_input, port_1_input, &pixel_grid)
+			broke := tick_nes_till_vblank(&nes, port_0_input, port_1_input, &pixel_grid)
+			if broke {
+				paused = true
+			}
 		}
 
 		// here you modify the pixels (draw the frame)
@@ -228,11 +249,153 @@ window_main :: proc() {
 		rl.DrawTextureEx(checked, {0, 0}, 0, scale_factor, rl.WHITE)
 		draw_debugger(nes)
 
+		if rl.IsKeyPressed(.F1) {
+			// draw GUI
+			app_state.in_menu = !app_state.in_menu
+		}
+
+		if app_state.in_menu {
+			draw_menu()
+		}
+
 		rl.EndDrawing()
 		free_all(context.temp_allocator)
 	}
 
 	print_faulty_ops(&nes)
+}
+
+is_key_hex :: proc(key: rune) -> bool {
+	switch key {
+		case '0'..='9':
+			return true
+		case 'a'..='f':
+			return true
+	}
+	return false
+}
+
+draw_menu :: proc() {
+
+	context.allocator = context.temp_allocator
+
+	// Handle menu input
+
+	if rl.IsKeyPressed(.UP) {
+		app_state.item_selected -= 1
+		if app_state.item_selected < 0 {
+			app_state.item_selected = app_state.item_count - 1
+		}
+	}
+
+	if rl.IsKeyPressed(.DOWN) {
+		app_state.item_selected += 1
+		if app_state.item_selected >= app_state.item_count {
+			app_state.item_selected = 0
+		}
+	}
+
+	if rl.IsKeyPressed(.SPACE) {
+		switch app_state.item_selected {
+		case 0:
+			app_state.break_on_nmi = !app_state.break_on_nmi
+		case 1:
+			app_state.break_on_game_start = !app_state.break_on_game_start
+		case 2:
+			app_state.break_on_given_pc = !app_state.break_on_given_pc
+		}
+	}
+
+	if app_state.item_selected == 2 {
+		// handle_pc_input()
+		key := rl.GetCharPressed()
+
+		if is_key_hex(key) {
+			if strings.builder_len(app_state.given_pc_b) >= 4 {
+				strings.builder_reset(&app_state.given_pc_b)
+			}
+
+			strings.write_rune(&app_state.given_pc_b, key)
+
+			// update pc
+
+			the_str := strings.to_string(app_state.given_pc_b)
+			the_n, ok := strconv.parse_uint(the_str, 16)
+			app_state.given_pc = u16(the_n)
+		}
+
+	}
+
+	// Handle menu drawing
+
+	menu_bg: rl.Color = {0, 0, 0, 100} // Black
+	menu_x_start: f32 = 3
+	current_color := debug_text_color
+
+	ypos: f32 = 1
+
+	// draw menu
+	rl.DrawRectangle(0, 0, nes_width * scale_factor, 300, menu_bg)
+
+	if app_state.item_selected == 0 {
+		current_color = debug_text_active_color
+	} else {
+		current_color = debug_text_color
+	}
+
+	b := strings.builder_make_len_cap(0, 40)
+
+	for i in 0 ..< app_state.item_count {
+		draw_menu_item(&b, i, menu_x_start, ypos)
+		ypos += f32(vertical_spacing)
+	}
+}
+
+draw_menu_item :: proc(b: ^strings.Builder, item_n: int, menu_x_start, ypos: f32) {
+
+	strings.builder_reset(b)
+	strings.write_string(b, "[")
+
+	// is it ticked
+	is_ticked := false
+
+	switch item_n {
+	case 0:
+		is_ticked = app_state.break_on_nmi
+	case 1:
+		is_ticked = app_state.break_on_game_start
+	case 2:
+		is_ticked = app_state.break_on_given_pc
+	}
+
+	if is_ticked {
+		strings.write_string(b, "X")
+	} else {
+		strings.write_string(b, " ")
+	}
+
+	strings.write_string(b, "] - ")
+
+	switch item_n {
+	case 0:
+		strings.write_string(b, "Break on NMI")
+	case 1:
+		strings.write_string(b, "Break on Game Start")
+	case 2:
+		strings.write_string(b, "Break on PC: ")
+		strings.write_string(b, strings.to_string(app_state.given_pc_b))
+	}
+
+	current_color := debug_text_color
+
+	if app_state.item_selected == item_n {
+		current_color = debug_text_active_color
+	}
+
+	the_str := strings.to_string(b^)
+	the_cstr := strings.clone_to_cstring(the_str)
+
+	rl.DrawTextEx(font, the_cstr, {menu_x_start, ypos}, f32(font.baseSize), 0, current_color)
 }
 
 clear_pixels :: proc(pixels: []rl.Color, color: rl.Color) {

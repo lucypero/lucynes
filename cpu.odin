@@ -347,7 +347,7 @@ run_instruction :: proc(using nes: ^NES) {
 	// get first byte of instruction
 	instr := read(nes, program_counter)
 
-	instr_inf : InstructionInfo
+	instr_inf: InstructionInfo
 	instr_inf.pc = program_counter
 
 	// if program_counter == 0xBC50 {
@@ -1170,20 +1170,48 @@ instruction_tick :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8, pi
 
 }
 
-tick_nes_till_vblank :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8, pixel_grid: ^PixelGrid) {
+// It stops at breakpoints
+// if it stops at breakpoints, returns true
+tick_nes_till_vblank :: proc(
+	using nes: ^NES,
+	port_0_input: u8,
+	port_1_input: u8,
+	pixel_grid: ^PixelGrid,
+) -> (
+	broke: bool,
+) {
 
 	reset_debugging_vars(nes)
 
 	// running instructions forever
 	for true {
+
+		// break at given PC
+		if app_state.break_on_given_pc && app_state.given_pc == program_counter {
+			return true
+		}
+
 		instruction_tick(nes, port_0_input, port_1_input, pixel_grid)
 		reset_debugging_vars(nes)
 
+		instr_info := instr_history.buf[instr_history.last_placed]
+
+		if app_state.break_on_nmi && instr_info.triggered_nmi {
+			return true
+		}
+
+		// breaking at NMI. 
+		// if instr_info.triggered_nmi {
+		// 	return true;
+		// }
+
 		if vblank_hit {
 			vblank_hit = false
-			return
+			return false
 		}
 	}
+
+	return false
 }
 
 print_faulty_ops :: proc(nes: ^NES) {
