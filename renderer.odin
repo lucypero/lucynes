@@ -112,7 +112,6 @@ AppState :: struct {
 	break_on_game_start: bool, // not used
 	break_on_given_pc:   bool,
 	given_pc_b:          strings.Builder,
-	given_pc_str:        string,
 	given_pc:            u16,
 }
 
@@ -267,10 +266,10 @@ window_main :: proc() {
 
 is_key_hex :: proc(key: rune) -> bool {
 	switch key {
-		case '0'..='9':
-			return true
-		case 'a'..='f':
-			return true
+	case '0' ..= '9':
+		return true
+	case 'a' ..= 'f':
+		return true
 	}
 	return false
 }
@@ -312,18 +311,18 @@ draw_menu :: proc() {
 
 		if is_key_hex(key) {
 			if strings.builder_len(app_state.given_pc_b) >= 4 {
+				temp := strings.to_string(app_state.given_pc_b)[1:]
 				strings.builder_reset(&app_state.given_pc_b)
+				strings.write_string(&app_state.given_pc_b, temp)
 			}
 
 			strings.write_rune(&app_state.given_pc_b, key)
 
 			// update pc
-
 			the_str := strings.to_string(app_state.given_pc_b)
 			the_n, ok := strconv.parse_uint(the_str, 16)
 			app_state.given_pc = u16(the_n)
 		}
-
 	}
 
 	// Handle menu drawing
@@ -383,7 +382,9 @@ draw_menu_item :: proc(b: ^strings.Builder, item_n: int, menu_x_start, ypos: f32
 		strings.write_string(b, "Break on Game Start")
 	case 2:
 		strings.write_string(b, "Break on PC: ")
-		strings.write_string(b, strings.to_string(app_state.given_pc_b))
+		the_str := strings.to_string(app_state.given_pc_b)
+		the_str = strings.to_upper(the_str)
+		strings.write_string(b, the_str)
 	}
 
 	current_color := debug_text_color
