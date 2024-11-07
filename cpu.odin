@@ -1174,6 +1174,7 @@ instruction_tick :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8, pi
 // if it stops at breakpoints, returns true
 tick_nes_till_vblank :: proc(
 	using nes: ^NES,
+	tick_force: bool, // force running at least one tick, ignoring breakpoints
 	port_0_input: u8,
 	port_1_input: u8,
 	pixel_grid: ^PixelGrid,
@@ -1187,7 +1188,7 @@ tick_nes_till_vblank :: proc(
 	for true {
 
 		// break at given PC
-		if app_state.break_on_given_pc && app_state.given_pc == program_counter {
+		if !tick_force && app_state.break_on_given_pc && app_state.given_pc == program_counter {
 			return true
 		}
 
@@ -1196,7 +1197,7 @@ tick_nes_till_vblank :: proc(
 
 		instr_info := instr_history.buf[instr_history.last_placed]
 
-		if app_state.break_on_nmi && instr_info.triggered_nmi {
+		if !tick_force && app_state.break_on_nmi && instr_info.triggered_nmi {
 			return true
 		}
 

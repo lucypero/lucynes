@@ -48,6 +48,15 @@ NumberDisplay :: enum {
 	Base16With10,
 }
 
+draw_text :: proc(b: ^strings.Builder, ypos: f32, name: string, x_offset: f32 = 0) {
+	strings.builder_reset(b)
+	strings.write_string(b, name)
+	the_str := strings.to_string(b^)
+	the_str = strings.to_upper(the_str)
+	the_cstr := strings.clone_to_cstring(the_str)
+	rl.DrawTextEx(font, the_cstr, {debug_x_start + x_offset, ypos}, f32(font.baseSize), 0, debug_text_color)
+}
+
 draw_cpu_thing :: proc(
 	b: ^strings.Builder,
 	ypos: f32,
@@ -102,7 +111,7 @@ draw_ppu_state :: proc(nes: NES, ypos: f32) -> f32 {
 	return ypos
 }
 
-draw_cpu_state :: proc(ypos: f32, nes: NES) -> f32 {
+draw_cpu_state :: proc(ypos: f32, nes: NES, is_paused: bool) -> f32 {
 
 	ypos := ypos
 
@@ -204,13 +213,17 @@ draw_cpu_state :: proc(ypos: f32, nes: NES) -> f32 {
 
 	// Stack P
 	draw_cpu_thing(&b, ypos, "SP", int(nes.stack_pointer), .Base16)
+
+	if is_paused {
+		draw_text(&b, ypos, "PAUSED", x_offset = 200)
+	}
 	ypos += f32(vertical_spacing)
 
 
 	return ypos
 }
 
-draw_debugger :: proc(nes: NES) {
+draw_debugger :: proc(nes: NES, is_paused: bool) {
 
 	context.allocator = context.temp_allocator
 	vertical_spacing = font.baseSize - 5
@@ -218,7 +231,7 @@ draw_debugger :: proc(nes: NES) {
 	ypos: f32 = 1
 
 	// Drawing CPU State
-	ypos = draw_cpu_state(ypos, nes)
+	ypos = draw_cpu_state(ypos, nes, is_paused)
 
 	// Line
 

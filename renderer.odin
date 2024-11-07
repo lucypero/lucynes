@@ -117,6 +117,8 @@ AppState :: struct {
 
 app_state: AppState
 
+clear_color := rl.Color{36, 41, 46, 255}
+
 window_main :: proc() {
 
 	app_state = {}
@@ -173,7 +175,6 @@ window_main :: proc() {
 
 		rl.BeginDrawing()
 
-		clear_color := rl.Color{36, 41, 46, 255}
 		rl.ClearBackground(clear_color)
 
 		// clear_pixels(pixels, rl.BLACK)
@@ -184,8 +185,16 @@ window_main :: proc() {
 			nes_reset(&nes, rom_in_nes)
 		}
 
+		tick_force := false
+
 		if rl.IsKeyPressed(.P) {
 			paused = !paused
+
+			if !paused {
+				// if unpausing, advance one instruction no matter what
+				tick_force = true
+			}
+
 		}
 
 		if rl.IsKeyPressed(.F10) {
@@ -235,7 +244,7 @@ window_main :: proc() {
 
 		// run nes till vblank
 		if !paused {
-			broke := tick_nes_till_vblank(&nes, port_0_input, port_1_input, &pixel_grid)
+			broke := tick_nes_till_vblank(&nes, tick_force, port_0_input, port_1_input, &pixel_grid)
 			if broke {
 				paused = true
 			}
@@ -246,9 +255,9 @@ window_main :: proc() {
 
 		rl.UpdateTexture(checked, raw_data(pixels))
 		rl.DrawTextureEx(checked, {0, 0}, 0, scale_factor, rl.WHITE)
-		draw_debugger(nes)
+		draw_debugger(nes, paused)
 
-		if rl.IsKeyPressed(.F1) {
+		if rl.IsKeyPressed(.M) {
 			// draw GUI
 			app_state.in_menu = !app_state.in_menu
 		}
@@ -327,11 +336,13 @@ draw_menu :: proc() {
 
 	// Handle menu drawing
 
-	menu_bg: rl.Color = {0, 0, 0, 100} // Black
 	menu_x_start: f32 = 3
 	current_color := debug_text_color
 
 	ypos: f32 = 1
+
+	menu_bg := clear_color
+	menu_bg.a = 220
 
 	// draw menu
 	rl.DrawRectangle(0, 0, nes_width * scale_factor, 300, menu_bg)
