@@ -6,7 +6,7 @@ import "core:c"
 instructions_y_start :: 200
 
 // how many previous instructions to display
-prev_instructions_count :: 20
+prev_instructions_count :: 2000
 
 // how many future instructions to display
 next_instructions_count :: 20

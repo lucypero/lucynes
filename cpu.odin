@@ -192,6 +192,8 @@ read :: proc(using nes: ^NES, addr: u16) -> u8 {
 
 write :: proc(using nes: ^NES, addr: u16, val: u8) {
 
+	last_write_addr = addr
+	last_write_val = val
 	readwrite_things(nes, addr, val, true, false)
 
 	switch addr {
@@ -1118,6 +1120,7 @@ run_instruction :: proc(using nes: ^NES) {
 
 	instr_inf.next_pc = program_counter
 	instr_inf.triggered_nmi = nmi_triggered != 0
+	instr_inf.cpu_status = nes.registers
 	ringthing_add(&instr_history, instr_inf)
 	flags += {.NoEffect1}
 }
@@ -1170,6 +1173,61 @@ instruction_tick :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8, pi
 
 }
 
+dump_log :: proc(using nes: ^NES) {
+
+	context.allocator = context.temp_allocator
+
+	b := strings.builder_make_len_cap(0, 10000)
+
+	// Drawing instructions
+	the_indx := nes.instr_history.last_placed
+	the_buf_len := len(nes.instr_history.buf)
+
+	the_indx += 1
+
+	if the_indx >= the_buf_len {
+		the_indx = 0
+	}
+
+	for i in 0 ..< the_buf_len {
+		instr := nes.instr_history.buf[the_indx]
+
+		the_indx += 1
+
+		if the_indx >= the_buf_len {
+			the_indx = 0
+		}
+
+		tb, np := get_instr_str_builder(nes^, instr.pc)
+		strings.write_string(&b, strings.to_upper(strings.to_string(tb)))
+		if instr.triggered_nmi {
+			strings.write_string(&b, " - [NMI!]")
+		}
+
+		// if i == instr_history.last_placed {
+		// 	strings.write_string(&b, " - the last one ")
+		// }
+
+		fmt.sbprintf(
+			&b,
+			" // A:$%X, X:$%X, Y:$%X",
+			instr.cpu_status.accumulator,
+			instr.cpu_status.index_x,
+			instr.cpu_status.index_y,
+		)
+
+		strings.write_string(&b, "\n")
+
+	}
+
+	ok := os.write_entire_file("dump.log", b.buf[:])
+	if !ok {
+		fmt.eprintfln("could not write dump")
+		os.exit(1)
+	}
+	fmt.printfln("Log Dumped")
+}
+
 // It stops at breakpoints
 // if it stops at breakpoints, returns true
 tick_nes_till_vblank :: proc(
@@ -1195,9 +1253,20 @@ tick_nes_till_vblank :: proc(
 		instruction_tick(nes, port_0_input, port_1_input, pixel_grid)
 		reset_debugging_vars(nes)
 
+		// dump
+		if program_counter == 0xBC52 {
+			// dump_log(nes)
+			// os.exit(0)
+			// log_dump_scheudled = false
+		}
+
 		instr_info := instr_history.buf[instr_history.last_placed]
 
 		if !tick_force && app_state.break_on_nmi && instr_info.triggered_nmi {
+			return true
+		}
+
+		if last_write_addr == 0x2000 && (last_write_val | 0x80) == 0 {
 			return true
 		}
 

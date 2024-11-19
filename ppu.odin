@@ -119,11 +119,13 @@ write_ppu_register :: proc(nes: ^NES, ppu_reg: u16, val: u8) {
 		}
 
 		if val == 0x10 {
-			asd := 1
-			asd += 1
+			// fmt.printfln("set to 10")
+			//
+			// nes.log_dump_scheudled = true
 		}
 
 		ppu_ctrl.reg = val
+		fmt.printfln("set to %X", val)
 		temp_loopy.nametable_x = u16(ppu_ctrl.n & 0b1) != 0 ? 1 : 0
 		temp_loopy.nametable_y = u16(ppu_ctrl.n & 0b10) != 0 ? 1 : 0
 
