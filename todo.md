@@ -122,3 +122,14 @@ Ice Climber
 Donkey Kong
 Kung Fu
 Bomberman
+
+
+# Mapper code
+
+read your discord general for more information
+
+the cart can dictate everything.
+
+so when you for example do cpu read, first of all check the mapper if it wants to do something
+if not then proceed to do the read normally.
+

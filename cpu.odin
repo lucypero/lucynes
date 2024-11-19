@@ -20,85 +20,11 @@ dummy_read :: proc(using nes: ^NES) {
 
 // fake read (no side effects at all)
 fake_read :: proc(using nes: NES, addr: u16) -> u8 {
-
-	switch addr {
-
-	// PPU registers
-	case 0x2000 ..= 0x3FFF:
-		return 0
-
-	// APU STATUS
-	case 0x4015:
-		// apu status
-		return 0
-
-	// Input
-	case 0x4016:
-		// read input from port 0
-		// val := port_0_register & 0x80
-		val := (port_0_register & 0x80) >> 7
-
-		return val
-
-	case 0x4017:
-		// read input from port 1
-		// read input from port 0
-		val := (port_1_register & 0x80) >> 7
-
-		return val
-	}
-
-	// CPU memory
-	if !rom_info.rom_loaded {
-		return ram[addr]
-	}
-
-	// ROM mapped memory
-
-	switch rom_info.mapper {
-	case .NROM128:
-		switch addr {
-		case 0x8000 ..< 0xC000:
-			return prg_rom[addr - 0x8000]
-		case 0xC000 ..= 0xFFFF:
-			return prg_rom[addr - 0xC000]
-		}
-	case .NROM256:
-		switch addr {
-		case 0x8000 ..= 0xFFFF:
-			return prg_rom[addr - 0x8000]
-		}
-	case .UXROM:
-		switch addr {
-		case 0x8000 ..< 0xC000:
-			// use the bank i guess
-			// data.bank <- use that
-			// fmt.printfln("reading switchable memory. bank is %v", data.bank)
-			data := mapper_data.(UXROMData)
-			return prg_rom[uint(addr) - 0x8000 + (data.bank * 0x4000)]
-		case 0xC000 ..= 0xFFFF:
-			// it's the last bank
-			// fmt.printfln("reading last bank")
-			offset: uint = uint(addr) - 0xC000
-			bank_count: uint = len(prg_rom) / 0x4000
-			bank_offset := (uint(bank_count) - 1) * 0x4000
-			return prg_rom[bank_offset + offset]
-		}
-	}
-
-	if rom_info.contains_ram {
-		switch addr {
-		case 0x6000 ..= 0x7FFF:
-			return prg_ram[addr - 0x6000]
-		}
-	}
-
-	// CPU $6000-$7FFF: Family Basic only: PRG RAM, mirrored as necessary to fill entire 8 KiB window, write protectable with an external switch
-	// CPU $8000-$BFFF: First 16 KB of ROM.
-	// CPU $C000-$FFFF: Last 16 KB of ROM (NROM-256) or mirror of $8000-$BFFF (NROM-128).
-
-	return ram[addr]
-
+	// makes a copy of nes to do the read, to make this an immutable read
+	// well it won't be immutable unless you do a deep copy...
+	// TODO...
+	nes_fake := nes
+	return read(&nes_fake, addr)
 }
 
 // cpu bus read
@@ -106,88 +32,39 @@ read :: proc(using nes: ^NES, addr: u16) -> u8 {
 
 	readwrite_things(nes, addr, 0, false, false)
 
-	switch addr {
+	data: u8
+	ok: bool
 
-	// PPU registers
-	case 0x2000 ..= 0x3FFF:
-		ppu_reg := get_mirrored(int(addr), 0x2000, 0x2007)
-		// fmt.printfln("reading to a ppu register %X", ppu_reg)
-
-		return read_ppu_register(nes, u16(ppu_reg))
-
-	// APU STATUS
-	case 0x4015:
-		// apu status
+	if data, ok = cart_cpu_read(nes, addr); ok {
+		// Cart dictates the cpu read, above everything else
+		return data
+	} else if addr >= 0x0000 && addr <= 0x1FFF {
+		// Internal RAM address range
+		return ram[addr & 0x07FF]
+	} else if addr >= 0x2000 && addr <= 0x3FFF {
+		// PPU registers address range
+		ppu_reg := get_mirrored(addr, 0x2000, 0x2007)
+		return read_ppu_register(nes, ppu_reg)
+	} else if addr == 0x4015 {
+		// APU Read status
 		return apu_read(nes, addr)
-
-	// Input
-	case 0x4016:
+	} else if addr == 0x4016 {
+		// Reading controller input
 		// read input from port 0
-		// val := port_0_register & 0x80
 		val := (port_0_register & 0x80) >> 7
 		port_0_register <<= 1
-
 		return val
-
-	case 0x4017:
+	} else if addr == 0x4017 {
+		// Reading controller input
 		// read input from port 1
-		// read input from port 0
 		val := (port_1_register & 0x80) >> 7
 		port_1_register <<= 1
-
 		return val
 	}
 
-	// CPU memory
-	if !rom_info.rom_loaded {
-		return ram[addr]
-	}
-
-	// ROM mapped memory
-
-	switch rom_info.mapper {
-	case .NROM128:
-		switch addr {
-		case 0x8000 ..< 0xC000:
-			return prg_rom[addr - 0x8000]
-		case 0xC000 ..= 0xFFFF:
-			return prg_rom[addr - 0xC000]
-		}
-	case .NROM256:
-		switch addr {
-		case 0x8000 ..= 0xFFFF:
-			return prg_rom[addr - 0x8000]
-		}
-	case .UXROM:
-		switch addr {
-		case 0x8000 ..< 0xC000:
-			// use the bank i guess
-			// data.bank <- use that
-			// fmt.printfln("reading switchable memory. bank is %v", data.bank)
-			data := mapper_data.(UXROMData)
-			return prg_rom[uint(addr) - 0x8000 + (data.bank * 0x4000)]
-		case 0xC000 ..= 0xFFFF:
-			// it's the last bank
-			// fmt.printfln("reading last bank")
-			offset: uint = uint(addr) - 0xC000
-			bank_count: uint = len(prg_rom) / 0x4000
-			bank_offset := (uint(bank_count) - 1) * 0x4000
-			return prg_rom[bank_offset + offset]
-		}
-	}
-
-	if rom_info.contains_ram {
-		switch addr {
-		case 0x6000 ..= 0x7FFF:
-			return prg_ram[addr - 0x6000]
-		}
-	}
-
-	// CPU $6000-$7FFF: Family Basic only: PRG RAM, mirrored as necessary to fill entire 8 KiB window, write protectable with an external switch
-	// CPU $8000-$BFFF: First 16 KB of ROM.
-	// CPU $C000-$FFFF: Last 16 KB of ROM (NROM-256) or mirror of $8000-$BFFF (NROM-128).
-
-	return ram[addr]
+	// open bus here?
+	// fmt.eprintfln("should never come here - cpu read, addr %X", addr)
+	return 0
 }
 
 write :: proc(using nes: ^NES, addr: u16, val: u8) {
@@ -196,27 +73,24 @@ write :: proc(using nes: ^NES, addr: u16, val: u8) {
 	last_write_val = val
 	readwrite_things(nes, addr, val, true, false)
 
-	switch addr {
-	// PPU registers
-	case 0x2000 ..= 0x3FFF:
+	if cart_cpu_write(nes, addr, val) {
+		// Cart dictates the cpu write, above everything else
+		return
+	} else if addr >= 0x0000 && addr <= 0x1FFF {
+		// Internal RAM Address range
+		ram[addr & 0x7FF] = val
+		return
+	} else if addr >= 0x2000 && addr <= 0x3FFF {
+		// PPU registers address range
 		ppu_reg := get_mirrored(int(addr), 0x2000, 0x2007)
-		// fmt.printfln("writing to a ppu register %X", ppu_reg)
 		write_ppu_register(nes, u16(ppu_reg), val)
 		return
-
-	// APU Registers
-	case 0x4000 ..= 0x4013, 0x4015, 0x4017:
+	} else if (addr >= 0x4000 && addr <= 0x4013) || addr == 0x4013 || addr == 0x4015 || addr == 0x4017 {
+		// APU registers address range
 		apu_write(nes, addr, val)
 		return
-
-	// Input
-	case 0x4016:
-		poll_input = (val & 0x01) != 0
-		return
-
-	//OAMDMA
-	case 0x4014:
-		// fmt.printfln("writing to OAMDMA")
+	} else if addr == 0x4014 {
+		// OAM DMA 
 		start_addr: u16 = u16(val) << 8
 
 		for i in 0x0000 ..= 0x00FF {
@@ -225,52 +99,12 @@ write :: proc(using nes: ^NES, addr: u16, val: u8) {
 		}
 
 		return
-	}
-
-	if !rom_info.rom_loaded {
-		// fmt.printfln("unsafe write to ram: %X", addr)
-		ram[addr] = val
+	} else if addr == 0x4016 {
+		// Controller Input
+		poll_input = (val & 0x01) != 0
 		return
 	}
 
-	switch rom_info.mapper {
-	case .NROM128:
-		switch addr {
-		case 0x8000 ..= 0xBFFF:
-			// prg_rom[addr - 0x8000] = val
-			return
-		case 0xC000 ..= 0xFFFF:
-			// prg_rom[addr - 0xC000] = val
-			return
-		}
-	case .NROM256:
-		switch addr {
-		case 0x8000 ..= 0xFFFF:
-			// prg_rom[addr - 0x8000] = val
-			return
-		}
-	case .UXROM:
-		switch addr {
-		case 0x8000 ..= 0xFFFF:
-			data := &mapper_data.(UXROMData)
-			data.bank = uint(val) & 0x0F
-		// fmt.printfln("bank switching! to %v", data.bank)
-		// here u do the bank switch
-		}
-	}
-
-	if rom_info.contains_ram {
-		switch addr {
-		case 0x6000 ..= 0x7FFF:
-			// wrote to prg ram! it's ok i think
-			// fmt.println("wrote to prg ram! probably ok")
-			prg_ram[addr - 0x6000] = val
-			return
-		}
-	}
-
-	// if it didn't return by now, just write to addr.
-	ram[addr] = val
 }
 
 nmi :: proc(using nes: ^NES, nmi_type: int) {
@@ -1122,6 +956,7 @@ run_instruction :: proc(using nes: ^NES) {
 	instr_inf.triggered_nmi = nmi_triggered != 0
 	instr_inf.cpu_status = nes.registers
 	ringthing_add(&instr_history, instr_inf)
+	ringthing_add(&instr_history_log, instr_inf)
 	flags += {.NoEffect1}
 }
 
@@ -1180,8 +1015,8 @@ dump_log :: proc(using nes: ^NES) {
 	b := strings.builder_make_len_cap(0, 10000)
 
 	// Drawing instructions
-	the_indx := nes.instr_history.last_placed
-	the_buf_len := len(nes.instr_history.buf)
+	the_indx := nes.instr_history_log.last_placed
+	the_buf_len := len(nes.instr_history_log.buf)
 
 	the_indx += 1
 
@@ -1190,7 +1025,7 @@ dump_log :: proc(using nes: ^NES) {
 	}
 
 	for i in 0 ..< the_buf_len {
-		instr := nes.instr_history.buf[the_indx]
+		instr := nes.instr_history_log.buf[the_indx]
 
 		the_indx += 1
 
@@ -1204,7 +1039,7 @@ dump_log :: proc(using nes: ^NES) {
 			strings.write_string(&b, " - [NMI!]")
 		}
 
-		// if i == instr_history.last_placed {
+		// if i == instr_history_log.last_placed {
 		// 	strings.write_string(&b, " - the last one ")
 		// }
 

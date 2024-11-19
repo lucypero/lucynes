@@ -30,19 +30,6 @@ forever_allocator: mem.Tracking_Allocator
 
 palette: []rl.Color
 
-Mapper :: enum {
-	NROM128, // 00
-	NROM256, // 00 
-	UXROM, // 02
-}
-
-UXROMData :: struct {
-	bank: uint,
-}
-
-MapperData :: union {
-	UXROMData,
-}
 
 RomFormat :: enum {
 	NES20,
@@ -198,7 +185,11 @@ NES :: struct {
 	nmi_triggered:                  int,
 
 	// DEBUGGING
+
+	// history for display in debugger
 	instr_history:                  RingThing(prev_instructions_count, InstructionInfo),
+	// history for log dump
+	instr_history_log:              RingThing(prev_instructions_log_count, InstructionInfo),
 	faulty_ops:                     map[u8]FaultyOp,
 	read_writes:                    uint,
 	last_write_addr: u16,
@@ -729,7 +720,7 @@ print_patterntable :: proc(nes: NES) {
 	}
 }
 
-get_mirrored :: proc(val, from, to: int) -> int {
+get_mirrored :: proc(val, from, to: $T) -> T {
 	range := to - from + 1
 	return ((val - from) % range) + from
 }
@@ -828,14 +819,17 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 
 	switch mapper_number {
 	case 0:
+		rom_info.mapper = .M0
+		data : M0Data
 		if rom_string[4] == 1 {
-			rom_info.mapper = .NROM128
+			data.is_128 = true
 		} else {
-			rom_info.mapper = .NROM256
+			data.is_128 = false
 		}
+		nes.mapper_data = data
 	case 2:
-		rom_info.mapper = .UXROM
-		nes.mapper_data = UXROMData{}
+		rom_info.mapper = .M2
+		nes.mapper_data = M2Data{}
 	case:
 		fmt.eprintfln("mapper not supported: %v. exiting", mapper_number)
 		os.exit(1)

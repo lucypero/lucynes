@@ -5,8 +5,11 @@ import "core:c"
 
 instructions_y_start :: 200
 
+// how many previous instructions to log
+prev_instructions_log_count :: 2000
+
 // how many previous instructions to display
-prev_instructions_count :: 2000
+prev_instructions_count :: 20
 
 // how many future instructions to display
 next_instructions_count :: 20
