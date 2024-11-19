@@ -830,6 +830,9 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 	case 2:
 		rom_info.mapper = .M2
 		nes.mapper_data = M2Data{}
+	case 3:
+		rom_info.mapper = .M3
+		nes.mapper_data = M3Data{}
 	case:
 		fmt.eprintfln("mapper not supported: %v. exiting", mapper_number)
 		os.exit(1)

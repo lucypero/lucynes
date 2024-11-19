@@ -286,6 +286,18 @@ ppu_readwrite :: proc(nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 	// ignoring top 2 bits (it's a 14 bit bus)
 	mem := mem & 0x3FFF
 
+	if write {
+		if cart_ppu_write(nes, mem, val) {
+			// Cartridge took care of the ppu write. return.
+			return 0
+		}
+	} else {
+		if val_read, ok := cart_ppu_read(nes, mem); ok {
+			// Cartridge took care of the ppu read. return.
+			return val_read
+		}
+	}
+
 	switch mem {
 
 	// Pattern tables
@@ -309,7 +321,7 @@ ppu_readwrite :: proc(nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 		mem_modulo := index_in_vram % 0x400
 
 		switch mem {
-		// First virtual nametalbe slot
+		// First virtual nametable slot
 		case 0x2000 ..< 0x2400:
 			if !nes.rom_info.is_horizontal_arrangement {
 				// write to first slot
@@ -318,7 +330,7 @@ ppu_readwrite :: proc(nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 				// write to first slot
 				index_in_vram = mem_modulo
 			}
-		// Second virtual nametalbe slot
+		// Second virtual nametable slot
 		case 0x2400 ..< 0x2800:
 			if !nes.rom_info.is_horizontal_arrangement {
 				// write to first slot
@@ -327,7 +339,7 @@ ppu_readwrite :: proc(nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 				// write to second slot
 				index_in_vram = mem_modulo + 0x400
 			}
-		// Third virtual nametalbe slot
+		// Third virtual nametable slot
 		case 0x2800 ..< 0x2C00:
 			if !nes.rom_info.is_horizontal_arrangement {
 				// write to second slot
@@ -336,7 +348,7 @@ ppu_readwrite :: proc(nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 				// write to first slot
 				index_in_vram = mem_modulo
 			}
-		// Fourth virtual nametalbe slot
+		// Fourth virtual nametable slot
 		case 0x2C00 ..< 0x3000:
 			if !nes.rom_info.is_horizontal_arrangement {
 				// write to second slot

@@ -3,6 +3,8 @@ import rl "vendor:raylib"
 import "core:strings"
 import "core:c"
 
+draw_debugger_view :: false
+
 instructions_y_start :: 200
 
 // how many previous instructions to log
@@ -227,6 +229,10 @@ draw_cpu_state :: proc(ypos: f32, nes: NES, is_paused: bool) -> f32 {
 }
 
 draw_debugger :: proc(nes: NES, is_paused: bool) {
+
+	when !draw_debugger_view {
+		return
+	}
 
 	context.allocator = context.temp_allocator
 	vertical_spacing = font.baseSize - 5
