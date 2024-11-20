@@ -30,6 +30,13 @@ forever_allocator: mem.Tracking_Allocator
 
 palette: []rl.Color
 
+// nametable mirror mode
+// for mappers with dynamic mirror mode
+// for hardwired mappers, look at rominfo.is_horizontal_arrangement
+MirrorMode :: enum {
+	Horizontal,
+	Vertical
+}
 
 RomFormat :: enum {
 	NES20,
@@ -42,7 +49,7 @@ RomInfo :: struct {
 	rom_format:                RomFormat,
 	prg_rom_size:              int,
 	chr_rom_size:              int,
-	is_horizontal_arrangement: bool, // true for horizontal, false for vertical
+	is_horizontal_arrangement: bool, // (only applicable for hardwired mappers) true for horizontal, false for vertical
 	contains_ram:              bool, // bit 2 in flags 6. true if it contains battery packed PRG RAM
 	contains_trainer:          bool,
 	alt_nametable_layout:      bool,

@@ -5,7 +5,7 @@ import "core:fmt"
 
 Mapper :: enum {
 	M0, // NROM128, NROM256
-	M1, // ??? 
+	M1, // MMC1
 	M2, // UXROM
 	M3, // CNROM
 	M66, // GxROM
@@ -83,6 +83,9 @@ cart_cpu_read :: proc(using nes: ^NES, addr: u16) -> (u8, bool) {
 
 // does the write depending on the current mapper.
 // returns true if it did anything. returns false if it should do a normal NES write.
+
+// TODO: cart calls are redundant rn. consider calling mapper functions directly
+//    if this continues being the case.
 cart_cpu_write :: proc(using nes: ^NES, addr: u16, val: u8) -> bool {
 	ok: bool
 	ok = m_cpu_write(nes, addr, val)
@@ -100,7 +103,6 @@ cart_ppu_write :: proc(using nes: ^NES, addr: u16, val: u8) -> bool {
 	ok: bool
 	ok = m_ppu_write(nes, addr, val)
 	return ok
-
 }
 
 m_dummy_read :: proc(using nes: ^NES, addr: u16) -> (u8, bool) {
@@ -143,7 +145,21 @@ m0_cpu_write :: proc(using nes: ^NES, addr: u16, val: u8) -> bool {
 
 // Mapper 1
 
-M1Data :: struct {}
+M1Data :: struct {
+	chr_bank_select_4lo: u8,
+	chr_bank_select_4hi: u8,
+	chr_bank_select_8: u8,
+
+	prg_bank_select_16lo: u8,
+	prg_bank_select_16hi: u8,
+	prg_bank_select_32: u8,
+
+	load_register: u8,
+	load_register_count: u8,
+	control_register: u8,
+
+	mirror_mode: MirrorMode,
+}
 
 m1_cpu_read :: proc(using nes: ^NES, addr: u16) -> (u8, bool) {
 
