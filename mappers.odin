@@ -8,6 +8,7 @@ Mapper :: enum {
 	M1, // ??? 
 	M2, // UXROM
 	M3, // CNROM
+	M66, // GxROM
 }
 
 MapperData :: union {
@@ -15,6 +16,7 @@ MapperData :: union {
 	M1Data,
 	M2Data,
 	M3Data,
+	M66Data,
 }
 
 mapper_init :: proc(using nes: ^NES, mapper_number: u8, byte_4: u8) {
@@ -53,6 +55,13 @@ mapper_init :: proc(using nes: ^NES, mapper_number: u8, byte_4: u8) {
 		m_cpu_write = m3_cpu_write
 		m_ppu_read = m3_ppu_read
 		m_ppu_write = m3_ppu_write
+	case 66:
+		rom_info.mapper = .M66
+		nes.mapper_data = M66Data{}
+		m_cpu_read = m66_cpu_read
+		m_cpu_write = m66_cpu_write
+		m_ppu_read = m66_ppu_read
+		m_ppu_write = m66_ppu_write
 	case:
 		fmt.eprintfln("mapper not supported: %v. exiting", mapper_number)
 		os.exit(1)
@@ -187,8 +196,8 @@ m2_cpu_write :: proc(using nes: ^NES, addr: u16, val: u8) -> bool {
 // Mapper 3
 
 M3Data :: struct {
-	is_128: bool, // refactor to number of banks
-	bank:   uint,
+	is_128:              bool, // refactor to number of banks
+	prg_rom_bank_select: uint,
 }
 
 m3_cpu_read :: proc(using nes: ^NES, addr: u16) -> (u8, bool) {
@@ -218,7 +227,7 @@ m3_cpu_write :: proc(using nes: ^NES, addr: u16, val: u8) -> bool {
 	switch addr {
 	case 0x8000 ..= 0xFFFF:
 		// here u do the bank switch
-		m_data.bank = uint(val) & 0x03
+		m_data.prg_rom_bank_select = uint(val) & 0x03
 		return true
 	}
 
@@ -229,12 +238,63 @@ m3_ppu_read :: proc(using nes: ^NES, addr: u16) -> (u8, bool) {
 	m_data := nes.mapper_data.(M3Data)
 
 	if addr < 0x2000 {
-		return chr_rom[u16(m_data.bank) * 0x2000 + addr], true
+		return chr_rom[u16(m_data.prg_rom_bank_select) * 0x2000 + addr], true
 	}
 
 	return 0, false
 }
 
 m3_ppu_write :: proc(using nes: ^NES, addr: u16, val: u8) -> bool {
+	return false
+}
+
+// Mapper 66 (Untested. test some games using this mapper)
+// TODO test
+M66Data :: struct {
+	chr_bank_select: u16,
+	prg_bank_select: u16,
+}
+
+m66_cpu_read :: proc(using nes: ^NES, addr: u16) -> (u8, bool) {
+	m_data := nes.mapper_data.(M66Data)
+
+	if addr >= 0x8000 && addr <= 0xFFFF {
+		// this is the best way to do it so far i think
+		// 0x8000 = 32 KiB window
+		// you add the offset
+		prg_addr := m_data.prg_bank_select * 0x8000 + (addr & 0x7FFF)
+		return prg_rom[prg_addr], true
+	}
+
+	return 0, false
+}
+
+m66_cpu_write :: proc(using nes: ^NES, addr: u16, val: u8) -> bool {
+	m_data := &nes.mapper_data.(M66Data)
+
+	if addr >= 0x8000 && addr <= 0xFFFF {
+		m_data.chr_bank_select = u16(val & 0x03)
+		m_data.prg_bank_select = u16((val & 0x30) >> 4)
+		return true
+	}
+
+	return false
+}
+
+m66_ppu_read :: proc(using nes: ^NES, addr: u16) -> (u8, bool) {
+	m_data := nes.mapper_data.(M66Data)
+
+	if addr < 0x2000 {
+		// 0x2000 = 8 KiB bank window
+		chr_addr := m_data.chr_bank_select * 0x2000 + addr 
+		return chr_rom[chr_addr], true
+	}
+
+	return 0, false
+}
+
+m66_ppu_write :: proc(using nes: ^NES, addr: u16, val: u8) -> bool {
+	m_data := &nes.mapper_data.(M66Data)
+
 	return false
 }
