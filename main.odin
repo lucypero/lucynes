@@ -170,9 +170,7 @@ ringthing_add :: proc(using ringthing: ^RingThing($N, $T), data: T) {
 
 NES :: struct {
 	using registers:                Registers, // CPU Registers
-	// TODO: this isn't ram, so it shouldn't even be memory. don't store this. it's a bus, it's not real ram.
-	//  have fields only for when it's actual hardware ram.
-	ram:                            [64 * 1024]u8, // 64 KB of memory
+	ram:                            [0x800]u8, // 2 KiB of memory
 	cycles:                         uint,
 	extra_instr_cycles:             uint,
 	ignore_extra_addressing_cycles: bool,
@@ -277,11 +275,6 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 		fmt.eprintln("could not read program file")
 		return false
 	}
-
-	// read it from 0x10 because that's how the ROM format works.
-
-	copy(ram[0x8000:], test_rom[0x10:])
-	copy(ram[0xC000:], test_rom[0x10:])
 
 	program_counter = 0xC000
 	stack_pointer = 0xFD
@@ -860,9 +853,16 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 
 	// allocating prg ram
 	// assuming it is always 8kib
-	nes.prg_ram = make([]u8, 1024 * 8)
+	// All other SxROM variants are denoted by their functional PRG/CHR-ROM/RAM sizes in the NES 2.0 header. 
+	// Without NES 2.0, the PRG-RAM size has to be assumed; 32 KiB are sufficient for compatibility with all known titles. 
+	nes.prg_ram = make([]u8, 0x8000)
 
+	// don't realy on contains_ram or ram size because some roms will be ines format.
+	// to be safe, always allocate 32 KiB to prg ram.
 	// fmt.printfln("rom info: %v", rom_info)
+	// if rom_info.contains_ram {
+	// 	fmt.printfln("prg ram size ", prg_ram_size)
+	// }
 
 	return true
 }

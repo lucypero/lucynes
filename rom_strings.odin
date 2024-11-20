@@ -5,7 +5,7 @@ package main
 // rom_in_nes :: "roms/IceClimber.nes"
 // rom_in_nes :: "roms/Kung Fu.nes"
 // rom_in_nes :: "roms/Bomberman.nes"
-rom_in_nes :: "roms/PacMan.nes"
+// rom_in_nes :: "roms/PacMan.nes"
 
 // Mapper 0
 
@@ -14,7 +14,7 @@ rom_in_nes :: "roms/PacMan.nes"
 
 // Mapper 1
 
-// rom_in_nes :: "roms/Mega Man 2 (USA).nes"
+rom_in_nes :: "roms/Mega Man 2 (USA).nes"
 
 // Mapper 2
 
