@@ -146,10 +146,10 @@ FaultyOp :: struct {
 }
 
 InstructionInfo :: struct {
-	pc:      u16,
-	next_pc: u16, // The next position of the PC like, for real
+	pc:            u16,
+	next_pc:       u16, // The next position of the PC like, for real
 	triggered_nmi: bool,
-	cpu_status: Registers
+	cpu_status:    Registers,
 	// you can find out the rest from the PC.
 	// you can add other state later.
 }
@@ -181,8 +181,14 @@ NES :: struct {
 	prg_rom:                        []u8,
 	chr_rom:                        []u8,
 	prg_ram:                        []u8,
-	mapper_data:                    MapperData,
 	nmi_triggered:                  int,
+
+	// Mappers
+	mapper_data:                    MapperData,
+	m_cpu_read:                     proc(nes: ^NES, addr: u16) -> (u8, bool),
+	m_cpu_write:                    proc(nes: ^NES, addr: u16, val: u8) -> bool,
+	m_ppu_read:                     proc(nes: ^NES, addr: u16) -> (u8, bool),
+	m_ppu_write:                    proc(nes: ^NES, addr: u16, val: u8) -> bool,
 
 	// DEBUGGING
 
@@ -192,9 +198,9 @@ NES :: struct {
 	instr_history_log:              RingThing(prev_instructions_log_count, InstructionInfo),
 	faulty_ops:                     map[u8]FaultyOp,
 	read_writes:                    uint,
-	last_write_addr: u16,
-	last_write_val: u8,
-	log_dump_scheudled: bool,
+	last_write_addr:                u16,
+	last_write_val:                 u8,
+	log_dump_scheudled:             bool,
 
 	// INSTRUMENTING FOR THE OUTSIDE WORLD
 	vblank_hit:                     bool,
@@ -810,33 +816,10 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 	mapper_lower := (flags_6 & 0xF0) >> 4
 
 	// flags 7
-
 	flags_7 := rom_string[7]
-
 	mapper_higher := (flags_7 & 0xF0) >> 4
-
 	mapper_number := mapper_higher << 4 | mapper_lower
-
-	switch mapper_number {
-	case 0:
-		rom_info.mapper = .M0
-		data : M0Data
-		if rom_string[4] == 1 {
-			data.is_128 = true
-		} else {
-			data.is_128 = false
-		}
-		nes.mapper_data = data
-	case 2:
-		rom_info.mapper = .M2
-		nes.mapper_data = M2Data{}
-	case 3:
-		rom_info.mapper = .M3
-		nes.mapper_data = M3Data{}
-	case:
-		fmt.eprintfln("mapper not supported: %v. exiting", mapper_number)
-		os.exit(1)
-	}
+	mapper_init(nes, mapper_number, rom_string[4])
 
 	// flags 8
 

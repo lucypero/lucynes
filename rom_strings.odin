@@ -5,11 +5,16 @@ package main
 // rom_in_nes :: "roms/IceClimber.nes"
 // rom_in_nes :: "roms/Kung Fu.nes"
 // rom_in_nes :: "roms/Bomberman.nes"
+rom_in_nes :: "roms/PacMan.nes"
 
 // Mapper 0
 
 // rom_in_nes :: "roms/SuperMarioBros.nes"
 // rom_in_nes :: "roms/DonkeyKong.nes"
+
+// Mapper 1
+
+// rom_in_nes :: "roms/Mega Man 2 (USA).nes"
 
 // Mapper 2
 
@@ -22,7 +27,7 @@ package main
 // Mapper 3
 
 // rom_in_nes :: "roms/Ghostbusters.nes"
-rom_in_nes :: "roms/Solomon's Key.nes" // wow this one is actually good
+// rom_in_nes :: "roms/Solomon's Key.nes" // wow this one is actually good
 
 /// NON-WORKING GAMES: 
 
