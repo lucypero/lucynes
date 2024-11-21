@@ -236,9 +236,6 @@ m1_register_write :: proc(using m_data: ^M1Data, target_register: u16) {
 		case 3:
 			mirror_mode = .Vertical
 		}
-
-		fmt.printfln("set mirror mode: %v", mirror_mode)
-
 	case 1:
 		// 0xA000 - 0xBFFF
 		// Set CHR Bank Lo
@@ -278,7 +275,9 @@ m1_register_write :: proc(using m_data: ^M1Data, target_register: u16) {
 			prg_bank_select_16hi = load_register & 0x0F
 		case 3:
 			// Set 16KB PRG Bank at CPU 0x8000
+			// FIX: dragon quest is setting this to index 4. more than the total amount of banks (4)
 			prg_bank_select_16lo = load_register & 0x0F
+			fmt.printfln("bank select 16lo set to %v, total banks: %v", prg_bank_select_16lo, prg_bank_count)
 			// Fix 16KB PRG Bank at CPU 0xC000 to Last Bank
 			prg_bank_select_16hi = prg_bank_count - 1
 		}

@@ -135,11 +135,6 @@ the cart can dictate everything.
 so when you for example do cpu read, first of all check the mapper if it wants to do something
 if not then proceed to do the read normally.
 
+## Mapper 1: fixing dragon quest
 
-## mapper 1
-
-todo: handle dynamic mirror mode on the ppu
-megaman 2 doesn't boot.
-
-
-
+dragon quest is setting prg_bank_select_16lo to index 4. more than the total amount of banks (4)
