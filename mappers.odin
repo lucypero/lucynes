@@ -19,6 +19,16 @@ MapperData :: union {
 	M66Data,
 }
 
+get_mirror_mode :: proc(nes: NES) -> MirrorMode{
+	#partial switch nes.rom_info.mapper {
+		case .M1:
+			m1_data := nes.mapper_data.(M1Data)
+			return m1_data.mirror_mode
+	}
+
+	return nes.rom_info.mirror_mode_hardwired
+}
+
 mapper_init :: proc(using nes: ^NES, mapper_number: u8, prg_unit_count: u8, chr_unit_count: u8) -> (mapper: Mapper) {
 	switch mapper_number {
 	case 0:
@@ -222,10 +232,12 @@ m1_register_write :: proc(using m_data: ^M1Data, target_register: u16) {
 		case 1:
 			mirror_mode = .OneScreenHi
 		case 2:
-			mirror_mode = .Vertical
-		case 3:
 			mirror_mode = .Horizontal
+		case 3:
+			mirror_mode = .Vertical
 		}
+
+		fmt.printfln("set mirror mode: %v", mirror_mode)
 
 	case 1:
 		// 0xA000 - 0xBFFF

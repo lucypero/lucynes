@@ -320,10 +320,12 @@ ppu_readwrite :: proc(nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 		// the part of mem into each nametable
 		mem_modulo := index_in_vram % 0x400
 
+		mirror_mode := get_mirror_mode(nes^)
+
 		switch mem {
 		// First virtual nametable slot
 		case 0x2000 ..< 0x2400:
-			if !nes.rom_info.is_horizontal_arrangement {
+			if mirror_mode == .Vertical {
 				// write to first slot
 				index_in_vram = mem_modulo
 			} else {
@@ -332,7 +334,7 @@ ppu_readwrite :: proc(nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 			}
 		// Second virtual nametable slot
 		case 0x2400 ..< 0x2800:
-			if !nes.rom_info.is_horizontal_arrangement {
+			if mirror_mode == .Vertical {
 				// write to first slot
 				index_in_vram = mem_modulo
 			} else {
@@ -341,7 +343,7 @@ ppu_readwrite :: proc(nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 			}
 		// Third virtual nametable slot
 		case 0x2800 ..< 0x2C00:
-			if !nes.rom_info.is_horizontal_arrangement {
+			if mirror_mode == .Vertical {
 				// write to second slot
 				index_in_vram = mem_modulo + 0x400
 			} else {
@@ -350,7 +352,7 @@ ppu_readwrite :: proc(nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 			}
 		// Fourth virtual nametable slot
 		case 0x2C00 ..< 0x3000:
-			if !nes.rom_info.is_horizontal_arrangement {
+			if mirror_mode == .Vertical {
 				// write to second slot
 				index_in_vram = mem_modulo + 0x400
 			} else {

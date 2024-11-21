@@ -53,7 +53,7 @@ RomInfo :: struct {
 	chr_unit_count:            u8, // Size od CHR ROM in 8 KiB Units (8kib == 0x2000). AKA "CHR Bank Count"
 	prg_rom_size:              int,
 	chr_rom_size:              int,
-	is_horizontal_arrangement: bool, // (only applicable for hardwired mappers) true for horizontal, false for vertical
+	mirror_mode_hardwired: MirrorMode,
 	contains_ram:              bool, // bit 2 in flags 6. true if it contains battery packed PRG RAM
 	contains_trainer:          bool,
 	alt_nametable_layout:      bool,
@@ -796,9 +796,9 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 	flags_6 := rom_string[6]
 
 	if flags_6 & 0x01 != 0 {
-		rom_info.is_horizontal_arrangement = true
+		rom_info.mirror_mode_hardwired = .Horizontal
 	} else {
-		rom_info.is_horizontal_arrangement = false
+		rom_info.mirror_mode_hardwired = .Vertical
 	}
 
 	if flags_6 & 0x02 != 0 {
