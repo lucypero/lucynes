@@ -14,7 +14,8 @@ package main
 
 // Mapper 1
 
-rom_in_nes :: "roms/Mega Man 2 (USA).nes"
+// rom_in_nes :: "roms/Mega Man II.nes"
+rom_in_nes :: "roms/Dragon Warrior.nes" // this is dragon quest
 
 // Mapper 2
 
@@ -35,7 +36,6 @@ rom_in_nes :: "roms/Mega Man 2 (USA).nes"
 
 // rom_in_nes :: "roms/Spy Hunter.nes"
 // rom_in_nes :: "roms/Karate Kid, The.nes"
-// rom_in_nes :: "roms/Dragon Warrior.nes" // this is dragon quest
 // rom_in_nes :: "roms/Silver Surfer.nes"
 // rom_in_nes :: "roms/Mega Man II.nes"
 // rom_in_nes :: "roms/Mega Man III.nes"

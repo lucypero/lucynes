@@ -126,10 +126,20 @@ Bomberman
 
 # Mapper code
 
+
+
 read your discord general for more information
 
 the cart can dictate everything.
 
 so when you for example do cpu read, first of all check the mapper if it wants to do something
 if not then proceed to do the read normally.
+
+
+## mapper 1
+
+todo: handle dynamic mirror mode on the ppu
+megaman 2 doesn't boot.
+
+
 

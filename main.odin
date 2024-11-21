@@ -35,7 +35,9 @@ palette: []rl.Color
 // for hardwired mappers, look at rominfo.is_horizontal_arrangement
 MirrorMode :: enum {
 	Horizontal,
-	Vertical
+	Vertical,
+	OneScreenLo,
+	OneScreenHi,
 }
 
 RomFormat :: enum {
@@ -47,6 +49,8 @@ RomInfo :: struct {
 	// TODO: u can group a lot of this into a bitset
 	rom_loaded:                bool,
 	rom_format:                RomFormat,
+	prg_unit_count:            u8, // Size of PRG ROM in 16 KiB Units (16 kib == 0x4000). Aka "PRG Bank Count"
+	chr_unit_count:            u8, // Size od CHR ROM in 8 KiB Units (8kib == 0x2000). AKA "CHR Bank Count"
 	prg_rom_size:              int,
 	chr_rom_size:              int,
 	is_horizontal_arrangement: bool, // (only applicable for hardwired mappers) true for horizontal, false for vertical
@@ -778,6 +782,8 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 	// CHR ROM data, if present (8192 * y bytes) (but later on it just says 8kb units)
 
 	// fmt.printfln("byte 4 in rom string: %X", rom_string[4])
+	rom_info.prg_unit_count = u8(rom_string[4])
+	rom_info.chr_unit_count = u8(rom_string[5])
 
 	rom_info.prg_rom_size = int(rom_string[4]) * 16384
 	rom_info.chr_rom_size = int(rom_string[5]) * 8192
@@ -819,7 +825,8 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 	flags_7 := rom_string[7]
 	mapper_higher := (flags_7 & 0xF0) >> 4
 	mapper_number := mapper_higher << 4 | mapper_lower
-	mapper_init(nes, mapper_number, rom_string[4])
+	mapper := mapper_init(nes, mapper_number, rom_info.prg_unit_count, rom_info.chr_unit_count)
+	rom_info.mapper = mapper
 
 	// flags 8
 
