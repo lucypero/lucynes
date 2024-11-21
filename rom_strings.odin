@@ -15,16 +15,11 @@ package main
 // Mapper 1
 
 // rom_in_nes :: "roms/Mega Man II.nes"
-rom_in_nes :: "roms/Dragon Warrior.nes" // this is dragon quest
+// rom_in_nes :: "roms/Dragon Warrior.nes" // this is dragon quest
 // rom_in_nes :: "roms/Legend of Zelda, The.nes"
-// rom_in_nes :: "roms/Spy Hunter.nes"
-// rom_in_nes :: "roms/Karate Kid, The.nes"
-// rom_in_nes :: "roms/Silver Surfer.nes"
-// rom_in_nes :: "roms/Mega Man II.nes"
-// rom_in_nes :: "roms/Mega Man III.nes"
-// rom_in_nes :: "roms/Mega Man IV.nes"
-// rom_in_nes :: "roms/Mega Man V.nes"
-// rom_in_nes :: "roms/Mega Man VI.nes"
+// rom_in_nes :: "roms/Tetris.nes"
+// rom_in_nes :: "roms/Final Fantasy.nes"
+rom_in_nes :: "roms/Metroid.nes"
 
 // Mapper 2
 
@@ -43,13 +38,27 @@ rom_in_nes :: "roms/Dragon Warrior.nes" // this is dragon quest
 
 // Reason: Mapper unsupported
 
+// Mapper 67
+
+// rom_in_nes :: "roms/Spy Hunter.nes"
+// rom_in_nes :: "roms/Karate Kid, The.nes"
+
+// Mapper 64
+
+// rom_in_nes :: "roms/Ms. Pac Man (Tengen).nes"
+
+// Mapper 4
+
+// rom_in_nes :: "roms/Silver Surfer.nes"
+// rom_in_nes :: "roms/Mega Man III.nes"
+// rom_in_nes :: "roms/Mega Man IV.nes"
+// rom_in_nes :: "roms/Mega Man V.nes"
+// rom_in_nes :: "roms/Mega Man VI.nes"
+// rom_in_nes :: "roms/Adventures of Lolo II , The.nes"
 
 // Reason: Emulator Bug
 
-// rom_in_nes :: "roms/Adventures of Lolo II , The.nes"
-// rom_in_nes :: "roms/Ms. Pac Man (Tengen).nes"
 // rom_in_nes :: "roms/Spelunker.nes"
-
 
 /// TEST ROMS:
 

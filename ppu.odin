@@ -325,39 +325,49 @@ ppu_readwrite :: proc(nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 		switch mem {
 		// First virtual nametable slot
 		case 0x2000 ..< 0x2400:
-			if mirror_mode == .Vertical {
-				// write to first slot
-				index_in_vram = mem_modulo
-			} else {
+			switch mirror_mode {
+				case .OneScreenHi, .OneScreenLo, .Vertical, .Horizontal:
 				// write to first slot
 				index_in_vram = mem_modulo
 			}
 		// Second virtual nametable slot
 		case 0x2400 ..< 0x2800:
-			if mirror_mode == .Vertical {
+			switch mirror_mode {
+				case .Vertical:
 				// write to first slot
 				index_in_vram = mem_modulo
-			} else {
+				case .Horizontal:
 				// write to second slot
 				index_in_vram = mem_modulo + 0x400
+				case .OneScreenHi, .OneScreenLo:
+				// write to first slot
+				index_in_vram = mem_modulo
 			}
 		// Third virtual nametable slot
 		case 0x2800 ..< 0x2C00:
-			if mirror_mode == .Vertical {
+			switch mirror_mode {
+				case .Vertical:
 				// write to second slot
 				index_in_vram = mem_modulo + 0x400
-			} else {
+				case .Horizontal:
+				// write to first slot
+				index_in_vram = mem_modulo
+				case .OneScreenHi, .OneScreenLo:
 				// write to first slot
 				index_in_vram = mem_modulo
 			}
 		// Fourth virtual nametable slot
 		case 0x2C00 ..< 0x3000:
-			if mirror_mode == .Vertical {
+			switch mirror_mode {
+				case .Vertical:
 				// write to second slot
 				index_in_vram = mem_modulo + 0x400
-			} else {
+				case .Horizontal:
 				// write to second slot
 				index_in_vram = mem_modulo + 0x400
+				case .OneScreenHi, .OneScreenLo:
+				// write to first slot
+				index_in_vram = mem_modulo
 			}
 		}
 
