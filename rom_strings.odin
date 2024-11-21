@@ -12,11 +12,6 @@ package main
 // rom_in_nes :: "roms/SuperMarioBros.nes"
 // rom_in_nes :: "roms/DonkeyKong.nes"
 
-// Mapper 1
-
-// rom_in_nes :: "roms/Mega Man II.nes"
-rom_in_nes :: "roms/Dragon Warrior.nes" // this is dragon quest
-
 // Mapper 2
 
 // rom_in_nes :: "roms/Mega Man.nes"
@@ -34,6 +29,11 @@ rom_in_nes :: "roms/Dragon Warrior.nes" // this is dragon quest
 
 // Reason: Mapper unsupported
 
+// Mapper 1
+
+rom_in_nes :: "roms/Mega Man II.nes"
+// rom_in_nes :: "roms/Dragon Warrior.nes" // this is dragon quest
+// rom_in_nes :: "roms/Legend of Zelda, The.nes"
 // rom_in_nes :: "roms/Spy Hunter.nes"
 // rom_in_nes :: "roms/Karate Kid, The.nes"
 // rom_in_nes :: "roms/Silver Surfer.nes"

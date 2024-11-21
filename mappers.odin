@@ -185,18 +185,18 @@ m1_cpu_read :: proc(nes: ^NES, addr: u16) -> (u8, bool) {
 			// 16K Mode
 			switch addr {
 			case 0x8000 ..= 0xBFFF:
-				val_i := u16(prg_bank_select_16lo) * 0x4000 + (addr & 0x3FFF)
+				val_i := uint(prg_bank_select_16lo) * 0x4000 + (uint(addr) & 0x3FFF)
 				val := nes.prg_rom[val_i]
 				return val, true
 			case 0xC000 ..= 0xFFFF:
-				val_i := u16(prg_bank_select_16hi) * 0x4000 + (addr & 0x3FFF)
+				val_i := uint(prg_bank_select_16hi) * 0x4000 + (uint(addr) & 0x3FFF)
 				val := nes.prg_rom[val_i]
 				return val, true
 			}
 		} else {
 
 			// 32K Mode
-			val_i := u16(prg_bank_select_32) * 0x8000 + (addr & 0x7FFF)
+			val_i := uint(prg_bank_select_32) * 0x8000 + (uint(addr) & 0x7FFF)
 			val := nes.prg_rom[val_i]
 			return val, true
 		}
@@ -329,17 +329,17 @@ m1_ppu_read :: proc(nes: ^NES, addr: u16) -> (u8, bool) {
 			// 4K CHR Bank mode
 			switch addr {
 			case 0x0000 ..= 0x0FFF:
-				val_i := u16(chr_bank_select_4lo) * 0x1000 + (addr & 0x0FFF)
+				val_i := uint(chr_bank_select_4lo) * 0x1000 + (uint(addr) & 0x0FFF)
 				val := nes.chr_rom[val_i]
 				return val, true
 			case 0x1000 ..= 0x1FFF:
-				val_i := u16(chr_bank_select_4hi) * 0x1000 + (addr & 0x0FFF)
+				val_i := uint(chr_bank_select_4hi) * 0x1000 + (uint(addr) & 0x0FFF)
 				val := nes.chr_rom[val_i]
 				return val, true
 			}
 		} else {
 			// 8K CHR Bank Mode
-			val_i := u16(chr_bank_select_8) * 0x2000 + (addr & 0x1FFF)
+			val_i := uint(chr_bank_select_8) * 0x2000 + (uint(addr) & 0x1FFF)
 			val := nes.chr_rom[val_i]
 			return val, true
 		}
@@ -445,7 +445,7 @@ m3_ppu_read :: proc(using nes: ^NES, addr: u16) -> (u8, bool) {
 	m_data := nes.mapper_data.(M3Data)
 
 	if addr < 0x2000 {
-		return chr_rom[u16(m_data.prg_rom_bank_select) * 0x2000 + addr], true
+		return chr_rom[uint(m_data.prg_rom_bank_select) * 0x2000 + uint(addr)], true
 	}
 
 	return 0, false
@@ -469,7 +469,7 @@ m66_cpu_read :: proc(using nes: ^NES, addr: u16) -> (u8, bool) {
 		// this is the best way to do it so far i think
 		// 0x8000 = 32 KiB window
 		// you add the offset
-		prg_addr := m_data.prg_bank_select * 0x8000 + (addr & 0x7FFF)
+		prg_addr := uint(m_data.prg_bank_select) * 0x8000 + (uint(addr) & 0x7FFF)
 		return prg_rom[prg_addr], true
 	}
 
@@ -493,7 +493,7 @@ m66_ppu_read :: proc(using nes: ^NES, addr: u16) -> (u8, bool) {
 
 	if addr < 0x2000 {
 		// 0x2000 = 8 KiB bank window
-		chr_addr := m_data.chr_bank_select * 0x2000 + addr
+		chr_addr := uint(m_data.chr_bank_select) * 0x2000 + uint(addr)
 		return chr_rom[chr_addr], true
 	}
 
