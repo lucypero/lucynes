@@ -138,3 +138,21 @@ if not then proceed to do the read normally.
 ## Mapper 1: fixing dragon quest
 
 dragon quest is setting prg_bank_select_16lo to index 4. more than the total amount of banks (4)
+
+
+i tried wrapping the bank select. it still doesn't boot
+
+idk what to do.
+
+here's the cart info:
+
+https://nescartdb.com/profile/view/54/dragon-warrior
+
+PCB Class 	NES-SAROM
+
+Mirroring 	Mapper Ctrl
+Battery present 	Yes
+WRAM 	8 KB
+VRAM 	0 KB
+CIC Type 	6113B1
+Hardware 	MMC1B2

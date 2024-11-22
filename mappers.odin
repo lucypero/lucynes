@@ -19,11 +19,11 @@ MapperData :: union {
 	M66Data,
 }
 
-get_mirror_mode :: proc(nes: NES) -> MirrorMode{
+get_mirror_mode :: proc(nes: NES) -> MirrorMode {
 	#partial switch nes.rom_info.mapper {
-		case .M1:
-			m1_data := nes.mapper_data.(M1Data)
-			return m1_data.mirror_mode
+	case .M1:
+		m1_data := nes.mapper_data.(M1Data)
+		return m1_data.mirror_mode
 	}
 
 	return nes.rom_info.mirror_mode_hardwired
@@ -163,12 +163,12 @@ m0_cpu_write :: proc(using nes: ^NES, addr: u16, val: u8) -> bool {
 // Mapper 1
 
 M1Data :: struct {
-	chr_bank_select_4lo:  u8,
-	chr_bank_select_4hi:  u8,
-	chr_bank_select_8:    u8,
-	prg_bank_select_16lo: u8,
-	prg_bank_select_16hi: u8,
-	prg_bank_select_32:   u8,
+	chr_bank_select_4lo:  u8, // 0x1000 sized banks
+	chr_bank_select_4hi:  u8, // 0x1000 sized banks
+	chr_bank_select_8:    u8, // 0x2000 sized banks
+	prg_bank_select_16lo: u8, // 0x4000 sized banks
+	prg_bank_select_16hi: u8, // 0x4000 sized banks
+	prg_bank_select_32:   u8, // 0x8000 sized banks
 	load_register:        u8,
 	load_register_count:  u8,
 	control_register:     u8,
@@ -187,6 +187,7 @@ m1_cpu_read :: proc(nes: ^NES, addr: u16) -> (u8, bool) {
 	switch addr {
 	case 0x6000 ..= 0x7FFF:
 		// read cart RAM
+		// fmt.println("reading prg ram")
 		val := nes.prg_ram[addr & 0x1FFF]
 		return val, true
 	case 0x8000 ..= 0xFFFF:
@@ -195,18 +196,24 @@ m1_cpu_read :: proc(nes: ^NES, addr: u16) -> (u8, bool) {
 			// 16K Mode
 			switch addr {
 			case 0x8000 ..= 0xBFFF:
+				// fmt.printfln("bank select 16 lo: %v", prg_bank_select_16lo)
 				val_i := uint(prg_bank_select_16lo) * 0x4000 + (uint(addr) & 0x3FFF)
+				// val_i %= (0xC000 - 0x8000)
 				val := nes.prg_rom[val_i]
 				return val, true
 			case 0xC000 ..= 0xFFFF:
+				// fmt.printfln("bank select 16 lo: %v", prg_bank_select_16hi)
 				val_i := uint(prg_bank_select_16hi) * 0x4000 + (uint(addr) & 0x3FFF)
+				// val_i %= (0xC000 - 0x8000)
 				val := nes.prg_rom[val_i]
 				return val, true
 			}
 		} else {
 
 			// 32K Mode
+			fmt.printfln("bank select 32: %v", prg_bank_select_32)
 			val_i := uint(prg_bank_select_32) * 0x8000 + (uint(addr) & 0x7FFF)
+			// val_i %= len(nes.prg_rom)
 			val := nes.prg_rom[val_i]
 			return val, true
 		}
@@ -242,11 +249,13 @@ m1_register_write :: proc(using m_data: ^M1Data, target_register: u16) {
 
 		if (control_register & 0x10) != 0 {
 			// 4K CHR Bank at PPU 0x0000
-			chr_bank_select_4lo = load_register & 0x1F
+			chr_bank_select_4lo = (load_register & 0x1F)
+			// chr_bank_select_4lo &= (chr_bank_count * 2) - 1
 
 		} else {
 			// 8K CHR Bank at PPU 0x0000
-			chr_bank_select_8 = load_register & 0x1E
+			chr_bank_select_8 = (load_register & 0x1E)
+			// chr_bank_select_8 &= chr_bank_count - 1
 
 		}
 	case 2:
@@ -255,8 +264,8 @@ m1_register_write :: proc(using m_data: ^M1Data, target_register: u16) {
 		// Set CHR Bank Hi
 		if (control_register & 0x10) != 0 {
 			// 4K CHR Bank at PPU 0x1000
-			chr_bank_select_4hi = load_register & 0x1F
-
+			chr_bank_select_4hi = (load_register & 0x1F)
+			// chr_bank_select_4hi &= chr_bank_count * 2 - 1
 		}
 	case 3:
 		// 0xE000 - 0xFFFF
@@ -267,17 +276,22 @@ m1_register_write :: proc(using m_data: ^M1Data, target_register: u16) {
 		case 0, 1:
 			// Set 32K PRG Bank at CPU 0x8000
 			prg_bank_select_32 = (load_register & 0x0E) >> 1
+			fmt.println("prg mode 0 or 1")
+		// prg_bank_select_32 &= prg_bank_count / 2 - 1
 		case 2:
 			// Fix 16KB PRG Bank at CPU 0x8000 to First Bank
 			prg_bank_select_16lo = 0
+			fmt.println("prg mode 2")
 
 			// Set 16KB PRG Bank at CPU 0xC000
 			prg_bank_select_16hi = load_register & 0x0F
+		// prg_bank_select_16hi &= prg_bank_count - 1
 		case 3:
 			// Set 16KB PRG Bank at CPU 0x8000
-			// FIX: dragon quest is setting this to index 4. more than the total amount of banks (4)
-			prg_bank_select_16lo = load_register & 0x0F
-			// fmt.printfln("bank select 16lo set to %v, total banks: %v", prg_bank_select_16lo, prg_bank_count)
+			prg_bank_select_16lo = (load_register & 0x0F)
+			// fmt.printfln("setting bank select 16 lo: %v", prg_bank_select_16lo)
+			prg_bank_select_16lo %= prg_bank_count
+			// fmt.printfln("setting bank select 16 lo, after mask: %v", prg_bank_select_16lo)
 			// Fix 16KB PRG Bank at CPU 0xC000 to Last Bank
 			prg_bank_select_16hi = prg_bank_count - 1
 		}
@@ -293,6 +307,8 @@ m1_cpu_write :: proc(nes: ^NES, addr: u16, val: u8) -> bool {
 
 	case 0x6000 ..= 0x7FFF:
 		// write to cart RAM
+
+		// fmt.println("writing to prg ram")
 		nes.prg_ram[addr & 0x1FFF] = val
 		return true
 

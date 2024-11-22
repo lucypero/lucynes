@@ -242,7 +242,6 @@ instr_bit :: proc(using nes: ^NES, mem: u16) {
 }
 
 
-// TODO it does an interrupt. idk how to do this yet
 instr_brk :: proc(using nes: ^NES, mem: u16) {
 	instruction_type = .Other
 

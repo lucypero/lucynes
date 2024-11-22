@@ -873,10 +873,10 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 
 	// don't realy on contains_ram or ram size because some roms will be ines format.
 	// to be safe, always allocate 32 KiB to prg ram.
-	// fmt.printfln("rom info: %v", rom_info)
-	// if rom_info.contains_ram {
-	// 	fmt.printfln("prg ram size ", prg_ram_size)
-	// }
+	fmt.printfln("rom info: %v", rom_info)
+	if rom_info.contains_ram {
+		fmt.printfln("prg ram size %v", prg_ram_size)
+	}
 
 	return true
 }
