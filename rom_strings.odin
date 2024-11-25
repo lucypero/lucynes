@@ -38,19 +38,21 @@ package main
 
 // Mapper 4
 
-rom_in_nes :: "roms/Silver Surfer.nes"
+// rom_in_nes :: "roms/Silver Surfer.nes"
 // rom_in_nes :: "roms/Solomon's Key 2 (Europe).nes"
 // rom_in_nes :: "roms/Mega Man III.nes"
 // rom_in_nes :: "roms/Mega Man IV.nes"
 // rom_in_nes :: "roms/Mega Man V.nes"
-// rom_in_nes :: "roms/Mega Man VI.nes"
-// rom_in_nes :: "roms/Adventures of Lolo II , The.nes"
+rom_in_nes :: "roms/Mega Man VI.nes"
 // rom_in_nes :: "roms/Super Mario Bros. 3.nes"
 
 /// NON-WORKING GAMES: 
 
 // Reason: Mapper unsupported
 
+// Mapper 7
+
+// rom_in_nes :: "roms/Battletoads.nes"
 
 // Mapper 67
 
@@ -64,6 +66,7 @@ rom_in_nes :: "roms/Silver Surfer.nes"
 // Reason: Emulator Bug
 
 // rom_in_nes :: "roms/Spelunker.nes"
+// rom_in_nes :: "roms/Adventures of Lolo II , The.nes"
 
 /// TEST ROMS:
 

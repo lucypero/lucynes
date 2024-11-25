@@ -113,9 +113,10 @@ nmi :: proc(using nes: ^NES, nmi_type: int) {
 	// from_2000 == false: from ppu tick when hitting vblank
 
 	stack_push_u16(nes, program_counter)
-	flags -= {.NoEffectB}
-	stack_push(nes, transmute(u8)flags)
-	flags += {.InterruptDisable, .NoEffect1}
+
+	flags_to_push := flags + {.NoEffect1}
+	stack_push(nes, transmute(u8)flags_to_push)
+	flags += {.InterruptDisable}
 
 	// read u16 memory value at 0xFFFA
 	nmi_mem: u16
@@ -155,9 +156,10 @@ irq :: proc(using nes: ^NES) {
 	// TODO: This is the exact same as NMI except for the PC address. maybe unify code
 
 	stack_push_u16(nes, program_counter)
-	flags -= {.NoEffectB}
-	stack_push(nes, transmute(u8)flags)
-	flags += {.InterruptDisable, .NoEffect1}
+
+	flags_to_push := flags + {.NoEffect1}
+	stack_push(nes, transmute(u8)flags_to_push)
+	flags += {.InterruptDisable}
 
 	// read u16 memory value at 0xFFFE
 	nmi_mem: u16
