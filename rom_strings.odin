@@ -44,6 +44,7 @@ package main
 // rom_in_nes :: "roms/Mega Man IV.nes"
 // rom_in_nes :: "roms/Mega Man V.nes"
 rom_in_nes :: "roms/Mega Man VI.nes"
+// rom_in_nes :: "roms/Final Fantasy III (Japan).nes"
 // rom_in_nes :: "roms/Super Mario Bros. 3.nes"
 
 /// NON-WORKING GAMES: 

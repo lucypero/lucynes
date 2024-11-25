@@ -365,42 +365,42 @@ clear_pixels :: proc(pixels: []rl.Color, color: rl.Color) {
 fill_input_port :: proc(port_input: ^u8) {
 
 	// A button
-	if rl.IsKeyDown(.H) {
+	if rl.IsKeyDown(.H) || rl.IsGamepadButtonDown(0, .RIGHT_FACE_DOWN) {
 		port_input^ |= 0b10000000
 	}
 
 	// B button
-	if rl.IsKeyDown(.J) {
+	if rl.IsKeyDown(.J) || rl.IsGamepadButtonDown(0, .RIGHT_FACE_LEFT) {
 		port_input^ |= 0b01000000
 	}
 
 	// Select button
-	if rl.IsKeyDown(.Y) {
+	if rl.IsKeyDown(.Y) || rl.IsGamepadButtonDown(0, .MIDDLE_LEFT) {
 		port_input^ |= 0b00100000
 	}
 
 	// Start button
-	if rl.IsKeyDown(.U) {
+	if rl.IsKeyDown(.U) || rl.IsGamepadButtonDown(0, .MIDDLE_RIGHT) {
 		port_input^ |= 0b00010000
 	}
 
 	// Up button
-	if rl.IsKeyDown(.W) {
+	if rl.IsKeyDown(.W) || rl.IsGamepadButtonDown(0, .LEFT_FACE_UP) {
 		port_input^ |= 0b00001000
 	}
 
 	// Down button
-	if rl.IsKeyDown(.S) {
+	if rl.IsKeyDown(.S) || rl.IsGamepadButtonDown(0, .LEFT_FACE_DOWN) {
 		port_input^ |= 0b00000100
 	}
 
 	// Left button
-	if rl.IsKeyDown(.A) {
+	if rl.IsKeyDown(.A) || rl.IsGamepadButtonDown(0, .LEFT_FACE_LEFT) {
 		port_input^ |= 0b00000010
 	}
 
 	// Right button
-	if rl.IsKeyDown(.D) {
+	if rl.IsKeyDown(.D) || rl.IsGamepadButtonDown(0, .LEFT_FACE_RIGHT) {
 		port_input^ |= 0b00000001
 	}
 }
