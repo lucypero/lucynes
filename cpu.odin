@@ -113,9 +113,9 @@ nmi :: proc(using nes: ^NES, nmi_type: int) {
 	// from_2000 == false: from ppu tick when hitting vblank
 
 	stack_push_u16(nes, program_counter)
-	flags += {.InterruptDisable, .NoEffect1}
 	flags -= {.NoEffectB}
 	stack_push(nes, transmute(u8)flags)
+	flags += {.InterruptDisable, .NoEffect1}
 
 	// read u16 memory value at 0xFFFA
 	nmi_mem: u16
@@ -141,6 +141,33 @@ nmi :: proc(using nes: ^NES, nmi_type: int) {
 	// 	scanline,
 	// )
 
+	cycles += 7
+}
+
+// Interrupt Request - Executes an instruction at a specific location
+irq :: proc(using nes: ^NES) {
+
+	// If interrupts are disabled, return
+	if .InterruptDisable in flags {
+		return
+	}
+
+	// TODO: This is the exact same as NMI except for the PC address. maybe unify code
+
+	stack_push_u16(nes, program_counter)
+	flags -= {.NoEffectB}
+	stack_push(nes, transmute(u8)flags)
+	flags += {.InterruptDisable, .NoEffect1}
+
+	// read u16 memory value at 0xFFFE
+	nmi_mem: u16
+	low_byte := u16(read(nes, 0xFFFE))
+	high_byte := u16(read(nes, 0xFFFE + 1))
+	nmi_mem = high_byte << 8 | low_byte
+	old_pc := program_counter
+	program_counter = nmi_mem
+	dummy_read(nes)
+	dummy_read(nes)
 	cycles += 7
 }
 
@@ -978,6 +1005,12 @@ instruction_tick :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8, pi
 	if nmi_triggered != 0 {
 		nmi(nes, nmi_triggered)
 		nmi_triggered = 0
+	}
+
+	// Check if cartridge is requesting IRQ
+	if m_get_irq_state(nes) {
+		m_irq_clear(nes)
+		irq(nes)
 	}
 
 	// Input

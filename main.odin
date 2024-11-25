@@ -46,18 +46,17 @@ RomFormat :: enum {
 }
 
 RomInfo :: struct {
-	// TODO: u can group a lot of this into a bitset
-	rom_loaded:                bool,
-	rom_format:                RomFormat,
-	prg_unit_count:            u8, // Size of PRG ROM in 16 KiB Units (16 kib == 0x4000). Aka "PRG Bank Count"
-	chr_unit_count:            u8, // Size od CHR ROM in 8 KiB Units (8kib == 0x2000). AKA "CHR Bank Count"
-	prg_rom_size:              int,
-	chr_rom_size:              int,
+	rom_loaded:            bool,
+	rom_format:            RomFormat,
+	prg_unit_count:        u8, // Size of PRG ROM in 16 KiB Units (16 kib == 0x4000). Aka "PRG Bank Count"
+	chr_unit_count:        u8, // Size od CHR ROM in 8 KiB Units (8kib == 0x2000). AKA "CHR Bank Count"
+	prg_rom_size:          int,
+	chr_rom_size:          int,
 	mirror_mode_hardwired: MirrorMode,
-	contains_ram:              bool, // bit 2 in flags 6. true if it contains battery packed PRG RAM
-	contains_trainer:          bool,
-	alt_nametable_layout:      bool,
-	mapper:                    Mapper,
+	contains_ram:          bool, // bit 2 in flags 6. true if it contains battery packed PRG RAM
+	contains_trainer:      bool,
+	alt_nametable_layout:  bool,
+	mapper:                Mapper,
 }
 
 RegisterFlagEnum :: enum {
@@ -179,6 +178,12 @@ ringthing_add :: proc(using ringthing: ^RingThing($N, $T), data: T) {
 	buf[last_placed] = data
 }
 
+// Mapper read operation. Returns true if the mapper handled the read.
+mread_op :: proc(nes: ^NES, addr: u16) -> (u8, bool)
+
+// Mapper write operation. Returns true if the mapper handled the write.
+mwrite_op :: proc(nes: ^NES, addr: u16, val: u8) -> bool
+
 NES :: struct {
 	using registers:                Registers, // CPU Registers
 	ram:                            [0x800]u8, // 2 KiB of memory
@@ -188,16 +193,19 @@ NES :: struct {
 	instruction_type:               InstructionType,
 	rom_info:                       RomInfo,
 	prg_rom:                        []u8,
-	chr_rom:                        []u8,
 	prg_ram:                        []u8,
+	chr_rom:                        []u8,
 	nmi_triggered:                  int,
 
 	// Mappers
 	mapper_data:                    MapperData,
-	m_cpu_read:                     proc(nes: ^NES, addr: u16) -> (u8, bool),
-	m_cpu_write:                    proc(nes: ^NES, addr: u16, val: u8) -> bool,
-	m_ppu_read:                     proc(nes: ^NES, addr: u16) -> (u8, bool),
-	m_ppu_write:                    proc(nes: ^NES, addr: u16, val: u8) -> bool,
+	m_cpu_read:                     mread_op,
+	m_cpu_write:                    mwrite_op,
+	m_ppu_read:                     mread_op,
+	m_ppu_write:                    mwrite_op,
+	m_scanline_hit:                 proc(nes: ^NES),
+	m_get_irq_state:                proc(nes: ^NES) -> bool,
+	m_irq_clear:                    proc(nes: ^NES),
 
 	// DEBUGGING
 
@@ -744,6 +752,10 @@ mirror_test :: proc() {
 
 }
 
+// TODO: this proc does too much. mixes up a bunch of stuff
+// it should just load RomInfo struct.
+// then after that, do the following operations that will take in Rom Info.
+// Like: initializing the mapper and allocating cart ROM and RAM data.
 load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 
 	rom_info: RomInfo

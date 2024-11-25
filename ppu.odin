@@ -667,6 +667,10 @@ ppu_tick :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
 		}
 	}
 
+	if (ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0) && cycle_x == 260 && scanline < 240 {
+		nes.m_scanline_hit(nes)
+	}
+
 	/// Rendering the current pixel
 	draw_pixel(&nes.ppu, framebuffer)
 

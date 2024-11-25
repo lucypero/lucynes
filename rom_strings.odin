@@ -1,24 +1,26 @@
+
 package main
 
 /// FULLY WORKING GAMES:
 
-// rom_in_nes :: "roms/IceClimber.nes"
-// rom_in_nes :: "roms/Kung Fu.nes"
-// rom_in_nes :: "roms/Bomberman.nes"
-// rom_in_nes :: "roms/PacMan.nes"
 
 // Mapper 0
 
 // rom_in_nes :: "roms/SuperMarioBros.nes"
 // rom_in_nes :: "roms/DonkeyKong.nes"
+// rom_in_nes :: "roms/Kung Fu.nes"
+// rom_in_nes :: "roms/IceClimber.nes"
+// rom_in_nes :: "roms/PacMan.nes"
+// rom_in_nes :: "roms/Bomberman.nes"
 
 // Mapper 1
 
 // rom_in_nes :: "roms/Mega Man II.nes"
-rom_in_nes :: "roms/Dragon Warrior.nes" // this is dragon quest
+// rom_in_nes :: "roms/Dragon Warrior.nes" // this is dragon quest
 // rom_in_nes :: "roms/Legend of Zelda, The.nes"
 // rom_in_nes :: "roms/Tetris.nes"
 // rom_in_nes :: "roms/Final Fantasy.nes"
+// rom_in_nes :: "roms/Final Fantasy II (USA) (Proto).nes"
 // rom_in_nes :: "roms/Metroid.nes"
 
 // Mapper 2
@@ -34,9 +36,21 @@ rom_in_nes :: "roms/Dragon Warrior.nes" // this is dragon quest
 // rom_in_nes :: "roms/Ghostbusters.nes"
 // rom_in_nes :: "roms/Solomon's Key.nes" // wow this one is actually good
 
+// Mapper 4
+
+rom_in_nes :: "roms/Silver Surfer.nes"
+// rom_in_nes :: "roms/Solomon's Key 2 (Europe).nes"
+// rom_in_nes :: "roms/Mega Man III.nes"
+// rom_in_nes :: "roms/Mega Man IV.nes"
+// rom_in_nes :: "roms/Mega Man V.nes"
+// rom_in_nes :: "roms/Mega Man VI.nes"
+// rom_in_nes :: "roms/Adventures of Lolo II , The.nes"
+// rom_in_nes :: "roms/Super Mario Bros. 3.nes"
+
 /// NON-WORKING GAMES: 
 
 // Reason: Mapper unsupported
+
 
 // Mapper 67
 
@@ -46,15 +60,6 @@ rom_in_nes :: "roms/Dragon Warrior.nes" // this is dragon quest
 // Mapper 64
 
 // rom_in_nes :: "roms/Ms. Pac Man (Tengen).nes"
-
-// Mapper 4
-
-// rom_in_nes :: "roms/Silver Surfer.nes"
-// rom_in_nes :: "roms/Mega Man III.nes"
-// rom_in_nes :: "roms/Mega Man IV.nes"
-// rom_in_nes :: "roms/Mega Man V.nes"
-// rom_in_nes :: "roms/Mega Man VI.nes"
-// rom_in_nes :: "roms/Adventures of Lolo II , The.nes"
 
 // Reason: Emulator Bug
 
