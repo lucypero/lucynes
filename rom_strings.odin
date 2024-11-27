@@ -16,7 +16,6 @@ package main
 // Mapper 1
 
 // rom_in_nes :: "roms/Mega Man II.nes"
-// rom_in_nes :: "roms/Dragon Warrior.nes" // this is dragon quest
 // rom_in_nes :: "roms/Legend of Zelda, The.nes"
 // rom_in_nes :: "roms/Tetris.nes"
 // rom_in_nes :: "roms/Final Fantasy.nes"
@@ -27,7 +26,7 @@ package main
 
 // rom_in_nes :: "roms/Mega Man.nes"
 // rom_in_nes :: "roms/Metal Gear.nes"
-// rom_in_nes :: "roms/Contra.nes"
+rom_in_nes :: "roms/Contra.nes"
 // rom_in_nes :: "roms/Duck Tales.nes"
 // rom_in_nes :: "roms/Castlevania.nes"
 
@@ -43,7 +42,7 @@ package main
 // rom_in_nes :: "roms/Mega Man III.nes"
 // rom_in_nes :: "roms/Mega Man IV.nes"
 // rom_in_nes :: "roms/Mega Man V.nes"
-rom_in_nes :: "roms/Mega Man VI.nes"
+// rom_in_nes :: "roms/Mega Man VI.nes"
 // rom_in_nes :: "roms/Final Fantasy III (Japan).nes"
 // rom_in_nes :: "roms/Super Mario Bros. 3.nes"
 
@@ -55,19 +54,24 @@ rom_in_nes :: "roms/Mega Man VI.nes"
 
 // rom_in_nes :: "roms/Battletoads.nes"
 
+// Mapper 64
+
+// rom_in_nes :: "roms/Ms. Pac Man (Tengen).nes"
+
 // Mapper 67
 
 // rom_in_nes :: "roms/Spy Hunter.nes"
 // rom_in_nes :: "roms/Karate Kid, The.nes"
 
-// Mapper 64
+// Mapper 69
 
-// rom_in_nes :: "roms/Ms. Pac Man (Tengen).nes"
+// rom_in_nes :: "roms/Batman - Return of the Joker.nes"
 
 // Reason: Emulator Bug
 
 // rom_in_nes :: "roms/Spelunker.nes"
 // rom_in_nes :: "roms/Adventures of Lolo II , The.nes"
+// rom_in_nes :: "roms/Dragon Warrior.nes" // this is dragon quest. mapper 1
 
 /// TEST ROMS:
 

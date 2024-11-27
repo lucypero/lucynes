@@ -17,7 +17,12 @@ nes_height :: 240
 // screen_width :: nes_width * scale_factor
 // screen_height :: nes_height * scale_factor // ntsc might only show 224 scan lines
 
-debug_width :: 400
+when draw_debugger_view {
+	debug_width :: 400
+} else {
+	debug_width :: 0
+}
+
 screen_width :: nes_width * scale_factor + debug_width
 screen_height :: nes_height * scale_factor
 
