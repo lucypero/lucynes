@@ -101,6 +101,9 @@ window_main :: proc() {
 		height = framebuffer_height,
 	}
 
+	scale_factor_f := f32(scale_factor)
+	x_offset: f32 = 0
+
 	// rl.UnloadImage(checkedIm) // Unload CPU (RAM) image data (pixels)
 
 	// initting audio
@@ -115,6 +118,10 @@ window_main :: proc() {
 		fmt.eprintln("could not get palette")
 		os.exit(1)
 	}
+
+	// shader
+
+	shader: rl.Shader = rl.LoadShader(nil, "shaders/scanlines.fs")
 
 	// initializing nes
 	nes: NES
@@ -146,6 +153,16 @@ window_main :: proc() {
 				tick_force = true
 			}
 
+		}
+
+		if rl.IsKeyPressed(.F12) {
+			rl.ToggleBorderlessWindowed()
+			w := rl.GetScreenWidth()
+			h := rl.GetScreenHeight()
+			scale_factor_f = f32(h) / f32(framebuffer_height)
+
+			nes_w := framebuffer_width * scale_factor_f
+			x_offset = (f32(w) / 2) - (f32(nes_w) / 2)
 		}
 
 		if rl.IsKeyPressed(.F10) {
@@ -205,7 +222,9 @@ window_main :: proc() {
 		// draw_frame(nes, &pixel_grid)
 
 		rl.UpdateTexture(checked, raw_data(pixels))
-		rl.DrawTextureEx(checked, {0, 0}, 0, scale_factor, rl.WHITE)
+		rl.BeginShaderMode(shader)
+		rl.DrawTextureEx(checked, {x_offset, 0}, 0, scale_factor_f, rl.WHITE)
+		rl.EndShaderMode()
 		draw_debugger(nes, paused)
 
 		if rl.IsKeyPressed(.M) {
