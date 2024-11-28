@@ -155,7 +155,7 @@ window_main :: proc() {
 
 		}
 
-		if rl.IsKeyPressed(.F12) {
+		if rl.IsKeyPressed(.F) {
 			rl.ToggleBorderlessWindowed()
 			w := rl.GetScreenWidth()
 			h := rl.GetScreenHeight()
