@@ -325,7 +325,7 @@ m1_register_write :: proc(using m_data: ^M1Data, target_register: u16) {
 			fmt.println("prg mode 2")
 
 			// Set 16KB PRG Bank at CPU 0xC000
-			prg_bank_select_16hi = load_register & 0x0F
+			prg_bank_select_16hi = (load_register & 0x0F) % prg_bank_count
 		// prg_bank_select_16hi &= prg_bank_count - 1
 		case 3:
 			// Set 16KB PRG Bank at CPU 0x8000

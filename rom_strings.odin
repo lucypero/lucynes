@@ -21,12 +21,14 @@ package main
 // rom_in_nes :: "roms/Final Fantasy.nes"
 // rom_in_nes :: "roms/Final Fantasy II (USA) (Proto).nes"
 // rom_in_nes :: "roms/Metroid.nes"
+// rom_in_nes :: "roms/Blaster Master.nes"
+rom_in_nes :: "roms/Batman.nes"
 
 // Mapper 2
 
 // rom_in_nes :: "roms/Mega Man.nes"
 // rom_in_nes :: "roms/Metal Gear.nes"
-rom_in_nes :: "roms/Contra.nes"
+// rom_in_nes :: "roms/Contra.nes"
 // rom_in_nes :: "roms/Duck Tales.nes"
 // rom_in_nes :: "roms/Castlevania.nes"
 

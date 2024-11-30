@@ -27,7 +27,6 @@ nes_allocator: mem.Tracking_Allocator
 forever_arena: mv.Arena
 forever_allocator: mem.Tracking_Allocator
 
-
 palette: []rl.Color
 
 // nametable mirror mode

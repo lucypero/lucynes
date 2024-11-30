@@ -7,6 +7,7 @@ import "core:os"
 import "core:mem"
 import "core:strings"
 import "core:strconv"
+import "core:slice"
 import rl "vendor:raylib"
 
 scale_factor :: 4
@@ -37,6 +38,11 @@ target_fps :: 60
 
 // palette_file :: "palettes/ntscpalette.pal"
 palette_file :: "palettes/Composite_wiki.pal"
+
+// enable_shader :: false
+enable_shader :: true
+shader_file :: "shaders/easymode.fs"
+// shader_file :: "shaders/scanlines.fs"
 
 
 PixelGrid :: struct {
@@ -85,7 +91,7 @@ window_main :: proc() {
 
 	pixels := make([]rl.Color, framebuffer_width * framebuffer_height)
 
-	checkedIm := rl.Image {
+	nes_image := rl.Image {
 		data    = raw_data(pixels),
 		width   = framebuffer_width,
 		height  = framebuffer_height,
@@ -93,7 +99,7 @@ window_main :: proc() {
 		mipmaps = 1,
 	}
 
-	checked := rl.LoadTextureFromImage(checkedIm)
+	nes_texture := rl.LoadTextureFromImage(nes_image)
 
 	pixel_grid = PixelGrid {
 		pixels = pixels,
@@ -121,11 +127,24 @@ window_main :: proc() {
 
 	// shader
 
-	shader: rl.Shader = rl.LoadShader(nil, "shaders/scanlines.fs")
+	when enable_shader {
+		shader: rl.Shader = rl.LoadShader(nil, shader_file)
+	}
+
+	// u gotta set the values...
+	// rl.SetShaderValue()
+
+	the_rom : string = rom_in_nes
+
+	if len(os.args) > 1 {
+		// a := [?]string { "roms/", os.args[1]}
+		// strrr := strings.concatenate(a[:])
+		the_rom = os.args[1]
+	}
 
 	// initializing nes
 	nes: NES
-	nes_reset(&nes, rom_in_nes)
+	nes_reset(&nes, the_rom)
 
 	paused := false
 
@@ -140,7 +159,7 @@ window_main :: proc() {
 		// doing input
 		if rl.IsKeyDown(.ENTER) {
 			// reset nes
-			nes_reset(&nes, rom_in_nes)
+			nes_reset(&nes, the_rom)
 		}
 
 		tick_force := false
@@ -175,6 +194,7 @@ window_main :: proc() {
 
 		if rl.IsKeyPressed(.F1) {
 			// save
+			context.allocator = mem.tracking_allocator(&nes_allocator)
 
 			if len(save_states) > 0 {
 				delete(save_states[0].chr_rom)
@@ -186,15 +206,12 @@ window_main :: proc() {
 
 			save_states = make([]NES, 1)
 			save_states[0] = nes
+			save_states[0].chr_rom = slice.clone(nes.chr_rom)
+			save_states[0].prg_rom = slice.clone(nes.prg_rom)
+			save_states[0].prg_ram = slice.clone(nes.prg_ram)
 
-			save_states[0].chr_rom = make([]u8, len(nes.chr_rom))
-			copy(save_states[0].chr_rom, nes.chr_rom)
-
-			save_states[0].prg_rom = make([]u8, len(nes.prg_rom))
-			copy(save_states[0].prg_rom, nes.prg_rom)
-
-			save_states[0].prg_ram = make([]u8, len(nes.prg_ram))
-			copy(save_states[0].prg_ram, nes.prg_ram)
+			fmt.printfln("save %v nes %v", save_states[0].mapper_data, nes.mapper_data)
+			fmt.printfln("nes ppu pattern")
 		}
 
 		if rl.IsKeyPressed(.F4) {
@@ -202,7 +219,15 @@ window_main :: proc() {
 			// free_all(mem.tracking_allocator(&nes_allocator))
 
 			if len(save_states) > 0 {
+
+
+
+
 				nes = save_states[0]
+				comp := mem.compare(nes.ppu.memory[:], save_states[0].ppu.memory[:])
+				nes.chr_rom = save_states[0].chr_rom
+				// here compare nes with save_states[0]
+				fmt.printfln("load: save %v nes %v, comp: %v", save_states[0].mapper_data, nes.mapper_data, comp)
 			}
 		}
 
@@ -221,10 +246,14 @@ window_main :: proc() {
 		// here you modify the pixels (draw the frame)
 		// draw_frame(nes, &pixel_grid)
 
-		rl.UpdateTexture(checked, raw_data(pixels))
-		rl.BeginShaderMode(shader)
-		rl.DrawTextureEx(checked, {x_offset, 0}, 0, scale_factor_f, rl.WHITE)
-		rl.EndShaderMode()
+		rl.UpdateTexture(nes_texture, raw_data(pixels))
+		when enable_shader {
+			rl.BeginShaderMode(shader)
+		}
+		rl.DrawTextureEx(nes_texture, {x_offset, 0}, 0, scale_factor_f, rl.WHITE)
+		when enable_shader {
+			rl.EndShaderMode()
+		}
 		draw_debugger(nes, paused)
 
 		if rl.IsKeyPressed(.M) {
