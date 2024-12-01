@@ -308,7 +308,7 @@ ppu_readwrite :: proc(nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 		// 	return 0
 		// }
 
-		the_val = &nes.chr_rom[mem]
+		the_val = &nes.chr_mem[mem]
 	// nametable data (it's in ppu memory)
 	case 0x2000 ..< 0x3000:
 		index_in_vram := mem - 0x2000

@@ -1111,7 +1111,7 @@ process_savestate_order :: proc(nes: ^NES) {
 	case .Save:
 
 		if len(save_states) > 0 {
-			delete(save_states[0].chr_rom)
+			delete(save_states[0].chr_mem)
 			delete(save_states[0].prg_rom)
 			delete(save_states[0].prg_ram)
 
@@ -1121,16 +1121,16 @@ process_savestate_order :: proc(nes: ^NES) {
 		save_states = make([]NES, 1)
 
 		save_states[0] = nes^
-		save_states[0].chr_rom = slice.clone(nes.chr_rom)
+		save_states[0].chr_mem = slice.clone(nes.chr_mem)
 		save_states[0].prg_rom = slice.clone(nes.prg_rom)
 		save_states[0].prg_ram = slice.clone(nes.prg_ram)
 	case .Load:
-		delete(nes.chr_rom)
+		delete(nes.chr_mem)
 		delete(nes.prg_rom)
 		delete(nes.prg_ram)
 
 		nes^ = save_states[0]
-		nes.chr_rom = slice.clone(save_states[0].chr_rom)
+		nes.chr_mem = slice.clone(save_states[0].chr_mem)
 		nes.prg_rom = slice.clone(save_states[0].prg_rom)
 		nes.prg_ram = slice.clone(save_states[0].prg_ram)
 	case .None:

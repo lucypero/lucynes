@@ -391,24 +391,24 @@ m1_ppu_read :: proc(nes: ^NES, addr: u16) -> (u8, bool) {
 	}
 
 	if chr_bank_count == 0 {
-		return nes.chr_rom[addr], true
+		return nes.chr_mem[addr], true
 	} else {
 		if (control_register & 0x10) != 0 {
 			// 4K CHR Bank mode
 			switch addr {
 			case 0x0000 ..= 0x0FFF:
 				val_i := uint(chr_bank_select_4lo) * 0x1000 + (uint(addr) & 0x0FFF)
-				val := nes.chr_rom[val_i]
+				val := nes.chr_mem[val_i]
 				return val, true
 			case 0x1000 ..= 0x1FFF:
 				val_i := uint(chr_bank_select_4hi) * 0x1000 + (uint(addr) & 0x0FFF)
-				val := nes.chr_rom[val_i]
+				val := nes.chr_mem[val_i]
 				return val, true
 			}
 		} else {
 			// 8K CHR Bank Mode
 			val_i := uint(chr_bank_select_8) * 0x2000 + (uint(addr) & 0x1FFF)
-			val := nes.chr_rom[val_i]
+			val := nes.chr_mem[val_i]
 			return val, true
 		}
 	}
@@ -422,7 +422,7 @@ m1_ppu_write :: proc(nes: ^NES, addr: u16, val: u8) -> bool {
 
 	// if addr < 0x2000 {
 	// 	if chr_bank_count == 0 {
-	// 		nes.chr_rom[addr] = val
+	// 		nes.chr_mem[addr] = val
 	// 		return true
 	// 	}
 	// }
@@ -513,7 +513,7 @@ m3_ppu_read :: proc(using nes: ^NES, addr: u16) -> (u8, bool) {
 	m_data := nes.mapper_data.(M3Data)
 
 	if addr < 0x2000 {
-		return chr_rom[uint(m_data.prg_rom_bank_select) * 0x2000 + uint(addr)], true
+		return chr_mem[uint(m_data.prg_rom_bank_select) * 0x2000 + uint(addr)], true
 	}
 
 	return 0, false
@@ -563,7 +563,7 @@ m66_ppu_read :: proc(using nes: ^NES, addr: u16) -> (u8, bool) {
 	if addr < 0x2000 {
 		// 0x2000 = 8 KiB bank window
 		chr_addr := uint(m_data.chr_bank_select) * 0x2000 + uint(addr)
-		return chr_rom[chr_addr], true
+		return chr_mem[chr_addr], true
 	}
 
 	return 0, false
@@ -661,7 +661,7 @@ m4_ppu_read :: proc(nes: ^NES, addr: u16) -> (u8, bool) {
 	}
 
 	val_i := uint(chr_banks[chr_bank_no]) + (uint(addr) & 0x03FF)
-	val := nes.chr_rom[val_i]
+	val := nes.chr_mem[val_i]
 	return val, true
 }
 

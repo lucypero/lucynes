@@ -490,7 +490,7 @@ draw_pattern_tables :: proc(nes: ^NES) {
 
 			addr := u16((i * 16) + t)
 			// fmt.printfln("reading ppu addr %X", addr)
-			row := nes.chr_rom[(i * 16) + t]
+			row := nes.chr_mem[(i * 16) + t]
 			// row := ppu_read(nes, addr)
 
 			// looping row of pixels

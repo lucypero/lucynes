@@ -201,8 +201,16 @@ NES :: struct {
 	rom_info:                       RomInfo,
 	prg_rom:                        []u8,
 	prg_ram:                        []u8,
-	chr_rom:                        []u8,
+	// This is CHR RAM if rom_info.chr_rom_size == 0, otherwise it's CHR ROM
+	chr_mem:                        []u8,
 	nmi_triggered:                  int,
+	ppu:                            PPU,
+	apu:                            APU,
+
+	// input
+	port_0_register:                u8,
+	port_1_register:                u8,
+	poll_input:                     bool,
 
 	// Mappers
 	mapper_data:                    MapperData,
@@ -213,6 +221,9 @@ NES :: struct {
 	m_scanline_hit:                 proc(nes: ^NES),
 	m_get_irq_state:                proc(nes: ^NES) -> bool,
 	m_irq_clear:                    proc(nes: ^NES),
+
+	// INSTRUMENTING FOR THE OUTSIDE WORLD
+	vblank_hit:                     bool,
 
 	// DEBUGGING
 
@@ -225,20 +236,6 @@ NES :: struct {
 	last_write_addr:                u16,
 	last_write_val:                 u8,
 	log_dump_scheudled:             bool,
-
-	// INSTRUMENTING FOR THE OUTSIDE WORLD
-	vblank_hit:                     bool,
-
-	// input
-	port_0_register:                u8,
-	port_1_register:                u8,
-	poll_input:                     bool,
-
-	// PPU stuff
-	ppu:                            PPU,
-
-	// APU state
-	apu:                            APU,
 }
 
 
@@ -708,7 +705,7 @@ print_patterntable :: proc(nes: NES) {
 		// first bit plane
 		for t in 0 ..< 16 {
 
-			row := nes.chr_rom[(i * 16) + t]
+			row := nes.chr_mem[(i * 16) + t]
 
 			// looping row of pixels
 			for p in 0 ..< 8 {
@@ -805,7 +802,7 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 	rom_info.chr_rom_size = int(rom_string[5]) * 8192
 
 	// fmt.printfln("prg rom size: %v bytes", rom_info.prg_rom_size)
-	// fmt.printfln("chr rom size: %v bytes", rom_info.chr_rom_size)
+	// fmt.printfln("chr rom size: %v bytes", rom_info.chr_mem_size)
 
 	// Flags 6
 
@@ -860,18 +857,19 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 		prg_rom_start += trainer_size
 	}
 
-	chr_rom_start := prg_rom_start + rom_info.prg_rom_size
+	chr_mem_start := prg_rom_start + rom_info.prg_rom_size
 
 	prg_rom := make([]u8, rom_info.prg_rom_size)
 
-	chr_rom: []u8
+	chr_mem: []u8
 
 	if rom_info.chr_rom_size == 0 {
-		// fmt.printfln("chr rom size is 0.. so it uses chr ram? what is that?")
-		chr_rom = make([]u8, 0x2000)
+		// This means CHR ROM is actually CHR RAM
+		// 8KiB
+		chr_mem = make([]u8, 0x2000)
 	} else {
-		chr_rom = make([]u8, rom_info.chr_rom_size)
-		copy(chr_rom[:], rom_string[chr_rom_start:])
+		chr_mem = make([]u8, rom_info.chr_rom_size)
+		copy(chr_mem[:], rom_string[chr_mem_start:])
 	}
 
 	copy(prg_rom[:], rom_string[prg_rom_start:])
@@ -879,10 +877,10 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 
 	nes.rom_info = rom_info
 	nes.prg_rom = prg_rom
-	nes.chr_rom = chr_rom
+	nes.chr_mem = chr_mem
 
 	// allocating prg ram
-	// assuming it is always 8kib
+	// assuming it is always 32kib
 	// All other SxROM variants are denoted by their functional PRG/CHR-ROM/RAM sizes in the NES 2.0 header. 
 	// Without NES 2.0, the PRG-RAM size has to be assumed; 32 KiB are sufficient for compatibility with all known titles. 
 	nes.prg_ram = make([]u8, 0x8000)
