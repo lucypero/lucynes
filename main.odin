@@ -44,8 +44,8 @@ save_states: []NES
 MirrorMode :: enum {
 	Horizontal,
 	Vertical,
-	OneScreenLo,
-	OneScreenHi,
+	ScreenAOnly,
+	ScreenBOnly,
 }
 
 RomFormat :: enum {

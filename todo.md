@@ -126,8 +126,6 @@ Bomberman
 
 # Mapper code
 
-
-
 read your discord general for more information
 
 the cart can dictate everything.
@@ -162,12 +160,3 @@ Hardware 	MMC1B2
 ## Fixing batman:
 
 (it's still broken)
-
-
-
-# Save state bug
-
-I prob spent 4 hours debugging this. i still have no idea what's happening.
-Try drawing the current pattern tables.. see what it shows.
-
-i still suspect it's an odin compiler bug..

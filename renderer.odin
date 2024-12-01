@@ -122,14 +122,15 @@ window_main :: proc() {
 	audio_demo: AudioDemo
 	audio_demo_init(&audio_demo)
 
-	run_nestest_test()
-
 	ok: bool
 	palette, ok = get_palette(palette_file)
 	if !ok {
 		fmt.eprintln("could not get palette")
 		os.exit(1)
 	}
+
+	run_nestest_test()
+
 
 	// shader
 

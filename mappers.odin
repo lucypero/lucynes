@@ -10,6 +10,7 @@ Mapper :: enum {
 	M3, // CNROM
 	M4, // MMC3
 	M66, // GxROM
+	M7, // AxROM
 }
 
 MapperData :: union {
@@ -19,12 +20,15 @@ MapperData :: union {
 	M3Data,
 	M4Data,
 	M66Data,
+	M7Data,
 }
 
 mapper_init :: proc(using nes: ^NES, mapper_number: u8, prg_unit_count: u8, chr_unit_count: u8) -> (mapper: Mapper) {
 	m_scanline_hit = m_scanline_hit_dummy
 	m_get_irq_state = m_get_irq_state_dummy
 	m_irq_clear = m_irq_clear_dummy
+	m_ppu_read = m_dummy_read
+	m_ppu_write = m_dummy_write
 	switch mapper_number {
 	case 0:
 		mapper = .M0
@@ -37,8 +41,6 @@ mapper_init :: proc(using nes: ^NES, mapper_number: u8, prg_unit_count: u8, chr_
 		nes.mapper_data = data
 		m_cpu_read = m0_cpu_read
 		m_cpu_write = m0_cpu_write
-		m_ppu_read = m_dummy_read
-		m_ppu_write = m_dummy_write
 	case 1:
 		mapper = .M1
 		m1_data := M1Data{}
@@ -56,8 +58,6 @@ mapper_init :: proc(using nes: ^NES, mapper_number: u8, prg_unit_count: u8, chr_
 		nes.mapper_data = M2Data{}
 		m_cpu_read = m2_cpu_read
 		m_cpu_write = m2_cpu_write
-		m_ppu_read = m_dummy_read
-		m_ppu_write = m_dummy_write
 	case 3:
 		mapper = .M3
 		nes.mapper_data = M3Data{}
@@ -85,6 +85,14 @@ mapper_init :: proc(using nes: ^NES, mapper_number: u8, prg_unit_count: u8, chr_
 		m_scanline_hit = m4_scanline_hit
 		m_get_irq_state = m4_get_irq_state
 		m_irq_clear = m4_irq_clear
+	case 7:
+		mapper = .M7
+		m7_data := M7Data{}
+		m7_data.prg_bank_count = prg_unit_count
+		m7_data.mirror_mode = .ScreenAOnly
+		nes.mapper_data = m7_data
+		m_cpu_read = m7_cpu_read
+		m_cpu_write = m7_cpu_write
 	case 66:
 		mapper = .M66
 		nes.mapper_data = M66Data{}
@@ -110,6 +118,9 @@ get_mirror_mode :: proc(nes: NES) -> MirrorMode {
 	case .M4:
 		m4_data := nes.mapper_data.(M4Data)
 		return m4_data.mirror_mode
+	case .M7:
+		m7_data := nes.mapper_data.(M7Data)
+		return m7_data.mirror_mode
 	}
 
 	return nes.rom_info.mirror_mode_hardwired
@@ -156,6 +167,10 @@ m_dummy_read :: proc(using nes: ^NES, addr: u16) -> (u8, bool) {
 	return 0, false
 }
 
+m_dummy_write :: proc(using nes: ^NES, addr: u16, val: u8) -> bool {
+	return false
+}
+
 m_scanline_hit_dummy :: proc(nes: ^NES) {
 }
 
@@ -165,10 +180,6 @@ m_get_irq_state_dummy :: proc(nes: ^NES) -> bool {
 
 m_irq_clear_dummy :: proc(nes: ^NES) {
 
-}
-
-m_dummy_write :: proc(using nes: ^NES, addr: u16, val: u8) -> bool {
-	return false
 }
 
 // Mapper 0
@@ -252,7 +263,7 @@ m1_cpu_read :: proc(nes: ^NES, addr: u16) -> (u8, bool) {
 		} else {
 
 			// 32K Mode
-			fmt.printfln("bank select 32: %v", prg_bank_select_32)
+			// fmt.printfln("bank select 32: %v", prg_bank_select_32)
 			val_i := uint(prg_bank_select_32) * 0x8000 + (uint(addr) & 0x7FFF)
 			// val_i %= len(nes.prg_rom)
 			val := nes.prg_rom[val_i]
@@ -276,9 +287,9 @@ m1_register_write :: proc(using m_data: ^M1Data, target_register: u16) {
 
 		switch control_register & 0x03 {
 		case 0:
-			mirror_mode = .OneScreenLo
+			mirror_mode = .ScreenAOnly
 		case 1:
-			mirror_mode = .OneScreenHi
+			mirror_mode = .ScreenBOnly
 		case 2:
 			mirror_mode = .Horizontal
 		case 3:
@@ -792,4 +803,59 @@ m4_irq_clear :: proc(nes: ^NES) {
 	m_data := &nes.mapper_data.(M4Data)
 	using m_data
 	irq_active = false
+}
+
+// Mapper 7
+
+M7Data :: struct {
+	prg_bank_count:  u8,
+	prg_bank_select: u8,
+	mirror_mode : MirrorMode
+}
+
+m7_cpu_read :: proc(nes: ^NES, addr: u16) -> (u8, bool) {
+	m_data := nes.mapper_data.(M7Data)
+	using m_data
+
+	addr_uint := uint(addr)
+
+	switch addr {
+		case 0x8000 ..= 0xFFFF:
+			val_i := uint(prg_bank_select) * 0x8000 + ((addr_uint - 0x8000) & 0x7FFF)
+			val := nes.prg_rom[val_i]
+			return val, true
+	}
+
+	return 0, false
+}
+
+m7_cpu_write :: proc(using nes: ^NES, addr: u16, val: u8) -> bool {
+	m_data := &nes.mapper_data.(M7Data)
+	using m_data
+
+	// 7  bit  0
+	// ---- ----
+	// xxxM xPPP
+	//    |  |||
+	//    |  +++- Select 32 KB PRG ROM bank for CPU $8000-$FFFF
+	//    +------ Select 1 KB VRAM page for all 4 nametables
+
+	switch addr {
+	case 0x8000 ..= 0xFFFF:
+		p := val & 0x07
+		m := (val & 0x10) != 0
+
+		prg_bank_select = p
+
+		// SetMirroringType(((value & 0x10) == 0x10) ? MirroringType::ScreenBOnly : MirroringType::ScreenAOnly);
+		if m {
+			mirror_mode = .ScreenBOnly
+		} else {
+			mirror_mode = .ScreenAOnly
+		}
+
+		return true
+	}
+
+	return false
 }

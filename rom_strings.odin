@@ -27,7 +27,7 @@ package main
 // Mapper 2
 
 // rom_in_nes :: "roms/Mega Man.nes"
-rom_in_nes :: "roms/Metal Gear.nes"
+// rom_in_nes :: "roms/Metal Gear.nes"
 // rom_in_nes :: "roms/Contra.nes"
 // rom_in_nes :: "roms/Duck Tales.nes"
 // rom_in_nes :: "roms/Castlevania.nes"
@@ -48,13 +48,14 @@ rom_in_nes :: "roms/Metal Gear.nes"
 // rom_in_nes :: "roms/Final Fantasy III (Japan).nes"
 // rom_in_nes :: "roms/Super Mario Bros. 3.nes"
 
+// Mapper 7
+
+rom_in_nes :: "roms/Cobra Triangle.nes" 
+
 /// NON-WORKING GAMES: 
 
 // Reason: Mapper unsupported
 
-// Mapper 7
-
-// rom_in_nes :: "roms/Battletoads.nes"
 
 // Mapper 64
 
@@ -71,20 +72,21 @@ rom_in_nes :: "roms/Metal Gear.nes"
 
 // Reason: Emulator Bug
 
+// rom_in_nes :: "roms/Battletoads.nes" // doesn't work after start screens and start cutscene
 // rom_in_nes :: "roms/Spelunker.nes"
 // rom_in_nes :: "roms/Adventures of Lolo II , The.nes"
 // rom_in_nes :: "roms/Dragon Warrior.nes" // this is dragon quest. mapper 1
 
 /// TEST ROMS:
 
-// rom_in_nes :: "tests/cpu_timing_test6/cpu_timing_test.nes"
-// rom_in_nes :: "tests/branch_timing_tests/1.Branch_Basics.nes"
+// rom_in_nes :: "tests/cpu_timing_test6/cpu_timing_test.nes" // passed
+// rom_in_nes :: "tests/branch_timing_tests/1.Branch_Basics.nes" // passed
 // rom_in_nes :: "tests/full_nes_palette.nes"
 // rom_in_nes :: "tests/nmi_sync/demo_pal.nes"
 // rom_in_nes :: "tests/240pee.nes"
 // rom_in_nes :: "tests/full_palette.nes"
 // rom_in_nes :: "tests/color_test.nes"
-// rom_in_nes :: "nestest/nestest.nes"
+// rom_in_nes :: "nestest/nestest.nes" // passed
 
 /// VBL NMI TIMING
 

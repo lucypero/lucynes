@@ -35,7 +35,9 @@ PPU :: struct {
 		// BGRs bMmG
 		using flags: bit_field u8 {
 			greyscale:            u8 | 1,
+			// Show background in leftmost 8 pixels of screen, 0: Hide
 			show_left_background: u8 | 1,
+			// Show sprites in leftmost 8 pixels of screen, 0: Hide
 			show_left_sprites:    u8 | 1,
 			show_background:      u8 | 1,
 			show_sprites:         u8 | 1,
@@ -318,46 +320,39 @@ ppu_readwrite :: proc(nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 		// First virtual nametable slot
 		case 0x2000 ..< 0x2400:
 			switch mirror_mode {
-				case .OneScreenHi, .OneScreenLo, .Vertical, .Horizontal:
+				case .ScreenAOnly, .Vertical, .Horizontal:
 				// write to first slot
 				index_in_vram = mem_modulo
+				case .ScreenBOnly:
+				index_in_vram = mem_modulo + 0x400
 			}
 		// Second virtual nametable slot
 		case 0x2400 ..< 0x2800:
 			switch mirror_mode {
-				case .Vertical:
+				case .Vertical, .ScreenAOnly:
 				// write to first slot
 				index_in_vram = mem_modulo
-				case .Horizontal:
+				case .Horizontal, .ScreenBOnly:
 				// write to second slot
 				index_in_vram = mem_modulo + 0x400
-				case .OneScreenHi, .OneScreenLo:
-				// write to first slot
-				index_in_vram = mem_modulo
 			}
 		// Third virtual nametable slot
 		case 0x2800 ..< 0x2C00:
 			switch mirror_mode {
-				case .Vertical:
+				case .Vertical, .ScreenBOnly:
 				// write to second slot
 				index_in_vram = mem_modulo + 0x400
-				case .Horizontal:
-				// write to first slot
-				index_in_vram = mem_modulo
-				case .OneScreenHi, .OneScreenLo:
+				case .Horizontal, .ScreenAOnly:
 				// write to first slot
 				index_in_vram = mem_modulo
 			}
 		// Fourth virtual nametable slot
 		case 0x2C00 ..< 0x3000:
 			switch mirror_mode {
-				case .Vertical:
+				case .Vertical, .ScreenBOnly, .Horizontal:
 				// write to second slot
 				index_in_vram = mem_modulo + 0x400
-				case .Horizontal:
-				// write to second slot
-				index_in_vram = mem_modulo + 0x400
-				case .OneScreenHi, .OneScreenLo:
+				case .ScreenAOnly:
 				// write to first slot
 				index_in_vram = mem_modulo
 			}
@@ -827,16 +822,12 @@ update_sprite_shift_registers :: proc(nes: ^NES, current_scanline: int) {
 draw_pixel :: proc(using ppu: ^PPU, pixel_grid: ^PixelGrid) {
 	// checks before bothering to draw a pixel
 
-	// checks if renderer is on
-	if ppu_mask.show_background == 0 {
-		return
-	}
-
 	// checks if it's on a visible pixel
 	if !(scanline >= 0 && scanline <= 239 && cycle_x > 0 && cycle_x <= 256) {
 		return
 	}
 
+	// Background pixel
 	bg_pixel: u8
 	bg_palette: u8
 
@@ -850,6 +841,9 @@ draw_pixel :: proc(using ppu: ^PPU, pixel_grid: ^PixelGrid) {
 	bg_pal1: u8 = (bg_shifter_attrib_hi & bit_mux) > 0 ? 1 : 0
 	bg_palette = (bg_pal1 << 1) | bg_pal0
 
+	if ppu_mask.show_background == 0 || (cycle_x <= 8 && ppu_mask.show_left_background == 0) {
+		bg_pixel = 0
+	}
 
 	// foreground pixel
 
@@ -882,6 +876,10 @@ draw_pixel :: proc(using ppu: ^PPU, pixel_grid: ^PixelGrid) {
 				break
 			}
 		}
+	}
+
+	if ppu_mask.show_sprites == 0 || (cycle_x <= 8 && ppu_mask.show_left_sprites == 0) {
+		fg_pixel = 0
 	}
 
 	// combining background pixel and foreground pixel
