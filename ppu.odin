@@ -304,9 +304,8 @@ ppu_readwrite :: proc(nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 	// it's in cartridge's CHR ROM
 	case 0x0000 ..= 0x1FFF:
 		// if write {
-		// 	fmt.eprintln("u are trying to write to cartridge's ROM...")
-		// } else {
-		// 	fmt.printfln("u are trying to read to cartridge's ROM... %X", mem)
+		// 	fmt.eprintfln("u are trying to write to cartridge's ROM...")
+		// 	return 0
 		// }
 
 		the_val = &nes.chr_rom[mem]

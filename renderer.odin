@@ -24,7 +24,7 @@ when draw_debugger_view {
 	debug_width :: 0
 }
 
-screen_width :: nes_width * scale_factor + debug_width + 256 * 2 + 20
+screen_width :: nes_width * scale_factor + debug_width
 screen_height :: nes_height * scale_factor
 
 framebuffer_width :: nes_width
@@ -77,7 +77,7 @@ clear_color := rl.Color{36, 41, 46, 255}
 SaveStateOrder :: enum {
 	None,
 	Save,
-	Load
+	Load,
 }
 
 savestate_order: SaveStateOrder = .None
@@ -244,6 +244,10 @@ window_main :: proc() {
 
 		if app_state.in_menu {
 			draw_menu()
+		}
+
+		when draw_debugger_view && draw_pattern_tables_view {
+			draw_pattern_tables(&nes)
 		}
 
 		rl.EndDrawing()
@@ -446,3 +450,105 @@ color_map_from_nes_to_real :: proc(color_in_nes: u8) -> rl.Color {
 
 // Render pattern table
 // u did it in 8fb1aefb1a373b00b6eb223f73c22f00a59e61cb
+
+draw_pattern_tables :: proc(nes: ^NES) {
+
+	// draw some pattern table tiles
+
+
+	// pattern tables:
+	// 1: $0000 - $0FFF
+	// 2: $1000 - $1FFF
+
+	// each tile is 16 bytes made of 2 bit planes
+	// tile is 8x8 pixels (pixels being 2 bits long)
+
+	// pattern table is divided into two 256 tile sections (left and right pattern tables)
+
+
+	// it is stored tiled by tile
+
+	// how each tile is stored:
+
+	// bit plane 0 - then - bitplane 1
+
+
+	// tiles
+
+	// how many tiles we gon draw
+
+	tiles_per_row := 16
+	padding := 0
+
+	// looping tile
+	for i in 0 ..< 256 * 2 {
+
+		tile: [8 * 8]int // pixels of tiles (contains [0-3])
+
+		// first bit plane
+		for t in 0 ..< 16 {
+
+			addr := u16((i * 16) + t)
+			// fmt.printfln("reading ppu addr %X", addr)
+			row := nes.chr_rom[(i * 16) + t]
+			// row := ppu_read(nes, addr)
+
+			// looping row of pixels
+			for p in 0 ..< 8 {
+				is_on := (row >> uint(p)) & 0b00000001
+
+				if is_on != 0 {
+
+					// if we're on first bit plane, add one
+					if (t < 8) {
+						tile[(t * 8) + (7 - p)] += 1
+					} else {
+						// if we're on second bit plane, add two
+						tile[((t - 8) * 8) + (7 - p)] += 2
+					}
+				}
+			}
+		}
+
+		row_slot := i % tiles_per_row
+		x_pos := (8 + padding) * row_slot + padding
+		col_slot := i / tiles_per_row
+		y_pos := (8 + padding) * col_slot + padding
+
+		if i > 255 {
+			y_pos -= (8 + padding) * 16
+			x_pos += (8 + padding) * 16 + padding + 16
+		}
+
+		// we gonna draw
+		draw_tile(tile, x_pos, y_pos)
+	}
+}
+
+draw_tile :: proc(tile: [8 * 8]int, x_pos, y_pos: int) {
+
+	for p, i in tile {
+		col: rl.Color
+
+		switch p {
+		case 0:
+			col = rl.BLACK
+		case 1:
+			col = rl.WHITE
+		case 2:
+			col = rl.MAGENTA
+		case 3:
+			col = rl.RED
+		case:
+			col = rl.BLUE // we should not get this
+		}
+
+		x_add := i % 8
+		y_add := i / 8
+
+		// the_p_i := ((y_pos + y_add) * pixel_grid.width) + x_pos + x_add
+		// pixel_grid.pixels[the_p_i] = col
+
+		rl.DrawPixel(i32(x_pos + x_add) + nes_width * scale_factor + 10, i32(y_pos + y_add), col)
+	}
+}
