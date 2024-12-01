@@ -75,15 +75,13 @@ get_mem :: proc(nes: ^NES, addr_mode: AddressMode) -> (u16, uint) {
 	return mem, extra_cycles
 }
 
-do_opcode :: proc(nes: ^NES, addr_mode: AddressMode, instruction: proc(_: ^NES, _: u16), cycles: uint) {
+do_opcode :: proc(nes: ^NES, addr_mode: AddressMode, instruction: proc(_: ^NES, _: u16)) {
 	mem, extra_cycles := get_mem(nes, addr_mode)
-	nes.extra_instr_cycles = 0
 	nes.ignore_extra_addressing_cycles = false
 	// delete later
 	nes.instruction_type = .Branch
 	instruction(nes, mem)
 
-	// TODO(lucy): Get rid of this, use the new way of cycles
 	if nes.ignore_extra_addressing_cycles {
 		extra_cycles = 0
 	}
@@ -115,8 +113,6 @@ do_opcode :: proc(nes: ^NES, addr_mode: AddressMode, instruction: proc(_: ^NES, 
 		}
 	}
 	}
-
-	nes.cycles += cycles + extra_cycles + nes.extra_instr_cycles
 }
 
 // it just returns what's in A

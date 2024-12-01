@@ -194,8 +194,6 @@ mwrite_op :: proc(nes: ^NES, addr: u16, val: u8) -> bool
 NES :: struct {
 	using registers:                Registers, // CPU Registers
 	ram:                            [0x800]u8, // 2 KiB of memory
-	cycles:                         uint,
-	extra_instr_cycles:             uint,
 	ignore_extra_addressing_cycles: bool,
 	instruction_type:               InstructionType,
 	rom_info:                       RomInfo,
@@ -298,7 +296,6 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 
 	program_counter = 0xC000
 	stack_pointer = 0xFD
-	cycles = 7
 	flags = transmute(RegisterFlags)u8(0x24)
 
 	instructions_ran := 0
@@ -311,8 +308,6 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 
 		state_before_instr: NesTestLog
 		state_before_instr.cpu_registers = registers
-		state_before_instr.cpu_cycles = nes.cycles
-
 		reset_debugging_vars(nes)
 
 		// fmt.printfln("running line %v", instructions_ran + 1)
@@ -328,7 +323,7 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 			return true
 		}
 
-		if res := compare_reg(nes.registers, nes.cycles, total_read_writes, register_logs[instructions_ran]);
+		if res := compare_reg(nes.registers, total_read_writes, register_logs[instructions_ran]);
 		   res != 0 {
 			// test fail
 
@@ -351,8 +346,6 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 				fmt.printfln("P: %X, TEST P: %X", flags, logs_reg.cpu_registers.flags)
 			case 6:
 				fmt.printfln("SP: %X, TEST SP: %X", stack_pointer, logs_reg.cpu_registers.stack_pointer)
-			case 7:
-				fmt.printfln("CYCLES: %v, TEST CYCLES: %v", nes.cycles, logs_reg.cpu_cycles)
 			case 8:
 				fmt.printfln("REAL CYCLES: %v, TEST CYCLES: %v", total_read_writes, logs_reg.cpu_cycles)
 			}
@@ -363,7 +356,6 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 
 			fmt.println("state after instruction:")
 			state_before_instr.cpu_registers = registers
-			state_before_instr.cpu_cycles = nes.cycles
 			print_cpu_state(state_before_instr)
 			return false
 		}
@@ -375,7 +367,6 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 
 compare_reg :: proc(
 	current_register: Registers,
-	cpu_cycles: uint,
 	real_cpu_cycles: uint,
 	log_register: NesTestLog,
 ) -> int {
@@ -402,10 +393,6 @@ compare_reg :: proc(
 
 	if current_register.stack_pointer != log_register.cpu_registers.stack_pointer {
 		return 6
-	}
-
-	if cpu_cycles != log_register.cpu_cycles {
-		return 7
 	}
 
 	if real_cpu_cycles != log_register.cpu_cycles {

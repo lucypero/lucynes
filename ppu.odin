@@ -93,13 +93,6 @@ ppu_init :: proc(using ppu: ^PPU) {
 	ppu_status.vertical_blank = 1
 }
 
-advance_ppu :: proc(nes: ^NES) {
-	// running PPU 3 times
-	for i in 0 ..< 3 {
-		ppu_tick(nes, &pixel_grid)
-	}
-}
-
 write_ppu_register :: proc(nes: ^NES, ppu_reg: u16, val: u8) {
 
 	using nes.ppu
