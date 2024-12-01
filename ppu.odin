@@ -595,11 +595,18 @@ ppu_tick :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
 				addr: u16 = (u16(ppu_ctrl.b) << 12) + (u16(bg_next_tile_id) << 4) + current_loopy.fine_y + 0
 
 				bg_next_tile_lsb = ppu_read(nes, addr)
+				// if cycle_x == 141 && scanline == 220 {
+				// 	fmt.printfln("cx: %v, bg next tile lsb %X", cycle_x, bg_next_tile_lsb)
+				// }
 			case 6:
 				addr: u16 = (u16(ppu_ctrl.b) << 12) + (u16(bg_next_tile_id) << 4) + current_loopy.fine_y + 8
 
 				// fetch the next background tile bitplane 2 (msb)
 				bg_next_tile_msb = ppu_read(nes, addr)
+
+				// if cycle_x == 143 && scanline == 220 {
+				// 	fmt.printfln("cx: %v, bg next tile msb %X", cycle_x, bg_next_tile_msb)
+				// }
 			case 7:
 				// increment scroll x
 				increment_scroll_x(&nes.ppu)

@@ -24,7 +24,7 @@ when draw_debugger_view {
 	debug_width :: 0
 }
 
-screen_width :: nes_width * scale_factor + debug_width
+screen_width :: nes_width * scale_factor + debug_width + 256 * 2 + 20
 screen_height :: nes_height * scale_factor
 
 framebuffer_width :: nes_width
@@ -35,7 +35,6 @@ target_fps :: 60
 // the CPU clockrate for NTSC systems is 1789773 Hz
 //    https://www.nesdev.org/wiki/Cycle_reference_chart
 
-
 // palette_file :: "palettes/ntscpalette.pal"
 palette_file :: "palettes/Composite_wiki.pal"
 
@@ -43,7 +42,6 @@ palette_file :: "palettes/Composite_wiki.pal"
 enable_shader :: true
 shader_file :: "shaders/easymode.fs"
 // shader_file :: "shaders/scanlines.fs"
-
 
 PixelGrid :: struct {
 	pixels: []rl.Color,
@@ -75,6 +73,14 @@ AppState :: struct {
 app_state: AppState
 
 clear_color := rl.Color{36, 41, 46, 255}
+
+SaveStateOrder :: enum {
+	None,
+	Save,
+	Load
+}
+
+savestate_order: SaveStateOrder = .None
 
 window_main :: proc() {
 
@@ -134,7 +140,7 @@ window_main :: proc() {
 	// u gotta set the values...
 	// rl.SetShaderValue()
 
-	the_rom : string = rom_in_nes
+	the_rom: string = rom_in_nes
 
 	if len(os.args) > 1 {
 		// a := [?]string { "roms/", os.args[1]}
@@ -194,24 +200,7 @@ window_main :: proc() {
 
 		if rl.IsKeyPressed(.F1) {
 			// save
-			context.allocator = mem.tracking_allocator(&nes_allocator)
-
-			if len(save_states) > 0 {
-				delete(save_states[0].chr_rom)
-				delete(save_states[0].prg_rom)
-				delete(save_states[0].prg_ram)
-
-				delete(save_states)
-			}
-
-			save_states = make([]NES, 1)
-			save_states[0] = nes
-			save_states[0].chr_rom = slice.clone(nes.chr_rom)
-			save_states[0].prg_rom = slice.clone(nes.prg_rom)
-			save_states[0].prg_ram = slice.clone(nes.prg_ram)
-
-			fmt.printfln("save %v nes %v", save_states[0].mapper_data, nes.mapper_data)
-			fmt.printfln("nes ppu pattern")
+			savestate_order = .Save
 		}
 
 		if rl.IsKeyPressed(.F4) {
@@ -219,15 +208,7 @@ window_main :: proc() {
 			// free_all(mem.tracking_allocator(&nes_allocator))
 
 			if len(save_states) > 0 {
-
-
-
-
-				nes = save_states[0]
-				comp := mem.compare(nes.ppu.memory[:], save_states[0].ppu.memory[:])
-				nes.chr_rom = save_states[0].chr_rom
-				// here compare nes with save_states[0]
-				fmt.printfln("load: save %v nes %v, comp: %v", save_states[0].mapper_data, nes.mapper_data, comp)
+				savestate_order = .Load
 			}
 		}
 
@@ -461,3 +442,7 @@ fill_input_port :: proc(port_input: ^u8) {
 color_map_from_nes_to_real :: proc(color_in_nes: u8) -> rl.Color {
 	return palette[color_in_nes & 0x3F]
 }
+
+
+// Render pattern table
+// u did it in 8fb1aefb1a373b00b6eb223f73c22f00a59e61cb

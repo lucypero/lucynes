@@ -8,6 +8,7 @@ import "core:math"
 import "core:mem"
 import "core:os"
 import "core:strings"
+import "core:slice"
 
 readwrite_things :: proc(using nes: ^NES, addr: u16, val: u8, is_write: bool, is_dummy: bool) {
 	advance_ppu(nes)
@@ -1098,6 +1099,86 @@ dump_log :: proc(using nes: ^NES) {
 	fmt.printfln("Log Dumped")
 }
 
+
+process_savestate_order :: proc(nes: ^NES) {
+	if savestate_order == .None {
+		return
+	}
+
+	// load or save here
+	switch savestate_order {
+	case .Save:
+		context.allocator = mem.tracking_allocator(&nes_allocator)
+
+		if len(save_states) > 0 {
+			delete(save_states[0].chr_rom)
+			delete(save_states[0].prg_rom)
+			delete(save_states[0].prg_ram)
+
+			delete(save_states)
+		}
+
+		save_states = make([]NES, 1)
+		save_states[0] = nes^
+
+		save_states[0].ppu = nes.ppu
+
+		save_states[0].chr_rom = slice.clone(nes.chr_rom)
+		save_states[0].prg_rom = slice.clone(nes.prg_rom)
+		save_states[0].prg_ram = slice.clone(nes.prg_ram)
+
+		save_states[0].ppu.ppu_ctrl.reg = nes.ppu.ppu_ctrl.reg
+		save_states[0].ppu.memory = nes.ppu.memory
+		save_states[0].ppu.current_loopy.reg = nes.ppu.current_loopy.reg
+		save_states[0].ppu.temp_loopy.reg = nes.ppu.temp_loopy.reg
+
+		comp := mem.compare(nes.ppu.memory[:], save_states[0].ppu.memory[:])
+		comp2 := mem.compare(nes.prg_rom[:], save_states[0].prg_rom[:])
+		comp3 := mem.compare(nes.chr_rom[:], save_states[0].chr_rom[:])
+
+		if comp != 0 || comp2 != 0 || comp3 != 0 {
+			fmt.eprintln("not eq")
+			os.exit(1)
+		}
+
+		fmt.printfln("save %v nes %v", save_states[0].mapper_data, nes.mapper_data)
+		fmt.printfln("nes ppu pattern")
+
+
+	case .Load:
+		delete(nes.prg_rom)
+		delete(nes.chr_rom)
+
+		nes^ = {}
+		nes.ppu.memory = {}
+		nes.ppu = {}
+
+		nes^ = save_states[0]
+		comp := mem.compare(nes.ppu.memory[:], save_states[0].ppu.memory[:])
+		comp2 := mem.compare(nes.prg_rom[:], save_states[0].prg_rom[:])
+		comp3 := mem.compare(nes.chr_rom[:], save_states[0].chr_rom[:])
+		nes.chr_rom = save_states[0].chr_rom
+
+		nes.ppu.current_loopy.reg = save_states[0].ppu.current_loopy.reg
+		nes.ppu.memory = save_states[0].ppu.memory
+		nes.ppu.temp_loopy.reg = save_states[0].ppu.temp_loopy.reg
+		nes.ppu.ppu_ctrl.reg = save_states[0].ppu.ppu_ctrl.reg
+
+		comp4 := mem.compare(mem.any_to_bytes(nes^), mem.any_to_bytes(save_states[0]))
+
+		if comp != 0 || comp2 != 0 || comp3 != 0 || comp4 != 0 {
+			fmt.eprintln("not eq")
+			os.exit(1)
+		}
+		// here compare nes with save_states[0]
+		fmt.printfln("comp: %v %v %v %v", comp, comp2, comp3, comp4)
+
+	case .None:
+	}
+
+	savestate_order = .None
+}
+
 // It stops at breakpoints
 // if it stops at breakpoints, returns true
 tick_nes_till_vblank :: proc(
@@ -1141,9 +1222,11 @@ tick_nes_till_vblank :: proc(
 		}
 
 		// breaking at NMI. 
-		// if instr_info.triggered_nmi {
-		// 	return true;
-		// }
+		if instr_info.triggered_nmi {
+			fmt.println("triggered nmi")
+			process_savestate_order(nes)
+			// return true;
+		}
 
 		if vblank_hit {
 			vblank_hit = false

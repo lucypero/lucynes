@@ -17,6 +17,8 @@ import "core:sync/chan"
 import rl "vendor:raylib"
 import wt "wav_tools"
 
+/// GLOBAL STATE
+
 // Allocators
 
 // one for all memory that a NES needs. it will be freed when you reset or switch games.
@@ -28,6 +30,13 @@ forever_arena: mv.Arena
 forever_allocator: mem.Tracking_Allocator
 
 palette: []rl.Color
+
+// sync stuff for passing data to audio thread
+mutex: sync.Mutex
+ring_buffer: Buffer
+sema: sync.Sema
+
+save_states: []NES
 
 // nametable mirror mode
 // for mappers with dynamic mirror mode
@@ -143,7 +152,6 @@ OAMEntry :: struct {
 	x:         u8,
 }
 
-save_states: []NES
 
 FaultyOp :: struct {
 	supposed_cycles: int,
@@ -233,10 +241,7 @@ NES :: struct {
 	apu:                            APU,
 }
 
-// sync stuff for passing data to audio thread
-mutex: sync.Mutex
-ring_buffer: Buffer
-sema: sync.Sema
+
 
 set_flag :: proc(flags: ^RegisterFlags, flag: RegisterFlagEnum, predicate: bool) {
 	if predicate {

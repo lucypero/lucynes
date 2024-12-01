@@ -137,6 +137,8 @@ if not then proceed to do the read normally.
 
 ## Mapper 1: fixing dragon quest
 
+(it's still broken)
+
 dragon quest is setting prg_bank_select_16lo to index 4. more than the total amount of banks (4)
 
 
@@ -156,3 +158,16 @@ WRAM 	8 KB
 VRAM 	0 KB
 CIC Type 	6113B1
 Hardware 	MMC1B2
+
+## Fixing batman:
+
+(it's still broken)
+
+
+
+# Save state bug
+
+I prob spent 4 hours debugging this. i still have no idea what's happening.
+Try drawing the current pattern tables.. see what it shows.
+
+i still suspect it's an odin compiler bug..
