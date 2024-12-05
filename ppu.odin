@@ -282,12 +282,12 @@ ppu_readwrite :: proc(nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 	mem := mem & 0x3FFF
 
 	if write {
-		if cart_ppu_write(nes, mem, val) {
+		if nes.m_ppu_write(nes, mem, val) {
 			// Cartridge took care of the ppu write. return.
 			return 0
 		}
 	} else {
-		if val_read, ok := cart_ppu_read(nes, mem); ok {
+		if val_read, ok := nes.m_ppu_read(nes, mem); ok {
 			// Cartridge took care of the ppu read. return.
 			return val_read
 		}

@@ -208,9 +208,9 @@ window_main :: proc() {
 			// load
 			// free_all(mem.tracking_allocator(&nes_allocator))
 
-			if len(save_states) > 0 {
+			// if len(save_states) > 0 {
 				savestate_order = .Load
-			}
+			// }
 		}
 
 		port_0_input: u8

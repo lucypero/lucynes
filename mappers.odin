@@ -2,6 +2,7 @@ package main
 
 import "core:os"
 import "core:fmt"
+import "core:time"
 
 Mapper :: enum {
 	M0, // NROM128, NROM256
@@ -124,41 +125,6 @@ get_mirror_mode :: proc(nes: NES) -> MirrorMode {
 	}
 
 	return nes.rom_info.mirror_mode_hardwired
-}
-
-// does the write depending on the current mapper.
-// returns true if it did anything. returns false if it should do a normal NES read.
-cart_cpu_read :: proc(using nes: ^NES, addr: u16) -> (u8, bool) {
-	data_read: u8
-	ok: bool
-
-	data_read, ok = m_cpu_read(nes, addr)
-
-	return data_read, ok
-}
-
-// does the write depending on the current mapper.
-// returns true if it did anything. returns false if it should do a normal NES write.
-
-// TODO: cart calls are redundant rn. consider calling mapper functions directly
-//    if this continues being the case.
-cart_cpu_write :: proc(using nes: ^NES, addr: u16, val: u8) -> bool {
-	ok: bool
-	ok = m_cpu_write(nes, addr, val)
-	return ok
-}
-
-cart_ppu_read :: proc(using nes: ^NES, addr: u16) -> (u8, bool) {
-	data_read: u8
-	ok: bool
-	data_read, ok = m_ppu_read(nes, addr)
-	return data_read, ok
-}
-
-cart_ppu_write :: proc(using nes: ^NES, addr: u16, val: u8) -> bool {
-	ok: bool
-	ok = m_ppu_write(nes, addr, val)
-	return ok
 }
 
 // Dummy functions
@@ -351,6 +317,7 @@ m1_register_write :: proc(using m_data: ^M1Data, target_register: u16) {
 
 }
 
+
 m1_cpu_write :: proc(nes: ^NES, addr: u16, val: u8) -> bool {
 	m_data := &nes.mapper_data.(M1Data)
 	using m_data
@@ -360,8 +327,10 @@ m1_cpu_write :: proc(nes: ^NES, addr: u16, val: u8) -> bool {
 	case 0x6000 ..= 0x7FFF:
 		// write to cart RAM
 
-		// fmt.println("writing to prg ram")
+
+		// fmt.printfln("%v: writing to prg ram", time.now())
 		nes.prg_ram[addr & 0x1FFF] = val
+		// os.write_entire_file("ram-bup", nes.prg_ram)
 		return true
 
 	case 0x8000 ..= 0xFFFF:

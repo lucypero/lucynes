@@ -44,7 +44,7 @@ read :: proc(using nes: ^NES, addr: u16) -> u8 {
 	data: u8
 	ok: bool
 
-	if data, ok = cart_cpu_read(nes, addr); ok {
+	if data, ok = m_cpu_read(nes, addr); ok {
 		// Cart dictates the cpu read, above everything else
 		return data
 	} else if addr >= 0x0000 && addr <= 0x1FFF {
@@ -82,7 +82,7 @@ write :: proc(using nes: ^NES, addr: u16, val: u8) {
 	last_write_val = val
 	readwrite_things(nes, addr, val, true, false)
 
-	if cart_cpu_write(nes, addr, val) {
+	if m_cpu_write(nes, addr, val) {
 		// Cart dictates the cpu write, above everything else
 		return
 	} else if addr >= 0x0000 && addr <= 0x1FFF {
@@ -190,6 +190,12 @@ nes_reset :: proc(nes: ^NES, rom_file: string) {
 		os.exit(1)
 	}
 	nes_init(nes)
+
+	// loading ram from file if there is a backup
+	ram_bup, ok := os.read_entire_file(nes.rom_info.hash)
+	if ok {
+		nes.prg_ram = ram_bup
+	}
 }
 
 nes_init :: proc(using nes: ^NES) {
@@ -1106,15 +1112,18 @@ process_savestate_order :: proc(nes: ^NES) {
 		save_states[0].chr_mem = slice.clone(nes.chr_mem)
 		save_states[0].prg_rom = slice.clone(nes.prg_rom)
 		save_states[0].prg_ram = slice.clone(nes.prg_ram)
+		os.write_entire_file(nes.rom_info.hash, nes.prg_ram)
 	case .Load:
-		delete(nes.chr_mem)
-		delete(nes.prg_rom)
-		delete(nes.prg_ram)
+		if len(save_states) > 0 {
+			delete(nes.chr_mem)
+			delete(nes.prg_rom)
+			delete(nes.prg_ram)
 
-		nes^ = save_states[0]
-		nes.chr_mem = slice.clone(save_states[0].chr_mem)
-		nes.prg_rom = slice.clone(save_states[0].prg_rom)
-		nes.prg_ram = slice.clone(save_states[0].prg_ram)
+			nes^ = save_states[0]
+			nes.chr_mem = slice.clone(save_states[0].chr_mem)
+			nes.prg_rom = slice.clone(save_states[0].prg_rom)
+			nes.prg_ram = slice.clone(save_states[0].prg_ram)
+		}
 	case .None:
 	}
 
@@ -1126,7 +1135,7 @@ process_savestate_order :: proc(nes: ^NES) {
 tick_nes_till_vblank :: proc(
 	using nes: ^NES,
 	tick_force: bool,
-	port_0_input: u8,// force running at least one tick, ignoring breakpoints
+	port_0_input: u8, // force running at least one tick, ignoring breakpoints
 	port_1_input: u8,
 	pixel_grid: ^PixelGrid,
 ) -> (

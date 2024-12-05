@@ -14,6 +14,8 @@ import "core:strconv"
 import "core:strings"
 import "core:sync"
 import "core:sync/chan"
+import hash "core:crypto/hash"
+import base64 "core:encoding/base64"
 import rl "vendor:raylib"
 import wt "wav_tools"
 
@@ -54,6 +56,7 @@ RomFormat :: enum {
 }
 
 RomInfo :: struct {
+	hash: string,
 	rom_loaded:            bool,
 	rom_format:            RomFormat,
 	prg_unit_count:        u8, // Size of PRG ROM in 16 KiB Units (16 kib == 0x4000). Aka "PRG Bank Count"
@@ -237,7 +240,6 @@ NES :: struct {
 }
 
 
-
 set_flag :: proc(flags: ^RegisterFlags, flag: RegisterFlagEnum, predicate: bool) {
 	if predicate {
 		flags^ += {flag}
@@ -323,8 +325,7 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 			return true
 		}
 
-		if res := compare_reg(nes.registers, total_read_writes, register_logs[instructions_ran]);
-		   res != 0 {
+		if res := compare_reg(nes.registers, total_read_writes, register_logs[instructions_ran]); res != 0 {
 			// test fail
 
 			logs_reg := register_logs[instructions_ran]
@@ -365,11 +366,7 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 	return true
 }
 
-compare_reg :: proc(
-	current_register: Registers,
-	real_cpu_cycles: uint,
-	log_register: NesTestLog,
-) -> int {
+compare_reg :: proc(current_register: Registers, real_cpu_cycles: uint, log_register: NesTestLog) -> int {
 
 	if current_register.program_counter != log_register.cpu_registers.program_counter {
 		return 1
@@ -862,7 +859,6 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 	copy(prg_rom[:], rom_string[prg_rom_start:])
 	rom_info.rom_loaded = true
 
-	nes.rom_info = rom_info
 	nes.prg_rom = prg_rom
 	nes.chr_mem = chr_mem
 
@@ -879,6 +875,17 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 		fmt.printfln("prg ram size %v", prg_ram_size)
 	}
 
+	// hash file
+
+	the_hash := hash.hash_bytes(.SHA256, test_rom)
+	hash_str, ok_3 := base64.encode(the_hash)
+	if ok_3 != .None {
+		return false
+	}
+
+	rom_info.hash = hash_str
+
+	nes.rom_info = rom_info
 	return true
 }
 

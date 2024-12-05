@@ -16,7 +16,7 @@ package main
 // Mapper 1
 
 // rom_in_nes :: "roms/Mega Man II.nes"
-// rom_in_nes :: "roms/Legend of Zelda, The.nes"
+rom_in_nes :: "roms/Legend of Zelda, The.nes"
 // rom_in_nes :: "roms/Tetris.nes"
 // rom_in_nes :: "roms/Final Fantasy.nes"
 // rom_in_nes :: "roms/Final Fantasy II (USA) (Proto).nes"
@@ -50,12 +50,14 @@ package main
 
 // Mapper 7
 
-rom_in_nes :: "roms/Cobra Triangle.nes" 
+// rom_in_nes :: "roms/Cobra Triangle.nes" 
+// rom_in_nes :: "roms/R.C. Pro-Am II.nes"
+// rom_in_nes :: "roms/Teenage Mutant Ninja Turtles.nes"
+// rom_in_nes :: "roms/Ghosts 'N Goblins.nes"
 
 /// NON-WORKING GAMES: 
 
 // Reason: Mapper unsupported
-
 
 // Mapper 64
 
@@ -72,6 +74,7 @@ rom_in_nes :: "roms/Cobra Triangle.nes"
 
 // Reason: Emulator Bug
 
+// rom_in_nes :: "roms/Battletoads & Double Dragon - The Ultimate Team.nes"
 // rom_in_nes :: "roms/Battletoads.nes" // doesn't work after start screens and start cutscene
 // rom_in_nes :: "roms/Spelunker.nes"
 // rom_in_nes :: "roms/Adventures of Lolo II , The.nes"
