@@ -16,7 +16,7 @@ package main
 // Mapper 1
 
 // rom_in_nes :: "roms/Mega Man II.nes"
-rom_in_nes :: "roms/Legend of Zelda, The.nes"
+// rom_in_nes :: "roms/Legend of Zelda, The.nes"
 // rom_in_nes :: "roms/Tetris.nes"
 // rom_in_nes :: "roms/Final Fantasy.nes"
 // rom_in_nes :: "roms/Final Fantasy II (USA) (Proto).nes"
@@ -75,7 +75,7 @@ rom_in_nes :: "roms/Legend of Zelda, The.nes"
 // Reason: Emulator Bug
 
 // rom_in_nes :: "roms/Battletoads & Double Dragon - The Ultimate Team.nes"
-// rom_in_nes :: "roms/Battletoads.nes" // doesn't work after start screens and start cutscene
+rom_in_nes :: "roms/Battletoads.nes" // doesn't work after start screens and start cutscene
 // rom_in_nes :: "roms/Spelunker.nes"
 // rom_in_nes :: "roms/Adventures of Lolo II , The.nes"
 // rom_in_nes :: "roms/Dragon Warrior.nes" // this is dragon quest. mapper 1

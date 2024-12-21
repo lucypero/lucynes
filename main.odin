@@ -136,26 +136,6 @@ Registers :: struct {
 	flags:           RegisterFlags, // Processor Status Register (Processor Flags)
 }
 
-LoopyRegister :: struct #raw_union {
-	using values: bit_field u16 {
-		coarse_x:    u16 | 5,
-		coarse_y:    u16 | 5,
-		nametable_x: u16 | 1,
-		nametable_y: u16 | 1,
-		fine_y:      u16 | 3,
-	},
-	reg:          u16,
-}
-
-// sprites
-OAMEntry :: struct {
-	y:         u8,
-	id:        u8,
-	attribute: u8,
-	x:         u8,
-}
-
-
 FaultyOp :: struct {
 	supposed_cycles: int,
 	nmi_ran:         bool,
@@ -482,6 +462,9 @@ _main :: proc() {
 	// if true {
 	// 	os.exit(0)
 	// }
+	a := [2]f32 {}
+	draw_image(&a)
+	fmt.println(a)
 
 	window_main()
 

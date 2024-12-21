@@ -14,7 +14,12 @@ Mapper :: enum {
 	M7, // AxROM
 }
 
-MapperData :: union {
+draw_image :: proc(position: ^[2]f32) {
+	// Draw image using position.
+	position[1] = 2
+}
+
+MapperData :: union #no_nil {
 	M0Data,
 	M1Data,
 	M2Data,

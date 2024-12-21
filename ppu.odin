@@ -8,6 +8,42 @@ import "core:slice"
 import "core:strconv"
 import "core:strings"
 
+PpuMask :: struct #raw_union {
+	// BGRs bMmG
+	using flags: bit_field u8 {
+		greyscale:            u8 | 1,
+		// Show background in leftmost 8 pixels of screen, 0: Hide
+		show_left_background: u8 | 1,
+		// Show sprites in leftmost 8 pixels of screen, 0: Hide
+		show_left_sprites:    u8 | 1,
+		show_background:      u8 | 1,
+		show_sprites:         u8 | 1,
+		emphasize_red:        u8 | 1,
+		emphasize_green:      u8 | 1,
+		emphasize_blue:       u8 | 1,
+	},
+	reg:         u8,
+}
+
+LoopyRegister :: struct #raw_union {
+	using values: bit_field u16 {
+		coarse_x:    u16 | 5,
+		coarse_y:    u16 | 5,
+		nametable_x: u16 | 1,
+		nametable_y: u16 | 1,
+		fine_y:      u16 | 3,
+	},
+	reg:          u16,
+}
+
+// sprites
+OAMEntry :: struct {
+	y:         u8,
+	id:        u8,
+	attribute: u8,
+	x:         u8,
+}
+
 PPU :: struct {
 	memory:                     [2 * 1024]u8, // stores 2 nametables
 	palette:                    [32]u8, // internal memory inside the PPU, stores palette data
@@ -15,6 +51,7 @@ PPU :: struct {
 	oam_address:                u8,
 	cycle_x:                    int, // current ppu cycle horizontally in the scanline (0..=340)
 	scanline:                   int, // current ppu scanline (-1..=260)
+	vblank_count:               uint, // how many vblanks happened (just for debugging)
 
 	//NOTE: if everything is stored in loopy, then this is all redundant state, no?
 	// consider deleting all this
@@ -31,22 +68,9 @@ PPU :: struct {
 		},
 		reg:         u8,
 	},
-	ppu_mask:                   struct #raw_union {
-		// BGRs bMmG
-		using flags: bit_field u8 {
-			greyscale:            u8 | 1,
-			// Show background in leftmost 8 pixels of screen, 0: Hide
-			show_left_background: u8 | 1,
-			// Show sprites in leftmost 8 pixels of screen, 0: Hide
-			show_left_sprites:    u8 | 1,
-			show_background:      u8 | 1,
-			show_sprites:         u8 | 1,
-			emphasize_red:        u8 | 1,
-			emphasize_green:      u8 | 1,
-			emphasize_blue:       u8 | 1,
-		},
-		reg:         u8,
-	},
+	ppu_mask:                   PpuMask,
+	next_ppu_mask:              PpuMask, // to delay applying the mask, to avoid bugs in some games. ppu mask values are only applied in vblank.
+	ppu_mask_apply_timer:       int,
 	ppu_status:                 struct #raw_union {
 		// VSO. ....
 		using flags: bit_field u8 {
@@ -60,8 +84,8 @@ PPU :: struct {
 	ppu_buffer_read:            u8,
 
 	// ppu internals: new model: the ppu loopy model
-	current_loopy:              LoopyRegister,
-	temp_loopy:                 LoopyRegister,
+	current_loopy:              LoopyRegister, // the v register
+	temp_loopy:                 LoopyRegister, // the t register
 	ppu_x:                      u8, // fine x scroll (3 bits)
 	ppu_w:                      bool, // First or second write toggle (1 bit)
 
@@ -126,7 +150,24 @@ write_ppu_register :: proc(nes: ^NES, ppu_reg: u16, val: u8) {
 
 	// PPUMASK
 	case 0x2001:
-		ppu_mask.reg = val
+		prev_mask: PpuMask = ppu_mask
+		new_mask: PpuMask
+		new_mask.reg = val
+
+		// ppu_mask.reg = val
+
+		was_on := prev_mask.show_background != 0 || prev_mask.show_sprites != 0
+		is_on := new_mask.show_background != 0 || new_mask.show_sprites != 0
+
+		if was_on != is_on {
+			// a toggle happened. activate the delay
+			// fmt.printfln("rendering toggle. to -> %v, vblank? %X, scanline %v, cycle x %v, vblank_count %v", is_on, ppu_status.vertical_blank, scanline, cycle_x, vblank_count)
+			next_ppu_mask.reg = val
+			ppu_mask_apply_timer = 4
+		} else {
+			// no toggle. apply ppu mask immediately
+			ppu_mask.reg = val
+		}
 
 	// PPUSTATUS
 	case 0x2002:
@@ -320,39 +361,39 @@ ppu_readwrite :: proc(nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 		// First virtual nametable slot
 		case 0x2000 ..< 0x2400:
 			switch mirror_mode {
-				case .ScreenAOnly, .Vertical, .Horizontal:
+			case .ScreenAOnly, .Vertical, .Horizontal:
 				// write to first slot
 				index_in_vram = mem_modulo
-				case .ScreenBOnly:
+			case .ScreenBOnly:
 				index_in_vram = mem_modulo + 0x400
 			}
 		// Second virtual nametable slot
 		case 0x2400 ..< 0x2800:
 			switch mirror_mode {
-				case .Vertical, .ScreenAOnly:
+			case .Vertical, .ScreenAOnly:
 				// write to first slot
 				index_in_vram = mem_modulo
-				case .Horizontal, .ScreenBOnly:
+			case .Horizontal, .ScreenBOnly:
 				// write to second slot
 				index_in_vram = mem_modulo + 0x400
 			}
 		// Third virtual nametable slot
 		case 0x2800 ..< 0x2C00:
 			switch mirror_mode {
-				case .Vertical, .ScreenBOnly:
+			case .Vertical, .ScreenBOnly:
 				// write to second slot
 				index_in_vram = mem_modulo + 0x400
-				case .Horizontal, .ScreenAOnly:
+			case .Horizontal, .ScreenAOnly:
 				// write to first slot
 				index_in_vram = mem_modulo
 			}
 		// Fourth virtual nametable slot
 		case 0x2C00 ..< 0x3000:
 			switch mirror_mode {
-				case .Vertical, .ScreenBOnly, .Horizontal:
+			case .Vertical, .ScreenBOnly, .Horizontal:
 				// write to second slot
 				index_in_vram = mem_modulo + 0x400
-				case .ScreenAOnly:
+			case .ScreenAOnly:
 				// write to first slot
 				index_in_vram = mem_modulo
 			}
@@ -506,6 +547,15 @@ ppu_tick :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
 
 	using nes.ppu
 
+	// tick only if rendering is enabled.
+	is_rendering_on := ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0
+
+	if !is_rendering_on {
+		do_stuff_always(nes, framebuffer)
+		return
+	}
+
+
 	// read "PPU Rendering"
 
 	// 262 scanlines
@@ -582,18 +632,18 @@ ppu_tick :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
 				addr: u16 = (u16(ppu_ctrl.b) << 12) + (u16(bg_next_tile_id) << 4) + current_loopy.fine_y + 0
 
 				bg_next_tile_lsb = ppu_read(nes, addr)
-				// if cycle_x == 141 && scanline == 220 {
-				// 	fmt.printfln("cx: %v, bg next tile lsb %X", cycle_x, bg_next_tile_lsb)
-				// }
+			// if cycle_x == 141 && scanline == 220 {
+			// 	fmt.printfln("cx: %v, bg next tile lsb %X", cycle_x, bg_next_tile_lsb)
+			// }
 			case 6:
 				addr: u16 = (u16(ppu_ctrl.b) << 12) + (u16(bg_next_tile_id) << 4) + current_loopy.fine_y + 8
 
 				// fetch the next background tile bitplane 2 (msb)
 				bg_next_tile_msb = ppu_read(nes, addr)
 
-				// if cycle_x == 143 && scanline == 220 {
-				// 	fmt.printfln("cx: %v, bg next tile msb %X", cycle_x, bg_next_tile_msb)
-				// }
+			// if cycle_x == 143 && scanline == 220 {
+			// 	fmt.printfln("cx: %v, bg next tile msb %X", cycle_x, bg_next_tile_msb)
+			// }
 			case 7:
 				// increment scroll x
 				increment_scroll_x(&nes.ppu)
@@ -651,9 +701,15 @@ ppu_tick :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
 		// }
 	}
 
+	do_stuff_always(nes, framebuffer)
+}
+
+do_stuff_always :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
+	using nes.ppu 
 	// Setting vblank
 	if scanline == 241 && cycle_x == 1 {
 		ppu_status.vertical_blank = 1
+		vblank_count += 1
 		nes.vblank_hit = true
 		if ppu_ctrl.v != 0 {
 			// nmi(nes, false)
@@ -674,6 +730,25 @@ ppu_tick :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
 		scanline += 1
 		if scanline >= 261 {
 			scanline = -1
+		}
+	}
+
+	// check ppu mask swap (it is applied with a delay)
+
+	if ppu_mask_apply_timer > 0 {
+		// timer active
+		ppu_mask_apply_timer -= 1
+
+		if ppu_mask_apply_timer == 0 {
+
+			was_on := ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0
+			is_on := next_ppu_mask.show_background != 0 || next_ppu_mask.show_sprites != 0
+
+			if was_on != is_on {
+				fmt.printfln("applying ppu mask switch. rendering to -> %v", is_on)
+			}
+
+			ppu_mask = next_ppu_mask
 		}
 	}
 }
