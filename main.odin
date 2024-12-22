@@ -150,6 +150,10 @@ InstructionInfo :: struct {
 	next_pc:       u16, // The next position of the PC like, for real
 	triggered_nmi: bool,
 	cpu_status:    Registers,
+	// ppu info is when AFTER the instruction ran
+	ppu_scanline: int,
+	ppu_cycle: int,
+	ppu_vblank_count: uint,
 	// you can find out the rest from the PC.
 	// you can add other state later.
 }

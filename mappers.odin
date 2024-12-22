@@ -822,11 +822,7 @@ m7_cpu_write :: proc(using nes: ^NES, addr: u16, val: u8) -> bool {
 		prg_bank_select = p
 
 		// SetMirroringType(((value & 0x10) == 0x10) ? MirroringType::ScreenBOnly : MirroringType::ScreenAOnly);
-		if m {
-			mirror_mode = .ScreenBOnly
-		} else {
-			mirror_mode = .ScreenAOnly
-		}
+		mirror_mode = m ? .ScreenBOnly : .ScreenAOnly
 
 		return true
 	}

@@ -82,14 +82,17 @@ rom_in_nes :: "roms/Battletoads.nes" // doesn't work after start screens and sta
 
 /// TEST ROMS:
 
-// rom_in_nes :: "tests/cpu_timing_test6/cpu_timing_test.nes" // passed
-// rom_in_nes :: "tests/branch_timing_tests/1.Branch_Basics.nes" // passed
+// hard to judge if u pass
 // rom_in_nes :: "tests/full_nes_palette.nes"
 // rom_in_nes :: "tests/nmi_sync/demo_pal.nes"
 // rom_in_nes :: "tests/240pee.nes"
 // rom_in_nes :: "tests/full_palette.nes"
-// rom_in_nes :: "tests/color_test.nes"
+
+// rom_in_nes :: "tests/cpu_timing_test6/cpu_timing_test.nes" // passed
+// rom_in_nes :: "tests/branch_timing_tests/1.Branch_Basics.nes" // passed
 // rom_in_nes :: "nestest/nestest.nes" // passed
+
+// rom_in_nes :: "tests/color_test.nes" // failed. tests ppu mask emphasis and grayscale (important)
 
 /// VBL NMI TIMING
 

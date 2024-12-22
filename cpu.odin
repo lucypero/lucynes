@@ -996,6 +996,10 @@ run_instruction :: proc(using nes: ^NES) {
 	instr_inf.next_pc = program_counter
 	instr_inf.triggered_nmi = nmi_triggered != 0
 	instr_inf.cpu_status = nes.registers
+	instr_inf.ppu_scanline = nes.ppu.scanline
+	instr_inf.ppu_cycle = nes.ppu.cycle_x
+	instr_inf.ppu_vblank_count = nes.ppu.vblank_count
+
 	ringthing_add(&instr_history, instr_inf)
 	ringthing_add(&instr_history_log, instr_inf)
 	flags += {.NoEffect1}
@@ -1070,10 +1074,13 @@ dump_log :: proc(using nes: ^NES) {
 
 		fmt.sbprintf(
 			&b,
-			" // A:$%X, X:$%X, Y:$%X",
+			" // A:$%X, X:$%X, Y:$%X, PY: %v, PX: %v, PV: %v",
 			instr.cpu_status.accumulator,
 			instr.cpu_status.index_x,
 			instr.cpu_status.index_y,
+			instr.ppu_scanline,
+			instr.ppu_cycle,
+			instr.ppu_vblank_count
 		)
 
 		strings.write_string(&b, "\n")
@@ -1156,11 +1163,12 @@ tick_nes_till_vblank :: proc(
 		reset_debugging_vars(nes)
 
 		// dump
-		if program_counter == 0xBC52 {
-			// dump_log(nes)
-			// os.exit(0)
-			// log_dump_scheudled = false
-		}
+		// if program_counter == 0x8641 {
+		// 	fmt.println("reached 8641")
+		// 	// dump_log(nes)
+		// 	// os.exit(0)
+		// 	log_dump_scheudled = false
+		// }
 
 		instr_info := instr_history.buf[instr_history.last_placed]
 

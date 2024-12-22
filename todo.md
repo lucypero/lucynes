@@ -160,3 +160,16 @@ Hardware 	MMC1B2
 ## Fixing batman:
 
 (it's still broken)
+
+
+## fixing battletoads
+
+it freezes when loading the first level.
+
+- print logs, the ones you did.
+- force sprite 0 hit and see what happens.
+	- game works fine if u force sprite 0 hit.
+
+after debugging in Mesen, i see the entire screen is palette index 3 in mesen, so sprite 0 is hit.
+in lucynes, background is at 0, so the hit is never done. i don't know why this happens.
+might be a mapper bug.

@@ -38,8 +38,8 @@ target_fps :: 60
 // palette_file :: "palettes/ntscpalette.pal"
 palette_file :: "palettes/Composite_wiki.pal"
 
-// enable_shader :: false
-enable_shader :: true
+enable_shader :: false
+// enable_shader :: true
 shader_file :: "shaders/easymode.fs"
 // shader_file :: "shaders/scanlines.fs"
 
@@ -204,6 +204,7 @@ window_main :: proc() {
 			savestate_order = .Save
 		}
 
+
 		if rl.IsKeyPressed(.F4) {
 			// load
 			// free_all(mem.tracking_allocator(&nes_allocator))
@@ -211,6 +212,10 @@ window_main :: proc() {
 			// if len(save_states) > 0 {
 				savestate_order = .Load
 			// }
+		}
+
+		if rl.IsKeyPressed(.L) {
+			dump_log(&nes)
 		}
 
 		port_0_input: u8

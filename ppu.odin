@@ -153,6 +153,7 @@ write_ppu_register :: proc(nes: ^NES, ppu_reg: u16, val: u8) {
 		prev_mask: PpuMask = ppu_mask
 		new_mask: PpuMask
 		new_mask.reg = val
+		// fmt.printfln("new ppu mask: %X", val)
 
 		// ppu_mask.reg = val
 
@@ -436,7 +437,6 @@ ppu_readwrite :: proc(nes: ^NES, mem: u16, val: u8, write: bool) -> u8 {
 	return the_val^
 }
 
-
 // loads the background shifters with data of the next tile, on the least significant byte
 load_bg_shifters :: proc(using ppu: ^PPU) {
 
@@ -460,19 +460,27 @@ load_bg_shifters :: proc(using ppu: ^PPU) {
 
 // shifts the bg shifter registers by 1 bit to the left
 shift_bg_shifters :: proc(using ppu: ^PPU) {
-	if ppu_mask.show_background != 0 {
-		bg_shifter_pattern_lo <<= 1
-		bg_shifter_pattern_hi <<= 1
-		bg_shifter_attrib_lo <<= 1
-		bg_shifter_attrib_hi <<= 1
+	if !(ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0) {
+		return
 	}
+
+	// if ppu_mask.show_background != 0 {
+	bg_shifter_pattern_lo <<= 1
+	bg_shifter_pattern_hi <<= 1
+	bg_shifter_attrib_lo <<= 1
+	bg_shifter_attrib_hi <<= 1
+	// }
 }
 
 // shifts the fg shifter registers by 1 bit to the left
 //  when some conditions are hit
 shift_fg_shifters :: proc(using ppu: ^PPU) {
+	if !(ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0) {
+		return
+	}
+
 	// shifting sprite shifters (only when they hit the cycle)
-	if ppu_mask.show_sprites != 0 && cycle_x >= 0 && cycle_x < 258 {
+	if cycle_x >= 0 && cycle_x < 258 {
 		for i in 0 ..< sprite_count {
 			if int(sprite_scanline[i].x) < cycle_x - 1 {
 				sprite_shifter_pattern_lo[i] <<= 1
@@ -550,11 +558,10 @@ ppu_tick :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
 	// tick only if rendering is enabled.
 	is_rendering_on := ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0
 
-	if !is_rendering_on {
-		do_stuff_always(nes, framebuffer)
-		return
-	}
-
+	// if !is_rendering_on {
+	// 	do_stuff_always(nes, framebuffer)
+	// 	return
+	// }
 
 	// read "PPU Rendering"
 
@@ -589,6 +596,14 @@ ppu_tick :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
 		if cycle_x >= 280 && cycle_x < 305 {
 			transfer_address_y(&nes.ppu)
 		}
+
+		// skip a cycle if the frame is off and rendering is enabled
+		is_rendering_on := ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0
+
+		if is_rendering_on && cycle_x == 339 && vblank_count % 2 == 1 {
+			// fmt.println("skipping a cycle")
+			cycle_x += 1
+		}
 	}
 
 	// doing all the background data loading
@@ -620,8 +635,8 @@ ppu_tick :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
 
 				// selecting the right 2x2 block out of the 4x4 attribute entry
 
-				if current_loopy.coarse_y & 0x02 != 0 {bg_next_tile_attrib >>= 4}
-				if current_loopy.coarse_x & 0x02 != 0 {bg_next_tile_attrib >>= 2}
+				if current_loopy.coarse_y & 0x02 != 0 do bg_next_tile_attrib >>= 4
+				if current_loopy.coarse_x & 0x02 != 0 do bg_next_tile_attrib >>= 2
 
 				// you need only 2 bits
 				bg_next_tile_attrib &= 0x03
@@ -705,7 +720,7 @@ ppu_tick :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
 }
 
 do_stuff_always :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
-	using nes.ppu 
+	using nes.ppu
 	// Setting vblank
 	if scanline == 241 && cycle_x == 1 {
 		ppu_status.vertical_blank = 1
@@ -744,9 +759,9 @@ do_stuff_always :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
 			was_on := ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0
 			is_on := next_ppu_mask.show_background != 0 || next_ppu_mask.show_sprites != 0
 
-			if was_on != is_on {
-				fmt.printfln("applying ppu mask switch. rendering to -> %v", is_on)
-			}
+			// if was_on != is_on {
+			// 	fmt.printfln("applying ppu mask switch. rendering to -> %v", is_on)
+			// }
 
 			ppu_mask = next_ppu_mask
 		}
@@ -962,6 +977,12 @@ draw_pixel :: proc(using ppu: ^PPU, pixel_grid: ^PixelGrid) {
 	pixel: u8
 	palette_final: u8
 
+	if sprite_zero_being_rendered && sprite_zero_hit_possible && fg_pixel > 0 {
+		fmt.printfln("sprite 0 at %v %v, bg pixel:%v, fg pixel %v, ppu mask %X",
+			cycle_x, scanline, bg_pixel, fg_pixel, ppu_mask.reg)
+		ppu_status.sprite_zero_hit = 1
+	}
+
 	if bg_pixel == 0 && fg_pixel == 0 {
 		pixel = 0
 		palette_final = 0
@@ -996,6 +1017,11 @@ draw_pixel :: proc(using ppu: ^PPU, pixel_grid: ^PixelGrid) {
 					if cycle_x >= 1 && cycle_x <= 255 {
 						ppu_status.sprite_zero_hit = 1
 					}
+				}
+
+				if ppu_status.sprite_zero_hit == 1 {
+					// fmt.printfln("sprite 0 hit at x %v y %v", cycle_x, scanline)
+
 				}
 			}
 		}
