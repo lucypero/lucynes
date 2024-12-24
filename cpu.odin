@@ -9,6 +9,10 @@ import "core:mem"
 import "core:os"
 import "core:strings"
 import "core:slice"
+import "core:encoding/cbor"
+import "core:encoding/json"
+import "core:reflect"
+import "base:intrinsics"
 
 readwrite_things :: proc(using nes: ^NES, addr: u16, val: u8, is_write: bool, is_dummy: bool) {
 	advance_ppu_and_apu(nes)
@@ -192,10 +196,10 @@ nes_reset :: proc(nes: ^NES, rom_file: string) {
 	nes_init(nes)
 
 	// loading ram from file if there is a backup
-	ram_bup, ok := os.read_entire_file(nes.rom_info.hash)
-	if ok {
-		nes.prg_ram = ram_bup
-	}
+	// ram_bup, ok := os.read_entire_file(nes.rom_info.hash)
+	// if ok {
+	// 	nes.prg_ram = ram_bup
+	// }
 }
 
 nes_init :: proc(using nes: ^NES) {
@@ -1080,7 +1084,7 @@ dump_log :: proc(using nes: ^NES) {
 			instr.cpu_status.index_y,
 			instr.ppu_scanline,
 			instr.ppu_cycle,
-			instr.ppu_vblank_count
+			instr.ppu_vblank_count,
 		)
 
 		strings.write_string(&b, "\n")
@@ -1119,8 +1123,24 @@ process_savestate_order :: proc(nes: ^NES) {
 		save_states[0].chr_mem = slice.clone(nes.chr_mem)
 		save_states[0].prg_rom = slice.clone(nes.prg_rom)
 		save_states[0].prg_ram = slice.clone(nes.prg_ram)
-		os.write_entire_file(nes.rom_info.hash, nes.prg_ram)
+
+		// how to downcast
+		nes_essential: ^NesEssential = cast(^NesEssential)nes
+
+
+		nes_binary, err := cbor.marshal(nes_essential^)
+		fmt.printfln("%X, %X", nes_essential.ppu.ppu_ctrl.reg, nes_essential.ppu.current_loopy.reg)
+		if err != nil {
+			fmt.eprintln("cbor error ", err)
+		}
+		fok := os.write_entire_file_or_err(nes.rom_info.hash, nes_binary)
+
+		if fok != nil {
+			fmt.eprintfln("file write error %v %v", fok, nes.rom_info.hash)
+		}
+		delete(nes_binary)
 	case .Load:
+		fmt.println("loading")
 		if len(save_states) > 0 {
 			delete(nes.chr_mem)
 			delete(nes.prg_rom)
@@ -1130,6 +1150,19 @@ process_savestate_order :: proc(nes: ^NES) {
 			nes.chr_mem = slice.clone(save_states[0].chr_mem)
 			nes.prg_rom = slice.clone(save_states[0].prg_rom)
 			nes.prg_ram = slice.clone(save_states[0].prg_ram)
+		} else {
+			fmt.println("loading from file")
+			nes_binary, fok := os.read_entire_file(nes.rom_info.hash)
+			if fok {
+				nes_essential: NesEssential
+				derr := cbor.unmarshal(string(nes_binary), &nes_essential)
+				if derr != nil {
+					fmt.eprintln("cbor decode error ", derr)
+				}
+				fmt.printfln("%X, %X", nes_essential.ppu.ppu_ctrl.reg, nes_essential.ppu.current_loopy.reg)
+			} else {
+				fmt.eprintln("file read error")
+			}
 		}
 	case .None:
 	}
@@ -1161,14 +1194,6 @@ tick_nes_till_vblank :: proc(
 
 		instruction_tick(nes, port_0_input, port_1_input, pixel_grid)
 		reset_debugging_vars(nes)
-
-		// dump
-		// if program_counter == 0x8641 {
-		// 	fmt.println("reached 8641")
-		// 	// dump_log(nes)
-		// 	// os.exit(0)
-		// 	log_dump_scheudled = false
-		// }
 
 		instr_info := instr_history.buf[instr_history.last_placed]
 

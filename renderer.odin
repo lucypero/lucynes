@@ -30,7 +30,7 @@ screen_height :: nes_height * scale_factor
 framebuffer_width :: nes_width
 framebuffer_height :: nes_height
 
-target_fps :: 60
+target_fps :: 400
 
 // the CPU clockrate for NTSC systems is 1789773 Hz
 //    https://www.nesdev.org/wiki/Cycle_reference_chart
@@ -131,7 +131,6 @@ window_main :: proc() {
 
 	run_nestest_test()
 
-
 	// shader
 
 	when enable_shader {
@@ -160,6 +159,7 @@ window_main :: proc() {
 		rl.BeginDrawing()
 
 		rl.ClearBackground(clear_color)
+
 
 		// clear_pixels(pixels, rl.BLACK)
 
@@ -255,6 +255,10 @@ window_main :: proc() {
 		when draw_debugger_view && draw_pattern_tables_view {
 			draw_pattern_tables(&nes)
 		}
+
+		// if rl.GuiButton({200, 200, 200, 200}, "hello button") {
+		// 	fmt.println("clicked on button")
+		// }
 
 		rl.EndDrawing()
 		free_all(context.temp_allocator)

@@ -18,6 +18,8 @@ import hash "core:crypto/hash"
 import base64 "core:encoding/base64"
 import rl "vendor:raylib"
 import wt "wav_tools"
+import "core:encoding/cbor"
+import "base:intrinsics"
 
 /// GLOBAL STATE
 
@@ -56,7 +58,7 @@ RomFormat :: enum {
 }
 
 RomInfo :: struct {
-	hash: string,
+	hash:                  string,
 	rom_loaded:            bool,
 	rom_format:            RomFormat,
 	prg_unit_count:        u8, // Size of PRG ROM in 16 KiB Units (16 kib == 0x4000). Aka "PRG Bank Count"
@@ -146,13 +148,13 @@ FaultyOp :: struct {
 }
 
 InstructionInfo :: struct {
-	pc:            u16,
-	next_pc:       u16, // The next position of the PC like, for real
-	triggered_nmi: bool,
-	cpu_status:    Registers,
+	pc:               u16,
+	next_pc:          u16, // The next position of the PC like, for real
+	triggered_nmi:    bool,
+	cpu_status:       Registers,
 	// ppu info is when AFTER the instruction ran
-	ppu_scanline: int,
-	ppu_cycle: int,
+	ppu_scanline:     int,
+	ppu_cycle:        int,
 	ppu_vblank_count: uint,
 	// you can find out the rest from the PC.
 	// you can add other state later.
@@ -177,6 +179,29 @@ mread_op :: proc(nes: ^NES, addr: u16) -> (u8, bool)
 
 // Mapper write operation. Returns true if the mapper handled the write.
 mwrite_op :: proc(nes: ^NES, addr: u16, val: u8) -> bool
+
+NesEssential :: struct {
+	using registers:                Registers, // CPU Registers
+	ram:                            [0x800]u8, // 2 KiB of memory
+	ignore_extra_addressing_cycles: bool,
+	instruction_type:               InstructionType,
+	rom_info:                       RomInfo,
+	prg_rom:                        []u8,
+	prg_ram:                        []u8,
+	// This is CHR RAM if rom_info.chr_rom_size == 0, otherwise it's CHR ROM
+	chr_mem:                        []u8,
+	nmi_triggered:                  int,
+	ppu:                            PPU,
+	apu:                            APU,
+
+	// input
+	port_0_register:                u8,
+	port_1_register:                u8,
+	poll_input:                     bool,
+
+	// Mappers
+	mapper_data:                    MapperData,
+}
 
 NES :: struct {
 	using registers:                Registers, // CPU Registers
@@ -220,7 +245,6 @@ NES :: struct {
 	read_writes:                    uint,
 	last_write_addr:                u16,
 	last_write_val:                 u8,
-	log_dump_scheudled:             bool,
 }
 
 
@@ -466,9 +490,108 @@ _main :: proc() {
 	// if true {
 	// 	os.exit(0)
 	// }
-	a := [2]f32 {}
+	a := [2]f32{}
 	draw_image(&a)
 	fmt.println(a)
+
+	// set up cbor
+	RAW_TAG_NR_LUCYREG8 :: 200
+
+	// 8 bit registers
+	cbor.tag_register_number(
+		{
+			marshal = proc(_: ^cbor.Tag_Implementation, e: cbor.Encoder, v: any) -> cbor.Marshal_Error {
+				// encoding the header (tag)
+				cbor._encode_u8(e.writer, RAW_TAG_NR_LUCYREG8, .Tag) or_return
+
+				the_val: u8
+
+				switch vt in v {
+				case PpuCtrl:
+					the_val = vt.reg
+				case PpuMask:
+					the_val = vt.reg
+				case:
+					return .Bad_Tag_Value
+				}
+
+				// encoding the thing
+				err := cbor._encode_u8(e.writer, the_val, .Unsigned)
+				return err
+			},
+			unmarshal = proc(
+				_: ^cbor.Tag_Implementation,
+				d: cbor.Decoder,
+				_: cbor.Tag_Number,
+				v: any,
+			) -> cbor.Unmarshal_Error {
+				hdr := cbor._decode_header(d.reader) or_return
+				maj, add := cbor._header_split(hdr)
+				if maj != .Unsigned {
+					return .Bad_Tag_Value
+				}
+
+				val, err := cbor._decode_u8(d.reader)
+				if err != .None {
+					fmt.eprintln("err heree")
+					return err
+				}
+				intrinsics.mem_copy_non_overlapping(v.data, &val, 1)
+				return nil
+			},
+		},
+		RAW_TAG_NR_LUCYREG8,
+		"lucyreg8",
+	)
+
+	// 16 bit registers
+	RAW_TAG_NR_LUCYREG16 :: 201
+
+	cbor.tag_register_number(
+		{
+			marshal = proc(_: ^cbor.Tag_Implementation, e: cbor.Encoder, v: any) -> cbor.Marshal_Error {
+				// encoding the header (tag)
+				fmt.eprintln("marshalling loopy")
+				cbor._encode_u8(e.writer, RAW_TAG_NR_LUCYREG16, .Tag) or_return
+
+				// encoding the thing
+				the_val: u16
+
+				switch vt in v {
+				case LoopyRegister:
+					the_val = vt.reg
+				case:
+					fmt.eprintln("no loopy")
+					return .Bad_Tag_Value
+				}
+
+				err := cbor._encode_u16(e, the_val, .Unsigned)
+				return cbor.err_conv(err)
+			},
+			unmarshal = proc(
+				_: ^cbor.Tag_Implementation,
+				d: cbor.Decoder,
+				_: cbor.Tag_Number,
+				v: any,
+			) -> cbor.Unmarshal_Error {
+				hdr := cbor._decode_header(d.reader) or_return
+				maj, add := cbor._header_split(hdr)
+				if maj != .Unsigned {
+					return .Bad_Tag_Value
+				}
+
+				val, err := cbor._decode_u16(d.reader)
+				if err != .None {
+					fmt.eprintln("err heree")
+					return err
+				}
+				intrinsics.mem_copy_non_overlapping(v.data, &val, 2)
+				return nil
+			},
+		},
+		RAW_TAG_NR_LUCYREG16,
+		"lucyreg16",
+	)
 
 	window_main()
 
@@ -724,6 +847,73 @@ mirror_test :: proc() {
 
 }
 
+ENC_TABLE := [64]byte {
+	'A',
+	'B',
+	'C',
+	'D',
+	'E',
+	'F',
+	'G',
+	'H',
+	'I',
+	'J',
+	'K',
+	'L',
+	'M',
+	'N',
+	'O',
+	'P',
+	'Q',
+	'R',
+	'S',
+	'T',
+	'U',
+	'V',
+	'W',
+	'X',
+	'Y',
+	'Z',
+	'a',
+	'b',
+	'c',
+	'd',
+	'e',
+	'f',
+	'g',
+	'h',
+	'i',
+	'j',
+	'k',
+	'l',
+	'm',
+	'n',
+	'o',
+	'p',
+	'q',
+	'r',
+	's',
+	't',
+	'u',
+	'v',
+	'w',
+	'x',
+	'y',
+	'z',
+	'0',
+	'1',
+	'2',
+	'3',
+	'4',
+	'5',
+	'6',
+	'7',
+	'8',
+	'9',
+	'+',
+	'_',
+}
+
 // TODO: this proc does too much. mixes up a bunch of stuff
 // it should just load RomInfo struct.
 // then after that, do the following operations that will take in Rom Info.
@@ -865,7 +1055,7 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 	// hash file
 
 	the_hash := hash.hash_bytes(.SHA256, test_rom)
-	hash_str, ok_3 := base64.encode(the_hash)
+	hash_str, ok_3 := base64.encode(the_hash, ENC_TABLE)
 	if ok_3 != .None {
 		return false
 	}

@@ -25,6 +25,20 @@ PpuMask :: struct #raw_union {
 	reg:         u8,
 }
 
+PpuCtrl :: struct #raw_union {
+	// VPHB SINN
+	using flags: bit_field u8 {
+		n: u8 | 2,
+		i: u8 | 1,
+		s: u8 | 1, // sprite pattern table address for 8x8 sprites (0: $0000, 1: $1000)
+		b: u8 | 1, // bg pattern table address (0: $0000, 1: $1000)
+		h: u8 | 1, // sprite size (0: 8x8, 1: 8x16)
+		p: u8 | 1,
+		v: u8 | 1,
+	},
+	reg:         u8,
+}
+
 LoopyRegister :: struct #raw_union {
 	using values: bit_field u16 {
 		coarse_x:    u16 | 5,
@@ -34,6 +48,17 @@ LoopyRegister :: struct #raw_union {
 		fine_y:      u16 | 3,
 	},
 	reg:          u16,
+}
+
+PpuStatus :: struct #raw_union {
+	// VSO. ....
+	using flags: bit_field u8 {
+		open_bus:        u8 | 5,
+		sprite_overflow: u8 | 1,
+		sprite_zero_hit: u8 | 1,
+		vertical_blank:  u8 | 1,
+	},
+	reg:         u8,
 }
 
 // sprites
@@ -52,40 +77,20 @@ PPU :: struct {
 	cycle_x:                    int, // current ppu cycle horizontally in the scanline (0..=340)
 	scanline:                   int, // current ppu scanline (-1..=260)
 	vblank_count:               uint, // how many vblanks happened (just for debugging)
+	next_rendering_enabled:     bool,
+	rendering_enabled:          bool,
+	rendering_toggle_timer:     int,
 
 	//NOTE: if everything is stored in loopy, then this is all redundant state, no?
 	// consider deleting all this
-	ppu_ctrl:                   struct #raw_union {
-		// VPHB SINN
-		using flags: bit_field u8 {
-			n: u8 | 2,
-			i: u8 | 1,
-			s: u8 | 1, // sprite pattern table address for 8x8 sprites (0: $0000, 1: $1000)
-			b: u8 | 1, // bg pattern table address (0: $0000, 1: $1000)
-			h: u8 | 1, // sprite size (0: 8x8, 1: 8x16)
-			p: u8 | 1,
-			v: u8 | 1,
-		},
-		reg:         u8,
-	},
-	ppu_mask:                   PpuMask,
-	next_ppu_mask:              PpuMask, // to delay applying the mask, to avoid bugs in some games. ppu mask values are only applied in vblank.
-	ppu_mask_apply_timer:       int,
-	ppu_status:                 struct #raw_union {
-		// VSO. ....
-		using flags: bit_field u8 {
-			open_bus:        u8 | 5,
-			sprite_overflow: u8 | 1,
-			sprite_zero_hit: u8 | 1,
-			vertical_blank:  u8 | 1,
-		},
-		reg:         u8,
-	},
+	ppu_ctrl:                   PpuCtrl `cbor_tag:"lucyreg8"`,
+	ppu_mask:                   PpuMask `cbor_tag:"lucyreg8"`,
+	ppu_status:                 PpuStatus `cbor_tag:"lucyreg8"`,
 	ppu_buffer_read:            u8,
 
 	// ppu internals: new model: the ppu loopy model
-	current_loopy:              LoopyRegister, // the v register
-	temp_loopy:                 LoopyRegister, // the t register
+	current_loopy:              LoopyRegister `cbor_tag:"lucyreg16"`, // the v register
+	temp_loopy:                 LoopyRegister `cbor_tag:"lucyreg16"`, // the t register
 	ppu_x:                      u8, // fine x scroll (3 bits)
 	ppu_w:                      bool, // First or second write toggle (1 bit)
 
@@ -137,12 +142,6 @@ write_ppu_register :: proc(nes: ^NES, ppu_reg: u16, val: u8) {
 			// nmi(nes,true)
 		}
 
-		if val == 0x10 {
-			// fmt.printfln("set to 10")
-			//
-			// nes.log_dump_scheudled = true
-		}
-
 		ppu_ctrl.reg = val
 		// fmt.printfln("set to %X", val)
 		temp_loopy.nametable_x = u16(ppu_ctrl.n & 0b1) != 0 ? 1 : 0
@@ -155,21 +154,23 @@ write_ppu_register :: proc(nes: ^NES, ppu_reg: u16, val: u8) {
 		new_mask.reg = val
 		// fmt.printfln("new ppu mask: %X", val)
 
-		// ppu_mask.reg = val
-
 		was_on := prev_mask.show_background != 0 || prev_mask.show_sprites != 0
 		is_on := new_mask.show_background != 0 || new_mask.show_sprites != 0
 
-		if was_on != is_on {
-			// a toggle happened. activate the delay
-			// fmt.printfln("rendering toggle. to -> %v, vblank? %X, scanline %v, cycle x %v, vblank_count %v", is_on, ppu_status.vertical_blank, scanline, cycle_x, vblank_count)
-			next_ppu_mask.reg = val
-			ppu_mask_apply_timer = 4
+		next_rendering_enabled = is_on
+
+		if next_rendering_enabled && !rendering_enabled {
+			// current_loopy.reg = temp_loopy.reg & 0x3FFF
+			// rendering_enabled = next_rendering_enabled
+			rendering_toggle_timer = 3
+			// rendering_enabled = next_rendering_enabled
+			// increment_scroll_x(&nes.ppu)
+			// increment_scroll_y(&nes.ppu)
 		} else {
-			// no toggle. apply ppu mask immediately
-			ppu_mask.reg = val
+			rendering_enabled = next_rendering_enabled
 		}
 
+		ppu_mask.reg = val
 	// PPUSTATUS
 	case 0x2002:
 	// do nothing
@@ -219,8 +220,10 @@ write_ppu_register :: proc(nes: ^NES, ppu_reg: u16, val: u8) {
 
 	//PPUDATA
 	case 0x2007:
+		is_midscreen := scanline >= 0 && scanline < 240
 		ppu_write(nes, current_loopy.reg, val)
 		increment_current_loopy(&nes.ppu)
+
 	}
 }
 
@@ -460,9 +463,7 @@ load_bg_shifters :: proc(using ppu: ^PPU) {
 
 // shifts the bg shifter registers by 1 bit to the left
 shift_bg_shifters :: proc(using ppu: ^PPU) {
-	if !(ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0) {
-		return
-	}
+	if !rendering_enabled do return
 
 	// if ppu_mask.show_background != 0 {
 	bg_shifter_pattern_lo <<= 1
@@ -475,9 +476,7 @@ shift_bg_shifters :: proc(using ppu: ^PPU) {
 // shifts the fg shifter registers by 1 bit to the left
 //  when some conditions are hit
 shift_fg_shifters :: proc(using ppu: ^PPU) {
-	if !(ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0) {
-		return
-	}
+	if !rendering_enabled do return
 
 	// shifting sprite shifters (only when they hit the cycle)
 	if cycle_x >= 0 && cycle_x < 258 {
@@ -491,9 +490,7 @@ shift_fg_shifters :: proc(using ppu: ^PPU) {
 }
 
 increment_scroll_x :: proc(using ppu: ^PPU) {
-	if !(ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0) {
-		return
-	}
+	if !rendering_enabled do return
 
 	// When crossing over nametables
 	if current_loopy.coarse_x == 31 {
@@ -505,9 +502,7 @@ increment_scroll_x :: proc(using ppu: ^PPU) {
 }
 
 increment_scroll_y :: proc(using ppu: ^PPU) {
-	if !(ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0) {
-		return
-	}
+	if !rendering_enabled do return
 
 	if current_loopy.fine_y < 7 {
 		current_loopy.fine_y += 1
@@ -531,19 +526,14 @@ increment_scroll_y :: proc(using ppu: ^PPU) {
 
 // what does this do? when does this get called?
 transfer_address_x :: proc(using ppu: ^PPU) {
-
-	if !(ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0) {
-		return
-	}
+	if !rendering_enabled do return
 
 	current_loopy.nametable_x = temp_loopy.nametable_x
 	current_loopy.coarse_x = temp_loopy.coarse_x
 }
 
 transfer_address_y :: proc(using ppu: ^PPU) {
-	if !(ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0) {
-		return
-	}
+	if !rendering_enabled do return
 
 	current_loopy.fine_y = temp_loopy.fine_y
 	current_loopy.nametable_y = temp_loopy.nametable_y
@@ -554,14 +544,6 @@ transfer_address_y :: proc(using ppu: ^PPU) {
 ppu_tick :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
 
 	using nes.ppu
-
-	// tick only if rendering is enabled.
-	is_rendering_on := ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0
-
-	// if !is_rendering_on {
-	// 	do_stuff_always(nes, framebuffer)
-	// 	return
-	// }
 
 	// read "PPU Rendering"
 
@@ -598,9 +580,7 @@ ppu_tick :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
 		}
 
 		// skip a cycle if the frame is off and rendering is enabled
-		is_rendering_on := ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0
-
-		if is_rendering_on && cycle_x == 339 && vblank_count % 2 == 1 {
+		if rendering_enabled && cycle_x == 339 && vblank_count % 2 == 1 {
 			// fmt.println("skipping a cycle")
 			cycle_x += 1
 		}
@@ -716,11 +696,6 @@ ppu_tick :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
 		// }
 	}
 
-	do_stuff_always(nes, framebuffer)
-}
-
-do_stuff_always :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
-	using nes.ppu
 	// Setting vblank
 	if scanline == 241 && cycle_x == 1 {
 		ppu_status.vertical_blank = 1
@@ -732,12 +707,41 @@ do_stuff_always :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
 		}
 	}
 
-	if (ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0) && cycle_x == 260 && scanline < 240 {
+	if rendering_enabled && cycle_x == 260 && scanline < 240 {
 		nes.m_scanline_hit(nes)
 	}
 
 	/// Rendering the current pixel
 	draw_pixel(&nes.ppu, framebuffer)
+
+	// check ppu mask swap (it is applied with a delay)
+	// todo
+
+	if rendering_toggle_timer > 0 {
+		rendering_toggle_timer -= 1
+
+		if rendering_toggle_timer == 0 {
+
+			// toggle rendering.. check when this is happening
+			is_midscreen := scanline >= 0 && scanline < 240
+
+			if is_midscreen && !next_rendering_enabled {
+				// current_loopy.reg = temp_loopy.reg & 0x3FFF
+				// temp_loopy.reg = current_loopy.reg & 0x3FFF
+				// what is _ppuBusAddress and _videoRamAddr
+				// u gotta do _ppuBusAddress = _videoRamAssr & 0x3FFF
+				// video ram addr is probably current loopy?
+				// _ppuBusAddress is loopy
+
+				// _videoRamAddr is V
+			}
+
+			rendering_enabled = next_rendering_enabled
+			// //When rendering is disabled midscreen, set the vram bus back to the value of 'v'
+			// SetBusAddress(_videoRamAddr & 0x3FFF);
+		}
+	}
+
 
 	cycle_x += 1
 	if cycle_x >= 341 {
@@ -745,25 +749,6 @@ do_stuff_always :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
 		scanline += 1
 		if scanline >= 261 {
 			scanline = -1
-		}
-	}
-
-	// check ppu mask swap (it is applied with a delay)
-
-	if ppu_mask_apply_timer > 0 {
-		// timer active
-		ppu_mask_apply_timer -= 1
-
-		if ppu_mask_apply_timer == 0 {
-
-			was_on := ppu_mask.show_background != 0 || ppu_mask.show_sprites != 0
-			is_on := next_ppu_mask.show_background != 0 || next_ppu_mask.show_sprites != 0
-
-			// if was_on != is_on {
-			// 	fmt.printfln("applying ppu mask switch. rendering to -> %v", is_on)
-			// }
-
-			ppu_mask = next_ppu_mask
 		}
 	}
 }
@@ -926,6 +911,7 @@ draw_pixel :: proc(using ppu: ^PPU, pixel_grid: ^PixelGrid) {
 	p0_pixel: u8 = (bg_shifter_pattern_lo & bit_mux) > 0 ? 1 : 0
 	p1_pixel: u8 = (bg_shifter_pattern_hi & bit_mux) > 0 ? 1 : 0
 	bg_pixel = (p1_pixel << 1) | p0_pixel
+	// fmt.printfln("bg pixel %v", bg_pixel)
 
 	bg_pal0: u8 = (bg_shifter_attrib_lo & bit_mux) > 0 ? 1 : 0
 	bg_pal1: u8 = (bg_shifter_attrib_hi & bit_mux) > 0 ? 1 : 0
@@ -977,11 +963,11 @@ draw_pixel :: proc(using ppu: ^PPU, pixel_grid: ^PixelGrid) {
 	pixel: u8
 	palette_final: u8
 
-	if sprite_zero_being_rendered && sprite_zero_hit_possible && fg_pixel > 0 {
-		fmt.printfln("sprite 0 at %v %v, bg pixel:%v, fg pixel %v, ppu mask %X",
-			cycle_x, scanline, bg_pixel, fg_pixel, ppu_mask.reg)
-		ppu_status.sprite_zero_hit = 1
-	}
+	// if sprite_zero_being_rendered && sprite_zero_hit_possible && fg_pixel > 0 {
+	// 	// fmt.printfln("sprite 0 at %v %v, bg pixel:%v, fg pixel %v, ppu mask %X",
+	// 	// 	cycle_x, scanline, bg_pixel, fg_pixel, ppu_mask.reg)
+	// 	ppu_status.sprite_zero_hit = 1
+	// }
 
 	if bg_pixel == 0 && fg_pixel == 0 {
 		pixel = 0
@@ -1027,7 +1013,11 @@ draw_pixel :: proc(using ppu: ^PPU, pixel_grid: ^PixelGrid) {
 		}
 	}
 
-	nes_color := get_color_from_palettes(ppu^, pixel, palette_final)
+	// pixel = bg_pixel
+	// palette_final = bg_palette
+
+	// nes_color := get_color_from_palettes(ppu^, pixel, palette_final)
+	nes_color := get_color_from_fake_palettes(ppu^, pixel, palette_final)
 	real_color := color_map_from_nes_to_real(nes_color)
 
 	// position of pixel
@@ -1068,5 +1058,20 @@ get_color_from_palettes :: proc(using ppu: PPU, pixel: u8, palette_idx: u8) -> u
 		return palette[0]
 	case:
 		return palette[palette_start + u16(pixel) - 1]
+	}
+}
+
+
+// debug palette
+get_color_from_fake_palettes :: proc(using ppu: PPU, pixel: u8, palette_idx: u8) -> u8 {
+	switch pixel {
+	case 0:
+		return 0x0f
+	case 1:
+		return 0x27
+	case 2:
+		return 0x05
+	case:
+		return 0x1c
 	}
 }
