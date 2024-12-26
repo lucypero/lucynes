@@ -40,8 +40,6 @@ mutex: sync.Mutex
 ring_buffer: Buffer
 sema: sync.Sema
 
-save_states: []NES
-
 // nametable mirror mode
 // for mappers with dynamic mirror mode
 // for hardwired mappers, look at rominfo.is_horizontal_arrangement
@@ -180,42 +178,16 @@ mread_op :: proc(nes: ^NES, addr: u16) -> (u8, bool)
 // Mapper write operation. Returns true if the mapper handled the write.
 mwrite_op :: proc(nes: ^NES, addr: u16, val: u8) -> bool
 
-NesEssential :: struct {
-	using registers:                Registers, // CPU Registers
-	ram:                            [0x800]u8, // 2 KiB of memory
-	ignore_extra_addressing_cycles: bool,
-	instruction_type:               InstructionType,
-	rom_info:                       RomInfo,
-	prg_rom:                        []u8,
-	prg_ram:                        []u8,
-	// This is CHR RAM if rom_info.chr_rom_size == 0, otherwise it's CHR ROM
-	chr_mem:                        []u8,
-	nmi_triggered:                  int,
-	ppu:                            PPU,
-	apu:                            APU,
-
-	// input
-	port_0_register:                u8,
-	port_1_register:                u8,
-	poll_input:                     bool,
-
-	// Mappers
-	mapper_data:                    MapperData,
-}
-
 NES :: struct {
 	using registers:                Registers, // CPU Registers
 	ram:                            [0x800]u8, // 2 KiB of memory
 	ignore_extra_addressing_cycles: bool,
 	instruction_type:               InstructionType,
-	rom_info:                       RomInfo,
-	prg_rom:                        []u8,
 	prg_ram:                        []u8,
 	// This is CHR RAM if rom_info.chr_rom_size == 0, otherwise it's CHR ROM
 	chr_mem:                        []u8,
 	nmi_triggered:                  int,
 	ppu:                            PPU,
-	apu:                            APU,
 
 	// input
 	port_0_register:                u8,
@@ -224,6 +196,13 @@ NES :: struct {
 
 	// Mappers
 	mapper_data:                    MapperData,
+
+	/// Serialized fields /end
+
+	apu:                            APU,
+	prg_rom:                        []u8,
+	rom_info:                       RomInfo,
+
 	m_cpu_read:                     mread_op,
 	m_cpu_write:                    mwrite_op,
 	m_ppu_read:                     mread_op,
@@ -475,25 +454,7 @@ main :: proc() {
 	print_allocated_temp()
 }
 
-_main :: proc() {
-	// flags_test()
-	// strong_type_test()
-	// casting_test()
-
-	// print_patterntable(nes)
-	// mirror_test()
-	// union_test()
-
-
-	// write_sample_wav_file()
-
-	// if true {
-	// 	os.exit(0)
-	// }
-	a := [2]f32{}
-	draw_image(&a)
-	fmt.println(a)
-
+set_up_cbor :: proc() {
 	// set up cbor
 	RAW_TAG_NR_LUCYREG8 :: 200
 
@@ -511,7 +472,10 @@ _main :: proc() {
 					the_val = vt.reg
 				case PpuMask:
 					the_val = vt.reg
+				case PpuStatus:
+					the_val = vt.reg
 				case:
+					fmt.println("it's bad here", v)
 					return .Bad_Tag_Value
 				}
 
@@ -551,7 +515,6 @@ _main :: proc() {
 		{
 			marshal = proc(_: ^cbor.Tag_Implementation, e: cbor.Encoder, v: any) -> cbor.Marshal_Error {
 				// encoding the header (tag)
-				fmt.eprintln("marshalling loopy")
 				cbor._encode_u8(e.writer, RAW_TAG_NR_LUCYREG16, .Tag) or_return
 
 				// encoding the thing
@@ -592,7 +555,10 @@ _main :: proc() {
 		RAW_TAG_NR_LUCYREG16,
 		"lucyreg16",
 	)
+}
 
+_main :: proc() {
+	set_up_cbor()
 	window_main()
 
 	// Audio sync report
@@ -1045,12 +1011,12 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 	// Without NES 2.0, the PRG-RAM size has to be assumed; 32 KiB are sufficient for compatibility with all known titles. 
 	nes.prg_ram = make([]u8, 0x8000)
 
-	// don't realy on contains_ram or ram size because some roms will be ines format.
-	// to be safe, always allocate 32 KiB to prg ram.
-	fmt.printfln("rom info: %v", rom_info)
-	if rom_info.contains_ram {
-		fmt.printfln("prg ram size %v", prg_ram_size)
-	}
+	// I'm not relying on contains_ram or ram size because some roms will be ines format.
+	// To be safe, always allocate 32 KiB to prg ram.
+	// fmt.printfln("rom info: %v", rom_info)
+	// if rom_info.contains_ram {
+	// 	fmt.printfln("prg ram size %v", prg_ram_size)
+	// }
 
 	// hash file
 

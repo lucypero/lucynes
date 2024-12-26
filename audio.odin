@@ -44,7 +44,7 @@ AudioDemo :: struct {
 	time:         f64,
 }
 
-audio_demo_init :: proc(audio_demo: ^AudioDemo) {
+audio_init :: proc(audio_demo: ^AudioDemo) {
 
 	err: runtime.Allocator_Error
 	sample_channel, err = chan.create_buffered(SampleChannel, CHANNEL_BUFFER_SIZE, context.allocator)
@@ -63,7 +63,6 @@ audio_demo_init :: proc(audio_demo: ^AudioDemo) {
 	device_config.periodSizeInFrames = PREFERRED_BUFFER_SIZE
 	device_config.pUserData = audio_demo
 
-	fmt.println("Configuring MiniAudio Device")
 	if (ma.device_init(nil, &device_config, &audio_demo.device) != .SUCCESS) {
 		fmt.println("Failed to open playback device.")
 		return
@@ -78,7 +77,6 @@ audio_demo_init :: proc(audio_demo: ^AudioDemo) {
 	buffer_init(&ring_buffer, audio_demo.buffer_size * 8)
 
 	// starts the audio device and the audio callback thread
-	fmt.println("Starting MiniAudio Device:", runtime.cstring_to_string(cstring(&info.name[0])))
 	if (ma.device_start(&audio_demo.device) != .SUCCESS) {
 		fmt.println("Failed to start playback device.")
 		ma.device_uninit(&audio_demo.device)

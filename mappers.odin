@@ -14,11 +14,6 @@ Mapper :: enum {
 	M7, // AxROM
 }
 
-draw_image :: proc(position: ^[2]f32) {
-	// Draw image using position.
-	position[1] = 2
-}
-
 MapperData :: union #no_nil {
 	M0Data,
 	M1Data,
@@ -111,7 +106,7 @@ mapper_init :: proc(using nes: ^NES, mapper_number: u8, prg_unit_count: u8, chr_
 		os.exit(1)
 	}
 
-	fmt.printfln("rom mapper n: %v", mapper_number)
+	// fmt.printfln("rom mapper n: %v", mapper_number)
 
 	return mapper
 }

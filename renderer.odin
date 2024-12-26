@@ -74,14 +74,6 @@ app_state: AppState
 
 clear_color := rl.Color{36, 41, 46, 255}
 
-SaveStateOrder :: enum {
-	None,
-	Save,
-	Load,
-}
-
-savestate_order: SaveStateOrder = .None
-
 window_main :: proc() {
 
 	app_state = {}
@@ -120,7 +112,7 @@ window_main :: proc() {
 
 	// initting audio
 	audio_demo: AudioDemo
-	audio_demo_init(&audio_demo)
+	audio_init(&audio_demo)
 
 	ok: bool
 	palette, ok = get_palette(palette_file)
@@ -201,17 +193,12 @@ window_main :: proc() {
 
 		if rl.IsKeyPressed(.F1) {
 			// save
-			savestate_order = .Save
+			process_savestate_order(&nes, .Save)
 		}
 
-
 		if rl.IsKeyPressed(.F4) {
-			// load
-			// free_all(mem.tracking_allocator(&nes_allocator))
-
-			// if len(save_states) > 0 {
-				savestate_order = .Load
-			// }
+			// it is never reaching NMI in battletoads bug so it will never load. remove that limitation.
+			process_savestate_order(&nes, .Load)
 		}
 
 		if rl.IsKeyPressed(.L) {

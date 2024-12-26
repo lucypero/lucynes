@@ -1099,77 +1099,6 @@ dump_log :: proc(using nes: ^NES) {
 	fmt.printfln("Log Dumped")
 }
 
-
-process_savestate_order :: proc(nes: ^NES) {
-	context.allocator = mem.tracking_allocator(&nes_allocator)
-	if savestate_order == .None {
-		return
-	}
-
-	// load or save here
-	switch savestate_order {
-	case .Save:
-		if len(save_states) > 0 {
-			delete(save_states[0].chr_mem)
-			delete(save_states[0].prg_rom)
-			delete(save_states[0].prg_ram)
-
-			delete(save_states)
-		}
-
-		save_states = make([]NES, 1)
-
-		save_states[0] = nes^
-		save_states[0].chr_mem = slice.clone(nes.chr_mem)
-		save_states[0].prg_rom = slice.clone(nes.prg_rom)
-		save_states[0].prg_ram = slice.clone(nes.prg_ram)
-
-		// how to downcast
-		nes_essential: ^NesEssential = cast(^NesEssential)nes
-
-
-		nes_binary, err := cbor.marshal(nes_essential^)
-		fmt.printfln("%X, %X", nes_essential.ppu.ppu_ctrl.reg, nes_essential.ppu.current_loopy.reg)
-		if err != nil {
-			fmt.eprintln("cbor error ", err)
-		}
-		fok := os.write_entire_file_or_err(nes.rom_info.hash, nes_binary)
-
-		if fok != nil {
-			fmt.eprintfln("file write error %v %v", fok, nes.rom_info.hash)
-		}
-		delete(nes_binary)
-	case .Load:
-		fmt.println("loading")
-		if len(save_states) > 0 {
-			delete(nes.chr_mem)
-			delete(nes.prg_rom)
-			delete(nes.prg_ram)
-
-			nes^ = save_states[0]
-			nes.chr_mem = slice.clone(save_states[0].chr_mem)
-			nes.prg_rom = slice.clone(save_states[0].prg_rom)
-			nes.prg_ram = slice.clone(save_states[0].prg_ram)
-		} else {
-			fmt.println("loading from file")
-			nes_binary, fok := os.read_entire_file(nes.rom_info.hash)
-			if fok {
-				nes_essential: NesEssential
-				derr := cbor.unmarshal(string(nes_binary), &nes_essential)
-				if derr != nil {
-					fmt.eprintln("cbor decode error ", derr)
-				}
-				fmt.printfln("%X, %X", nes_essential.ppu.ppu_ctrl.reg, nes_essential.ppu.current_loopy.reg)
-			} else {
-				fmt.eprintln("file read error")
-			}
-		}
-	case .None:
-	}
-
-	savestate_order = .None
-}
-
 // It stops at breakpoints
 // if it stops at breakpoints, returns true
 tick_nes_till_vblank :: proc(
@@ -1206,10 +1135,9 @@ tick_nes_till_vblank :: proc(
 		}
 
 		// breaking at NMI. 
-		if instr_info.triggered_nmi {
-			process_savestate_order(nes)
+		// if instr_info.triggered_nmi {
 			// return true;
-		}
+		// }
 
 		if vblank_hit {
 			vblank_hit = false

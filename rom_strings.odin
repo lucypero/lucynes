@@ -1,8 +1,12 @@
 
 package main
 
-/// FULLY WORKING GAMES:
+/// scratch, quick access
 
+rom_in_nes :: "roms/Battletoads.nes"
+// rom_in_nes :: "roms/Super Mario Bros. 3.nes"
+
+/// FULLY WORKING GAMES:
 
 // Mapper 0
 
@@ -75,7 +79,7 @@ package main
 // Reason: Emulator Bug
 
 // rom_in_nes :: "roms/Battletoads & Double Dragon - The Ultimate Team.nes"
-rom_in_nes :: "roms/Battletoads.nes" // doesn't work after start screens and start cutscene. if i force sprite 0 hit, it works.
+// rom_in_nes :: "roms/Battletoads.nes" // doesn't work after start screens and start cutscene. if i force sprite 0 hit, it works.
 // rom_in_nes :: "roms/Spelunker.nes"
 // rom_in_nes :: "roms/Adventures of Lolo II , The.nes"
 // rom_in_nes :: "roms/Dragon Warrior.nes" // this is dragon quest. mapper 1

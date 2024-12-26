@@ -81,23 +81,16 @@ PPU :: struct {
 	rendering_enabled:          bool,
 	rendering_toggle_timer:     int,
 
-	//NOTE: if everything is stored in loopy, then this is all redundant state, no?
-	// consider deleting all this
 	ppu_ctrl:                   PpuCtrl `cbor_tag:"lucyreg8"`,
 	ppu_mask:                   PpuMask `cbor_tag:"lucyreg8"`,
 	ppu_status:                 PpuStatus `cbor_tag:"lucyreg8"`,
 	ppu_buffer_read:            u8,
 
-	// ppu internals: new model: the ppu loopy model
 	current_loopy:              LoopyRegister `cbor_tag:"lucyreg16"`, // the v register
 	temp_loopy:                 LoopyRegister `cbor_tag:"lucyreg16"`, // the t register
 	ppu_x:                      u8, // fine x scroll (3 bits)
 	ppu_w:                      bool, // First or second write toggle (1 bit)
 
-
-	// data for rendering the next pixel
-	// TODO: what is this? i thought all the state required was the 4 variables above.
-	// idk look into it.
 	bg_next_tile_id:            u8,
 	bg_next_tile_attrib:        u8,
 	bg_next_tile_lsb:           u8, // bitplane of pattern tile
@@ -108,6 +101,9 @@ PPU :: struct {
 	bg_shifter_pattern_hi:      u16,
 	bg_shifter_attrib_lo:       u16,
 	bg_shifter_attrib_hi:       u16,
+
+	/// Sprite rendering state
+
 	sprite_scanline:            [8]OAMEntry, // the 8 possible sprites in a scanline
 	sprite_count:               u8, // to track how many sprites are in the next scanline
 
