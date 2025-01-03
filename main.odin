@@ -444,6 +444,10 @@ main :: proc() {
 	mem.tracking_allocator_init(&track, context.allocator)
 	context.allocator = mem.tracking_allocator(&track)
 
+	temp_arena : mv.Arena
+	assert(mv.arena_init_growing(&temp_arena) == .None)
+	context.temp_allocator = mv.arena_allocator(&temp_arena)
+
 	// initializing nes arena
 	assert(mv.arena_init_growing(&nes_arena) == .None)
 

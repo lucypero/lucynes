@@ -69,6 +69,21 @@ process_savestate_order :: proc(nes: ^NES, savestate_order: SaveStateOrder) -> b
 			return false
 		}
 
+		// debugging
+		decoded, derr := cbor.decode(string(nes_binary), allocator = context.temp_allocator)
+		if derr != nil {
+			fmt.eprintln("errrrrr")
+			return false
+		}
+
+		diagnosis, eerr := cbor.to_diagnostic_format(decoded)
+		if eerr != nil {
+			fmt.eprintln("d errrr")
+			return false
+		}
+
+		// fmt.println(diagnosis)
+
 		fok := os.write_entire_file_or_err(nes.rom_info.hash, nes_binary)
 
 		if fok != nil {
