@@ -13,6 +13,7 @@ import "core:encoding/cbor"
 import "core:encoding/json"
 import "core:reflect"
 import "base:intrinsics"
+import mv "core:mem/virtual"
 
 readwrite_things :: proc(using nes: ^NES, addr: u16, val: u8, is_write: bool, is_dummy: bool) {
 	advance_ppu_and_apu(nes)
@@ -185,10 +186,10 @@ irq :: proc(using nes: ^NES) {
 
 // resets all NES state. loads cartridge again
 nes_reset :: proc(nes: ^NES, rom_file: string) {
-	context.allocator = mem.tracking_allocator(&nes_allocator)
-	free_all(context.allocator)
 	nes^ = {}
-	res := load_rom_from_file(nes, rom_file)
+	nes_allocator := mv.arena_allocator(&nes_arena)
+	free_all(nes_allocator)
+	res := load_rom_from_file(nes, rom_file, nes_allocator)
 	if !res {
 		fmt.eprintln("could not load rom")
 		os.exit(1)

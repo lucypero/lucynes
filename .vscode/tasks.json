@@ -27,7 +27,8 @@
             "args": [
                 "build",
                 ".",
-                "--debug"
+                "-o:none",
+                "-debug"
             ],
             "group": {
                 "kind": "build",

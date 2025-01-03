@@ -234,3 +234,10 @@ https://forums.nesdev.org/viewtopic.php?p=5578#p5578
 	- draw with debug palette
 	- make these toggleables in a menu.
 	- implement save states to disk so u can get to the bug fast.
+
+
+# save state/ allocator issue
+
+// TODO there's still some bugs. I saved and loaded and it crashed.
+// cbor decode error  Unsupported_Type_Error{id = PPU, hdr = %!(BAD ENUM VALUE=0), add = %!(BAD ENUM VALUE=0)}
+// file read error

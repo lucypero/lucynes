@@ -3,7 +3,8 @@ package main
 
 /// scratch, quick access
 
-rom_in_nes :: "roms/Battletoads.nes"
+// rom_in_nes :: "roms/Battletoads.nes"
+rom_in_nes :: "roms/Castlevania.nes"
 // rom_in_nes :: "roms/Super Mario Bros. 3.nes"
 
 /// FULLY WORKING GAMES:

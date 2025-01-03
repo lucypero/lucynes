@@ -5,6 +5,8 @@ import "core:mem"
 import "core:os"
 import "core:slice"
 import "core:encoding/cbor"
+import mv "core:mem/virtual"
+import "core:strings"
 
 // In-memory save state:
 
@@ -14,7 +16,7 @@ save_states: []NES
 // OLD: in-memory save states. don't use
 @(deprecated = "this is old. we save everything to file now")
 process_savestate_order_in_memory :: proc(nes: ^NES, savestate_order: SaveStateOrder) {
-	context.allocator = mem.tracking_allocator(&nes_allocator)
+	// TODO mem leaks
 
 	// load or save here
 	switch savestate_order {
@@ -49,54 +51,24 @@ process_savestate_order_in_memory :: proc(nes: ^NES, savestate_order: SaveStateO
 }
 
 
-// The state needed to restore NES state (for serialization)
-// NOTE: this needs to be synced to the NES struct. It needs to be the first few fields, in order.
-//  otherwise it will crash.
-NesSerialized :: struct {
-	using registers:                Registers, // CPU Registers
-	ram:                            [0x800]u8, // 2 KiB of memory
-	ignore_extra_addressing_cycles: bool,
-	instruction_type:               InstructionType,
-	prg_ram:                        []u8,
-	// This is CHR RAM if rom_info.chr_rom_size == 0, otherwise it's CHR ROM
-	chr_mem:                        []u8,
-	nmi_triggered:                  int,
-	ppu:                            PPU,
-	// apu:                            APU,
-
-	// input
-	port_0_register:                u8,
-	port_1_register:                u8,
-	poll_input:                     bool,
-
-	// Mappers
-	mapper_data:                    MapperData,
-}
-
 SaveStateOrder :: enum {
 	Save,
 	Load,
 }
 
 // Saves/Load Nes state into/from file
-// TODO there are some memory leaks here.
+// TODO there's still some bugs. I saved and loaded and it crashed.
+// cbor decode error  Unsupported_Type_Error{id = PPU, hdr = %!(BAD ENUM VALUE=0), add = %!(BAD ENUM VALUE=0)}
+// file read error
 process_savestate_order :: proc(nes: ^NES, savestate_order: SaveStateOrder) -> bool {
-	context.allocator = mem.tracking_allocator(&nes_allocator)
-
-	// load or save here
 	switch savestate_order {
 	case .Save:
-		// Downcasting to only what we need to serialize
-		nes_essential: ^NesSerialized = cast(^NesSerialized)nes
-
-		nes_binary, err := cbor.marshal_into_bytes(nes_essential^)
+		nes_binary, err := cbor.marshal_into_bytes(nes.nes_serialized, allocator = context.temp_allocator)
 		if err != nil {
 			fmt.eprintfln("cbor error %v", err)
 			return false
 		}
-		defer delete(nes_binary)
 
-		fmt.println("save size:", len(nes_binary))
 		fok := os.write_entire_file_or_err(nes.rom_info.hash, nes_binary)
 
 		if fok != nil {
@@ -104,27 +76,40 @@ process_savestate_order :: proc(nes: ^NES, savestate_order: SaveStateOrder) -> b
 			return false
 		}
 
+		fmt.printfln("Saved save state to %v", nes.rom_info.hash)
+
 	case .Load:
 		// TODO: reset audio maybe? audio state isn't being serialized
-		nes_binary, fok := os.read_entire_file(nes.rom_info.hash)
+
+		fmt.printfln("Loading save state from %v", nes.rom_info.hash)
+
+		nes_binary, fok := os.read_entire_file(nes.rom_info.hash, allocator = context.temp_allocator)
 
 		if !fok {
 			fmt.eprintln("file read error")
 			return false
 		}
 
-		nes_state: NesSerialized
-		derr := cbor.unmarshal(string(nes_binary), &nes_state)
+		nes_serialized_temp: NesSerialized
+		derr := cbor.unmarshal(string(nes_binary), &nes_serialized_temp, allocator = context.temp_allocator)
 		if derr != nil {
 			fmt.eprintln("cbor decode error ", derr)
 			return false
 		}
 
-		// load success.
+		// backup things you want from current NES before wiping NES allocator.
+		prg_rom_backup := slice.clone(nes.prg_rom, allocator = context.temp_allocator)
+		hash_str_backup := strings.clone(nes.rom_info.hash, allocator = context.temp_allocator)
 
-		// pretending the nes is NesSerialized so we can copy that chunk of memory to it easily
-		nes_as_serialized: ^NesSerialized = cast(^NesSerialized)nes
-		nes_as_serialized^ = nes_state
+		// TODO maybe save state data should be in another allocator bc it's another lifetime. we're doing unnecessary copying here.
+		nes_arena_alloc := mv.arena_allocator(&nes_arena)
+		free_all(nes_arena_alloc)
+
+		nes.nes_serialized = nes_serialized_temp
+		nes.chr_mem = slice.clone(nes_serialized_temp.chr_mem, allocator = nes_arena_alloc)
+		nes.prg_ram = slice.clone(nes_serialized_temp.prg_ram, allocator = nes_arena_alloc)
+		nes.prg_rom = slice.clone(prg_rom_backup, allocator = nes_arena_alloc)
+		nes.rom_info.hash = strings.clone(hash_str_backup, allocator = nes_arena_alloc)
 	}
 
 	return true

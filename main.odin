@@ -21,18 +21,12 @@ import wt "wav_tools"
 import "core:encoding/cbor"
 import "base:intrinsics"
 
-/// GLOBAL STATE
-
-// Allocators
-
-// one for all memory that a NES needs. it will be freed when you reset or switch games.
+// NES emulation arena emulator.
+// allocates all NES emulation memory
+// when resetting a game or loading a save state, create a new one and destroy the old one.
 nes_arena: mv.Arena
-nes_allocator: mem.Tracking_Allocator
 
-// one for long term things that last forever
-forever_arena: mv.Arena
-forever_allocator: mem.Tracking_Allocator
-
+/// GLOBAL STATE
 palette: []rl.Color
 
 // sync stuff for passing data to audio thread
@@ -178,7 +172,8 @@ mread_op :: proc(nes: ^NES, addr: u16) -> (u8, bool)
 // Mapper write operation. Returns true if the mapper handled the write.
 mwrite_op :: proc(nes: ^NES, addr: u16, val: u8) -> bool
 
-NES :: struct {
+// The state needed to restore NES state (for serialization)
+NesSerialized :: struct {
 	using registers:                Registers, // CPU Registers
 	ram:                            [0x800]u8, // 2 KiB of memory
 	ignore_extra_addressing_cycles: bool,
@@ -196,34 +191,34 @@ NES :: struct {
 
 	// Mappers
 	mapper_data:                    MapperData,
+}
 
-	/// Serialized fields /end
-
-	apu:                            APU,
-	prg_rom:                        []u8,
-	rom_info:                       RomInfo,
-
-	m_cpu_read:                     mread_op,
-	m_cpu_write:                    mwrite_op,
-	m_ppu_read:                     mread_op,
-	m_ppu_write:                    mwrite_op,
-	m_scanline_hit:                 proc(nes: ^NES),
-	m_get_irq_state:                proc(nes: ^NES) -> bool,
-	m_irq_clear:                    proc(nes: ^NES),
+NES :: struct {
+	using nes_serialized: NesSerialized,
+	apu:                  APU,
+	prg_rom:              []u8,
+	rom_info:             RomInfo,
+	m_cpu_read:           mread_op,
+	m_cpu_write:          mwrite_op,
+	m_ppu_read:           mread_op,
+	m_ppu_write:          mwrite_op,
+	m_scanline_hit:       proc(nes: ^NES),
+	m_get_irq_state:      proc(nes: ^NES) -> bool,
+	m_irq_clear:          proc(nes: ^NES),
 
 	// INSTRUMENTING FOR THE OUTSIDE WORLD
-	vblank_hit:                     bool,
+	vblank_hit:           bool,
 
 	// DEBUGGING
 
 	// history for display in debugger
-	instr_history:                  RingThing(prev_instructions_count, InstructionInfo),
+	instr_history:        RingThing(prev_instructions_count, InstructionInfo),
 	// history for log dump
-	instr_history_log:              RingThing(prev_instructions_log_count, InstructionInfo),
-	faulty_ops:                     map[u8]FaultyOp,
-	read_writes:                    uint,
-	last_write_addr:                u16,
-	last_write_val:                 u8,
+	instr_history_log:    RingThing(prev_instructions_log_count, InstructionInfo),
+	faulty_ops:           map[u8]FaultyOp,
+	read_writes:          uint,
+	last_write_addr:      u16,
+	last_write_val:       u8,
 }
 
 
@@ -400,7 +395,7 @@ print_cpu_state :: proc(regs: NesTestLog) {
 	)
 }
 
-report_allocations :: proc(allocator: ^mem.Tracking_Allocator, allocator_name: string) {
+report_track_allocations :: proc(allocator: ^mem.Tracking_Allocator, allocator_name: string) {
 	fmt.printfln(
 		`--- %v allocator: ---
 Current memory allocated: %v KB
@@ -410,6 +405,17 @@ Total allocation count: %v`,
 		f32(allocator.current_memory_allocated) / 1000,
 		f32(allocator.peak_memory_allocated) / 1000,
 		allocator.total_allocation_count,
+	)
+}
+
+report_arena_allocations :: proc(arena: mv.Arena, arena_name: string) {
+	fmt.printfln(
+		`--- %v allocator: ---
+Total reserved: %v KB
+Total used: %v KB`,
+		arena_name,
+		f32(arena.total_reserved) / 1000,
+		f32(arena.total_used) / 1000,
 	)
 }
 
@@ -433,24 +439,22 @@ warn_leaks :: proc(allocator: ^mem.Tracking_Allocator, allocator_name: string) {
 }
 
 main :: proc() {
+	// initializing default allocator (wrapping it in a trackign allocator)
+	track: mem.Tracking_Allocator
+	mem.tracking_allocator_init(&track, context.allocator)
+	context.allocator = mem.tracking_allocator(&track)
 
-	init_tracking_alloc :: proc(arena: ^mv.Arena, tracking_allocator: ^mem.Tracking_Allocator) {
-		res := mv.arena_init_static(arena)
-		assert(res == .None)
-		mem.tracking_allocator_init(tracking_allocator, mv.arena_allocator(arena))
-	}
-
-	init_tracking_alloc(&nes_arena, &nes_allocator)
-	init_tracking_alloc(&forever_arena, &forever_allocator)
-
-	context.allocator = mem.tracking_allocator(&forever_allocator)
+	// initializing nes arena
+	assert(mv.arena_init_growing(&nes_arena) == .None)
 
 	_main()
 
 	// Allocations report
 	fmt.printfln(`-------- Allocations report: -----------`)
-	report_allocations(&nes_allocator, "NES")
-	report_allocations(&forever_allocator, "Forever")
+	report_track_allocations(&track, "Forever")
+	report_arena_allocations(nes_arena, "NES")
+
+	warn_leaks(&track, "Forever")
 	print_allocated_temp()
 }
 
@@ -884,18 +888,18 @@ ENC_TABLE := [64]byte {
 // it should just load RomInfo struct.
 // then after that, do the following operations that will take in Rom Info.
 // Like: initializing the mapper and allocating cart ROM and RAM data.
-load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
+load_rom_from_file :: proc(nes: ^NES, filename: string, allocator: runtime.Allocator) -> bool {
+
+	context.allocator = allocator
 
 	rom_info: RomInfo
 
-	test_rom, ok := os.read_entire_file(filename)
+	test_rom, ok := os.read_entire_file(filename, allocator = context.temp_allocator)
 
 	if !ok {
 		fmt.eprintln("could not read rom file")
 		return false
 	}
-
-	defer delete(test_rom)
 
 	rom_string := string(test_rom)
 
@@ -1020,7 +1024,7 @@ load_rom_from_file :: proc(nes: ^NES, filename: string) -> bool {
 
 	// hash file
 
-	the_hash := hash.hash_bytes(.SHA256, test_rom)
+	the_hash := hash.hash_bytes(.SHA256, test_rom, allocator = context.temp_allocator)
 	hash_str, ok_3 := base64.encode(the_hash, ENC_TABLE)
 	if ok_3 != .None {
 		return false

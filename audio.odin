@@ -32,6 +32,9 @@ sample_channel: SampleChannel
 record_wav :: false
 wav_file_seconds :: 60
 
+samples_for_wav: []f32
+samples_for_wav_i: int
+
 AudioDemo :: struct {
 	audio_data:   []i16,
 	write_buffer: []i16,
@@ -82,6 +85,8 @@ audio_init :: proc(audio_demo: ^AudioDemo) {
 		ma.device_uninit(&audio_demo.device)
 		os.exit(1)
 	}
+
+	samples_for_wav = make([]f32, OUTPUT_SAMPLE_RATE * wav_file_seconds)
 
 	// start separate thread for generating audio samples
 	// pass in a pointer to "app" as the data
@@ -170,8 +175,6 @@ APU :: struct {
 	ppu_ticks_since_last_sample: int,
 	channel_buffer:              [SAMPLE_PACKET_SIZE]f32,
 	channel_buffer_i:            int,
-	samples_for_wav:             []f32,
-	samples_for_wav_i:           int,
 }
 
 apu_read :: proc(using nes: ^NES, addr: u16) -> u8 {
@@ -349,9 +352,8 @@ apu_init :: proc(using nes: ^NES) {
 	triangle_init(&triangle)
 	noise_init(&noise)
 
-	samples_for_wav = make([]f32, OUTPUT_SAMPLE_RATE * wav_file_seconds)
+	samples_for_wav_i = 0
 }
-
 
 apu_tick :: proc(using nes: ^NES) {
 	using apu
@@ -495,7 +497,6 @@ generate_sample :: proc(using apu: ^APU) {
 	}
 }
 
-
 add_sample_to_wav_file :: proc(using apu: ^APU, sample: f32) {
 
 	if samples_for_wav_i >= len(samples_for_wav) do return
@@ -531,7 +532,7 @@ add_sample :: proc(using apu: ^APU, sample: f32) {
 
 		// Main thread will be blocked until the channel buffer has enough space.
 		ok := chan.send(sample_channel, channel_buffer)
-		start_counting_starves = true;
+		start_counting_starves = true
 
 		if !ok {
 			// fmt.printfln("send not ok. buffer full")
@@ -598,7 +599,7 @@ lc_load :: proc(using lc: ^LengthCounter, index: u8) {
 
 	if !lc.enabled do return
 
-	lookuptable: [32]u8 =  {
+	lookuptable: [32]u8 = {
 		10,
 		254,
 		20,
