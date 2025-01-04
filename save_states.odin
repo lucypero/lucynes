@@ -50,7 +50,6 @@ process_savestate_order_in_memory :: proc(nes: ^NES, savestate_order: SaveStateO
 	}
 }
 
-
 SaveStateOrder :: enum {
 	Save,
 	Load,
@@ -76,13 +75,15 @@ process_savestate_order :: proc(nes: ^NES, savestate_order: SaveStateOrder) -> b
 			return false
 		}
 
-		diagnosis, eerr := cbor.to_diagnostic_format(decoded)
+		diagnosis, eerr := cbor.to_diagnostic_format_string(decoded, allocator = context.temp_allocator)
 		if eerr != nil {
 			fmt.eprintln("d errrr")
 			return false
 		}
 
 		// fmt.println(diagnosis)
+
+		os.write_entire_file("diagnosis", transmute([]u8)(diagnosis)) or_return
 
 		fok := os.write_entire_file_or_err(nes.rom_info.hash, nes_binary)
 
@@ -98,7 +99,7 @@ process_savestate_order :: proc(nes: ^NES, savestate_order: SaveStateOrder) -> b
 
 		fmt.printfln("Loading save state from %v", nes.rom_info.hash)
 
-		nes_binary, fok := os.read_entire_file(nes.rom_info.hash, allocator = context.temp_allocator)
+		nes_binary, fok := os.read_entire_file_from_filename(nes.rom_info.hash, allocator = context.temp_allocator)
 
 		if !fok {
 			fmt.eprintln("file read error")
@@ -106,7 +107,7 @@ process_savestate_order :: proc(nes: ^NES, savestate_order: SaveStateOrder) -> b
 		}
 
 		nes_serialized_temp: NesSerialized
-		derr := cbor.unmarshal(string(nes_binary), &nes_serialized_temp, allocator = context.temp_allocator)
+		derr := cbor.unmarshal_from_string(string(nes_binary), &nes_serialized_temp, allocator = context.temp_allocator)
 		if derr != nil {
 			fmt.eprintln("cbor decode error ", derr)
 			return false

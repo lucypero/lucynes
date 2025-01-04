@@ -1104,14 +1104,13 @@ dump_log :: proc(using nes: ^NES) {
 // if it stops at breakpoints, returns true
 tick_nes_till_vblank :: proc(
 	using nes: ^NES,
-	tick_force: bool,
-	port_0_input: u8, // force running at least one tick, ignoring breakpoints
+	tick_force: bool, // force running at least one tick, ignoring breakpoints
+	port_0_input: u8, 
 	port_1_input: u8,
 	pixel_grid: ^PixelGrid,
 ) -> (
 	broke: bool,
 ) {
-
 	reset_debugging_vars(nes)
 
 	// running instructions forever

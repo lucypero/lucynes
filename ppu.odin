@@ -1012,8 +1012,9 @@ draw_pixel :: proc(using ppu: ^PPU, pixel_grid: ^PixelGrid) {
 	// pixel = bg_pixel
 	// palette_final = bg_palette
 
-	// nes_color := get_color_from_palettes(ppu^, pixel, palette_final)
-	nes_color := get_color_from_fake_palettes(ppu^, pixel, palette_final)
+	nes_color := get_color_from_palettes(ppu^, pixel, palette_final)
+	// Uncomment following line tu turn on debug palette
+	// nes_color := get_color_from_fake_palettes(ppu^, pixel, palette_final)
 	real_color := color_map_from_nes_to_real(nes_color)
 
 	// position of pixel

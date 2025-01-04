@@ -152,7 +152,6 @@ window_main :: proc() {
 
 		rl.ClearBackground(clear_color)
 
-
 		// clear_pixels(pixels, rl.BLACK)
 
 		// doing input
@@ -191,14 +190,14 @@ window_main :: proc() {
 			}
 		}
 
+		// Saving
 		if rl.IsKeyPressed(.F1) {
-			// save
-			process_savestate_order(&nes, .Save)
+			assert(process_savestate_order(&nes, .Save))
 		}
 
+		// Loading
 		if rl.IsKeyPressed(.F4) {
-			// it is never reaching NMI in battletoads bug so it will never load. remove that limitation.
-			process_savestate_order(&nes, .Load)
+			assert(process_savestate_order(&nes, .Load))
 		}
 
 		if rl.IsKeyPressed(.L) {
