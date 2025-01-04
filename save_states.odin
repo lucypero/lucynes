@@ -7,6 +7,8 @@ import "core:slice"
 import "core:encoding/cbor"
 import mv "core:mem/virtual"
 import "core:strings"
+import "core:bytes"
+import "core:io"
 
 // In-memory save state:
 
@@ -55,6 +57,7 @@ SaveStateOrder :: enum {
 	Load,
 }
 
+
 // Saves/Load Nes state into/from file
 // TODO there's still some bugs. I saved and loaded and it crashed.
 // cbor decode error  Unsupported_Type_Error{id = PPU, hdr = %!(BAD ENUM VALUE=0), add = %!(BAD ENUM VALUE=0)}
@@ -62,71 +65,70 @@ SaveStateOrder :: enum {
 process_savestate_order :: proc(nes: ^NES, savestate_order: SaveStateOrder) -> bool {
 	switch savestate_order {
 	case .Save:
-		nes_binary, err := cbor.marshal_into_bytes(nes.nes_serialized, allocator = context.temp_allocator)
+		// Fast testing. marshalls and unmarshalls.
+		// with these flags, it crashes way less.
+		// now it only crashes (sometimes) like this:
+		// cbor decode error  Unsupported_Type_Error{id = PPU, hdr = %!(BAD ENUM VALUE=0), add = %!(BAD ENUM VALUE=0)}
+
+		nes_binary, err := cbor.marshal_into_bytes(nes.nes_serialized, flags = {.Self_Described_CBOR})
 		if err != nil {
 			fmt.eprintfln("cbor error %v", err)
 			return false
 		}
+		defer delete(nes_binary)
 
-		// debugging
-		decoded, derr := cbor.decode(string(nes_binary), allocator = context.temp_allocator)
-		if derr != nil {
-			fmt.eprintln("errrrrr")
+		//save_diagnosis
+		save_diagnosis(nes_binary) or_return
+
+		reader: bytes.Reader
+		stream := bytes.reader_init(&reader, nes_binary)
+
+		nes_serialized_temp: NesSerialized
+
+		decoder_flags: cbor.Decoder_Flags = {.Disallow_Streaming, .Trusted_Input}
+
+		derr2 := cbor.unmarshal_from_reader(
+			stream,
+			&nes_serialized_temp,
+			flags = decoder_flags,
+			allocator = context.temp_allocator,
+		)
+		if derr2 != nil {
+			fmt.eprintln("cbor decode error ", derr2)
 			return false
 		}
 
-		diagnosis, eerr := cbor.to_diagnostic_format_string(decoded, allocator = context.temp_allocator)
-		if eerr != nil {
-			fmt.eprintln("d errrr")
-			return false
-		}
+		// fok := os.write_entire_file_or_err(nes.rom_info.hash, nes_binary)
 
-		// fmt.println(diagnosis)
+		// if fok != nil {
+		// 	fmt.eprintfln("file write error %v %v", fok, nes.rom_info.hash)
+		// 	return false
+		// }
 
-		os.write_entire_file("diagnosis", transmute([]u8)(diagnosis)) or_return
-
-		fok := os.write_entire_file_or_err(nes.rom_info.hash, nes_binary)
-
-		if fok != nil {
-			fmt.eprintfln("file write error %v %v", fok, nes.rom_info.hash)
-			return false
-		}
 
 		fmt.printfln("Saved save state to %v", nes.rom_info.hash)
 
 	case .Load:
-		// TODO: reset audio maybe? audio state isn't being serialized
-
-		fmt.printfln("Loading save state from %v", nes.rom_info.hash)
-
-		nes_binary, fok := os.read_entire_file_from_filename(nes.rom_info.hash, allocator = context.temp_allocator)
-
-		if !fok {
-			fmt.eprintln("file read error")
-			return false
-		}
-
-		nes_serialized_temp: NesSerialized
-		derr := cbor.unmarshal_from_string(string(nes_binary), &nes_serialized_temp, allocator = context.temp_allocator)
-		if derr != nil {
-			fmt.eprintln("cbor decode error ", derr)
-			return false
-		}
-
-		// backup things you want from current NES before wiping NES allocator.
-		prg_rom_backup := slice.clone(nes.prg_rom, allocator = context.temp_allocator)
-		hash_str_backup := strings.clone(nes.rom_info.hash, allocator = context.temp_allocator)
-
-		// TODO maybe save state data should be in another allocator bc it's another lifetime. we're doing unnecessary copying here.
-		nes_arena_alloc := mv.arena_allocator(&nes_arena)
-		free_all(nes_arena_alloc)
-
-		nes.nes_serialized = nes_serialized_temp
-		nes.chr_mem = slice.clone(nes_serialized_temp.chr_mem, allocator = nes_arena_alloc)
-		nes.prg_ram = slice.clone(nes_serialized_temp.prg_ram, allocator = nes_arena_alloc)
-		nes.prg_rom = slice.clone(prg_rom_backup, allocator = nes_arena_alloc)
-		nes.rom_info.hash = strings.clone(hash_str_backup, allocator = nes_arena_alloc)
 	}
+
+	return true
+}
+
+save_diagnosis :: proc(nes_binary: []u8) -> bool {
+	// debugging
+	decoded, derr := cbor.decode(string(nes_binary), allocator = context.temp_allocator)
+	if derr != nil {
+		fmt.eprintln("errrrrr")
+		return false
+	}
+
+	diagnosis, eerr := cbor.to_diagnostic_format_string(decoded, allocator = context.temp_allocator)
+	if eerr != nil {
+		fmt.eprintln("d errrr")
+		return false
+	}
+
+	os.write_entire_file("diagnosis", transmute([]u8)(diagnosis)) or_return
 
 	return true
 }
