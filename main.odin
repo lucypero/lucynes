@@ -444,7 +444,7 @@ main :: proc() {
 	mem.tracking_allocator_init(&track, context.allocator)
 	context.allocator = mem.tracking_allocator(&track)
 
-	temp_arena : mv.Arena
+	temp_arena: mv.Arena
 	assert(mv.arena_init_growing(&temp_arena) == .None)
 	context.temp_allocator = mv.arena_allocator(&temp_arena)
 
@@ -466,103 +466,81 @@ set_up_cbor :: proc() {
 	// set up cbor
 	RAW_TAG_NR_LUCYREG8 :: 200
 
-	// 8 bit registers
-	cbor.tag_register_number(
-		{
-			marshal = proc(_: ^cbor.Tag_Implementation, e: cbor.Encoder, v: any) -> cbor.Marshal_Error {
-				// encoding the header (tag)
-				cbor._encode_u8(e.writer, RAW_TAG_NR_LUCYREG8, .Tag) or_return
-
-				the_val: u8
-
-				switch vt in v {
-				case PpuCtrl:
-					the_val = vt.reg
-				case PpuMask:
-					the_val = vt.reg
-				case PpuStatus:
-					the_val = vt.reg
-				case:
-					fmt.println("it's bad here", v)
-					return .Bad_Tag_Value
-				}
-
-				// encoding the thing
-				err := cbor._encode_u8(e.writer, the_val, .Unsigned)
-				return err
-			},
-			unmarshal = proc(
-				_: ^cbor.Tag_Implementation,
-				d: cbor.Decoder,
-				_: cbor.Tag_Number,
-				v: any,
-			) -> cbor.Unmarshal_Error {
-				hdr := cbor._decode_header(d.reader) or_return
-				maj, add := cbor._header_split(hdr)
-				if maj != .Unsigned {
-					return .Bad_Tag_Value
-				}
-
-				val, err := cbor._decode_u8(d.reader)
-				if err != .None {
-					fmt.eprintln("err heree")
-					return err
-				}
-				intrinsics.mem_copy_non_overlapping(v.data, &val, 1)
-				return nil
-			},
+	reg8_tag_impl := cbor.Tag_Implementation {
+		marshal = proc(_: ^cbor.Tag_Implementation, e: cbor.Encoder, v: any) -> cbor.Marshal_Error {
+			// encoding the tag
+			cbor._encode_u8(e.writer, RAW_TAG_NR_LUCYREG8, .Tag) or_return
+			// encoding the value as a u8
+			the_val: u8 = (cast(^u8)v.data)^
+			err := cbor._encode_u8(e.writer, the_val, .Unsigned)
+			return err
 		},
-		RAW_TAG_NR_LUCYREG8,
-		"lucyreg8",
-	)
+		unmarshal = proc(
+			_: ^cbor.Tag_Implementation,
+			d: cbor.Decoder,
+			_: cbor.Tag_Number,
+			v: any,
+		) -> cbor.Unmarshal_Error {
+			hdr := cbor._decode_header(d.reader) or_return
+			maj, add := cbor._header_split(hdr)
+			if maj != .Unsigned {
+				return .Bad_Tag_Value
+			}
+
+			val: u8
+
+			// Check if the u8 is inside the header (tiny int optimization)
+			// This has cost me 5 hours of debugging. thanks.
+			// https://github.com/odin-lang/Odin/issues/4661
+			if add != .One_Byte {
+				val = cbor._decode_tiny_u8(add) or_return
+			} else {
+				val = cbor._decode_u8(d.reader) or_return
+			}
+
+			intrinsics.mem_copy_non_overlapping(v.data, &val, 1)
+			return nil
+		},
+	}
+
+	cbor.tag_register_type(reg8_tag_impl, RAW_TAG_NR_LUCYREG8, PpuCtrl)
+	cbor.tag_register_type(reg8_tag_impl, RAW_TAG_NR_LUCYREG8, PpuMask)
+	cbor.tag_register_type(reg8_tag_impl, RAW_TAG_NR_LUCYREG8, PpuStatus)
 
 	// 16 bit registers
 	RAW_TAG_NR_LUCYREG16 :: 201
 
-	cbor.tag_register_number(
-		{
-			marshal = proc(_: ^cbor.Tag_Implementation, e: cbor.Encoder, v: any) -> cbor.Marshal_Error {
-				// encoding the header (tag)
-				cbor._encode_u8(e.writer, RAW_TAG_NR_LUCYREG16, .Tag) or_return
-
-				// encoding the thing
-				the_val: u16
-
-				switch vt in v {
-				case LoopyRegister:
-					the_val = vt.reg
-				case:
-					fmt.eprintln("no loopy")
-					return .Bad_Tag_Value
-				}
-
-				err := cbor._encode_u16(e, the_val, .Unsigned)
-				return cbor.err_conv(err)
-			},
-			unmarshal = proc(
-				_: ^cbor.Tag_Implementation,
-				d: cbor.Decoder,
-				_: cbor.Tag_Number,
-				v: any,
-			) -> cbor.Unmarshal_Error {
-				hdr := cbor._decode_header(d.reader) or_return
-				maj, add := cbor._header_split(hdr)
-				if maj != .Unsigned {
-					return .Bad_Tag_Value
-				}
-
-				val, err := cbor._decode_u16(d.reader)
-				if err != .None {
-					fmt.eprintln("err heree")
-					return err
-				}
-				intrinsics.mem_copy_non_overlapping(v.data, &val, 2)
-				return nil
-			},
+	reg16_tag_impl := cbor.Tag_Implementation {
+		marshal = proc(_: ^cbor.Tag_Implementation, e: cbor.Encoder, v: any) -> cbor.Marshal_Error {
+			// encoding the header (tag)
+			cbor._encode_u8(e.writer, RAW_TAG_NR_LUCYREG16, .Tag) or_return
+			the_val: u16 = (cast(^u16)v.data)^
+			err := cbor._encode_u16(e, the_val, .Unsigned)
+			return cbor.err_conv(err)
 		},
-		RAW_TAG_NR_LUCYREG16,
-		"lucyreg16",
-	)
+		unmarshal = proc(
+			_: ^cbor.Tag_Implementation,
+			d: cbor.Decoder,
+			_: cbor.Tag_Number,
+			v: any,
+		) -> cbor.Unmarshal_Error {
+			hdr := cbor._decode_header(d.reader) or_return
+			maj, add := cbor._header_split(hdr)
+			if maj != .Unsigned {
+				return .Bad_Tag_Value
+			}
+
+			val, err := cbor._decode_u16(d.reader)
+			if err != .None {
+				fmt.eprintln("err heree")
+				return err
+			}
+			intrinsics.mem_copy_non_overlapping(v.data, &val, 2)
+			return nil
+		},
+	}
+
+	cbor.tag_register_type(reg16_tag_impl, RAW_TAG_NR_LUCYREG16, LoopyRegister)
 }
 
 _main :: proc() {

@@ -57,38 +57,33 @@ SaveStateOrder :: enum {
 	Load,
 }
 
-
 // Saves/Load Nes state into/from file
-// TODO there's still some bugs. I saved and loaded and it crashed.
-// cbor decode error  Unsupported_Type_Error{id = PPU, hdr = %!(BAD ENUM VALUE=0), add = %!(BAD ENUM VALUE=0)}
-// file read error
 process_savestate_order :: proc(nes: ^NES, savestate_order: SaveStateOrder) -> bool {
 	switch savestate_order {
 	case .Save:
-		// Fast testing. marshalls and unmarshalls.
-		// with these flags, it crashes way less.
-		// now it only crashes (sometimes) like this:
-		// cbor decode error  Unsupported_Type_Error{id = PPU, hdr = %!(BAD ENUM VALUE=0), add = %!(BAD ENUM VALUE=0)}
-
-		nes_binary, err := cbor.marshal_into_bytes(nes.nes_serialized, flags = {.Self_Described_CBOR})
+		marshal_flags := cbor.Encoder_Flags {
+			.Self_Described_CBOR,
+			//  .Deterministic_Int_Size, .Deterministic_Float_Size, .Deterministic_Map_Sorting
+		}
+		nes_binary, err := cbor.marshal_into_bytes(
+			nes.nes_serialized,
+			flags = marshal_flags,
+			allocator = context.temp_allocator,
+		)
 		if err != nil {
 			fmt.eprintfln("cbor error %v", err)
 			return false
 		}
-		defer delete(nes_binary)
-
-		//save_diagnosis
-		save_diagnosis(nes_binary) or_return
-
-		reader: bytes.Reader
-		stream := bytes.reader_init(&reader, nes_binary)
+		os.write_entire_file(nes.rom_info.hash, nes_binary) or_return
+		fmt.printfln("Saved save state to %v", nes.rom_info.hash)
+	case .Load:
+		nes_binary, fok := os.read_entire_file_from_filename(nes.rom_info.hash, allocator = context.temp_allocator)
 
 		nes_serialized_temp: NesSerialized
+		decoder_flags: cbor.Decoder_Flags = {.Disallow_Streaming, .Trusted_Input, .Shrink_Excess}
 
-		decoder_flags: cbor.Decoder_Flags = {.Disallow_Streaming, .Trusted_Input}
-
-		derr2 := cbor.unmarshal_from_reader(
-			stream,
+		derr2 := cbor.unmarshal_from_string(
+			string(nes_binary),
 			&nes_serialized_temp,
 			flags = decoder_flags,
 			allocator = context.temp_allocator,
@@ -98,37 +93,20 @@ process_savestate_order :: proc(nes: ^NES, savestate_order: SaveStateOrder) -> b
 			return false
 		}
 
-		// fok := os.write_entire_file_or_err(nes.rom_info.hash, nes_binary)
+		// backup things you want from current NES before wiping NES allocator.
+		prg_rom_backup := slice.clone(nes.prg_rom, allocator = context.temp_allocator)
+		hash_str_backup := strings.clone(nes.rom_info.hash, allocator = context.temp_allocator)
 
-		// if fok != nil {
-		// 	fmt.eprintfln("file write error %v %v", fok, nes.rom_info.hash)
-		// 	return false
-		// }
+		// TODO maybe save state data should be in another allocator bc it's another lifetime. we're doing unnecessary copying here.
+		nes_arena_alloc := mv.arena_allocator(&nes_arena)
+		free_all(nes_arena_alloc)
 
-
-		fmt.printfln("Saved save state to %v", nes.rom_info.hash)
-
-	case .Load:
+		nes.nes_serialized = nes_serialized_temp
+		nes.chr_mem = slice.clone(nes_serialized_temp.chr_mem, allocator = nes_arena_alloc)
+		nes.prg_ram = slice.clone(nes_serialized_temp.prg_ram, allocator = nes_arena_alloc)
+		nes.prg_rom = slice.clone(prg_rom_backup, allocator = nes_arena_alloc)
+		nes.rom_info.hash = strings.clone(hash_str_backup, allocator = nes_arena_alloc)
 	}
-
-	return true
-}
-
-save_diagnosis :: proc(nes_binary: []u8) -> bool {
-	// debugging
-	decoded, derr := cbor.decode(string(nes_binary), allocator = context.temp_allocator)
-	if derr != nil {
-		fmt.eprintln("errrrrr")
-		return false
-	}
-
-	diagnosis, eerr := cbor.to_diagnostic_format_string(decoded, allocator = context.temp_allocator)
-	if eerr != nil {
-		fmt.eprintln("d errrr")
-		return false
-	}
-
-	os.write_entire_file("diagnosis", transmute([]u8)(diagnosis)) or_return
 
 	return true
 }

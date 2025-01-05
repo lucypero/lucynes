@@ -81,13 +81,13 @@ PPU :: struct {
 	rendering_enabled:          bool,
 	rendering_toggle_timer:     int,
 
-	ppu_ctrl:                   PpuCtrl `cbor_tag:"lucyreg8"`,
-	ppu_mask:                   PpuMask `cbor_tag:"lucyreg8"`,
-	ppu_status:                 PpuStatus `cbor_tag:"lucyreg8"`,
+	ppu_ctrl:                   PpuCtrl,
+	ppu_mask:                   PpuMask,
+	ppu_status:                 PpuStatus,
 	ppu_buffer_read:            u8,
 
-	current_loopy:              LoopyRegister `cbor_tag:"lucyreg16"`, // the v register
-	temp_loopy:                 LoopyRegister `cbor_tag:"lucyreg16"`, // the t register
+	current_loopy:              LoopyRegister, // the v register
+	temp_loopy:                 LoopyRegister, // the t register
 	ppu_x:                      u8, // fine x scroll (3 bits)
 	ppu_w:                      bool, // First or second write toggle (1 bit)
 
