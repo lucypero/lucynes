@@ -9,7 +9,7 @@
             "command": "odin",
             "args": [
                 "run",
-                "."
+                "src/."
             ],
             "group": {
                 "kind": "build",
@@ -26,7 +26,7 @@
             "command": "odin",
             "args": [
                 "build",
-                ".",
+                "src/.",
                 "-o:none",
                 "-debug"
             ],
