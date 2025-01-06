@@ -58,7 +58,7 @@ SaveStateOrder :: enum {
 }
 
 // Saves/Load Nes state into/from file
-process_savestate_order :: proc(nes: ^NES, savestate_order: SaveStateOrder) -> bool {
+savestate_order :: proc(nes: ^NES, savestate_order: SaveStateOrder) -> bool {
 	switch savestate_order {
 	case .Save:
 		marshal_flags := cbor.Encoder_Flags {

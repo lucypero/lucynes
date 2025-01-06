@@ -80,17 +80,14 @@ PPU :: struct {
 	next_rendering_enabled:     bool,
 	rendering_enabled:          bool,
 	rendering_toggle_timer:     int,
-
 	ppu_ctrl:                   PpuCtrl,
 	ppu_mask:                   PpuMask,
 	ppu_status:                 PpuStatus,
 	ppu_buffer_read:            u8,
-
 	current_loopy:              LoopyRegister, // the v register
 	temp_loopy:                 LoopyRegister, // the t register
 	ppu_x:                      u8, // fine x scroll (3 bits)
 	ppu_w:                      bool, // First or second write toggle (1 bit)
-
 	bg_next_tile_id:            u8,
 	bg_next_tile_attrib:        u8,
 	bg_next_tile_lsb:           u8, // bitplane of pattern tile
@@ -103,7 +100,6 @@ PPU :: struct {
 	bg_shifter_attrib_hi:       u16,
 
 	/// Sprite rendering state
-
 	sprite_scanline:            [8]OAMEntry, // the 8 possible sprites in a scanline
 	sprite_count:               u8, // to track how many sprites are in the next scanline
 
@@ -1011,10 +1007,15 @@ draw_pixel :: proc(using ppu: ^PPU, pixel_grid: ^PixelGrid) {
 
 	// pixel = bg_pixel
 	// palette_final = bg_palette
+	nes_color :u8
 
-	nes_color := get_color_from_palettes(ppu^, pixel, palette_final)
+	if app_state.debug_palette {
+		nes_color = get_color_from_fake_palettes(ppu^, pixel, palette_final)
+	} else {
+		nes_color = get_color_from_palettes(ppu^, pixel, palette_final)
+	}
+
 	// Uncomment following line tu turn on debug palette
-	// nes_color := get_color_from_fake_palettes(ppu^, pixel, palette_final)
 	real_color := color_map_from_nes_to_real(nes_color)
 
 	// position of pixel

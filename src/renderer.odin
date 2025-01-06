@@ -10,7 +10,7 @@ import "core:strconv"
 import "core:slice"
 import rl "vendor:raylib"
 
-scale_factor :: 4
+scale_factor :: 2
 
 nes_width :: 256
 nes_height :: 240
@@ -30,7 +30,7 @@ screen_height :: nes_height * scale_factor
 framebuffer_width :: nes_width
 framebuffer_height :: nes_height
 
-target_fps :: 400
+target_fps :: 60
 
 // the CPU clockrate for NTSC systems is 1789773 Hz
 //    https://www.nesdev.org/wiki/Cycle_reference_chart
@@ -38,8 +38,6 @@ target_fps :: 400
 // palette_file :: "palettes/ntscpalette.pal"
 palette_file :: "palettes/Composite_wiki.pal"
 
-enable_shader :: false
-// enable_shader :: true
 shader_file :: "shaders/easymode.fs"
 // shader_file :: "shaders/scanlines.fs"
 
@@ -57,7 +55,6 @@ font: rl.Font
 font_size :: 30
 
 AppState :: struct {
-	paused:              bool, // Is NES emulation paused?
 	in_menu:             bool, // Showing HUD?
 
 	// Menu state
@@ -68,6 +65,22 @@ AppState :: struct {
 	break_on_given_pc:   bool,
 	given_pc_b:          strings.Builder,
 	given_pc:            u16,
+
+	// new menu state
+	menu_show:           bool,
+
+	// window dimensions stuff
+	scale_factor_f:      f32,
+	x_offset:            f32,
+	is_fullscreen:       bool,
+
+	// emulation stuff
+	paused:              bool, // Is NES emulation paused?
+	tick_force:          bool,
+	debug_palette:       bool,
+
+	// rendering
+	enable_shader:       bool,
 }
 
 app_state: AppState
@@ -79,6 +92,10 @@ window_main :: proc() {
 	app_state = {}
 	app_state.given_pc_b = strings.builder_make_len_cap(0, 10)
 	app_state.item_count = 3
+
+	app_state.scale_factor_f = f32(scale_factor)
+	app_state.x_offset = 0
+	app_state.menu_show = true
 
 	rl.SetTraceLogLevel(.ERROR)
 	rl.InitWindow(screen_width, screen_height, "lucynes")
@@ -105,8 +122,6 @@ window_main :: proc() {
 		height = framebuffer_height,
 	}
 
-	scale_factor_f := f32(scale_factor)
-	x_offset: f32 = 0
 
 	// rl.UnloadImage(checkedIm) // Unload CPU (RAM) image data (pixels)
 
@@ -125,9 +140,7 @@ window_main :: proc() {
 
 	// shader
 
-	when enable_shader {
-		shader: rl.Shader = rl.LoadShader(nil, shader_file)
-	}
+	shader: rl.Shader = rl.LoadShader(nil, shader_file)
 
 	// u gotta set the values...
 	// rl.SetShaderValue()
@@ -144,9 +157,11 @@ window_main :: proc() {
 	nes: NES
 	nes_reset(&nes, the_rom)
 
-	paused := false
+	gui_init(&nes)
 
 	for !rl.WindowShouldClose() {
+
+		gui_update(&nes)
 
 		rl.BeginDrawing()
 
@@ -160,31 +175,19 @@ window_main :: proc() {
 			nes_reset(&nes, the_rom)
 		}
 
-		tick_force := false
 
 		if rl.IsKeyPressed(.P) {
-			paused = !paused
-
-			if !paused {
-				// if unpausing, advance one instruction no matter what
-				tick_force = true
-			}
+			toggle_pause()
 
 		}
 
 		if rl.IsKeyPressed(.F) {
-			rl.ToggleBorderlessWindowed()
-			w := rl.GetScreenWidth()
-			h := rl.GetScreenHeight()
-			scale_factor_f = f32(h) / f32(framebuffer_height)
-
-			nes_w := framebuffer_width * scale_factor_f
-			x_offset = (f32(w) / 2) - (f32(nes_w) / 2)
+			toggle_fullscreen()
 		}
 
 		if rl.IsKeyPressed(.F10) {
 			// run one instruction
-			if paused {
+			if app_state.paused {
 				instruction_tick(&nes, 0, 0, &pixel_grid)
 				reset_debugging_vars(&nes)
 			}
@@ -192,12 +195,12 @@ window_main :: proc() {
 
 		// Saving
 		if rl.IsKeyPressed(.F1) {
-			assert(process_savestate_order(&nes, .Save))
+			assert(savestate_order(&nes, .Save))
 		}
 
 		// Loading
 		if rl.IsKeyPressed(.F4) {
-			assert(process_savestate_order(&nes, .Load))
+			assert(savestate_order(&nes, .Load))
 		}
 
 		if rl.IsKeyPressed(.L) {
@@ -209,29 +212,36 @@ window_main :: proc() {
 		fill_input_port(&port_0_input)
 
 		// run nes till vblank
-		if !paused {
-			broke := tick_nes_till_vblank(&nes, tick_force, port_0_input, port_1_input, &pixel_grid)
+		if !app_state.paused {
+			broke := tick_nes_till_vblank(&nes, app_state.tick_force, port_0_input, port_1_input, &pixel_grid)
 			if broke {
-				paused = true
+				app_state.paused = true
 			}
 		}
+		app_state.tick_force = false
 
 		// here you modify the pixels (draw the frame)
 		// draw_frame(nes, &pixel_grid)
 
 		rl.UpdateTexture(nes_texture, raw_data(pixels))
-		when enable_shader {
+		if app_state.enable_shader {
 			rl.BeginShaderMode(shader)
 		}
-		rl.DrawTextureEx(nes_texture, {x_offset, 0}, 0, scale_factor_f, rl.WHITE)
-		when enable_shader {
+		rl.DrawTextureEx(nes_texture, {app_state.x_offset, 0}, 0, app_state.scale_factor_f, rl.WHITE)
+		if app_state.enable_shader {
 			rl.EndShaderMode()
 		}
-		draw_debugger(nes, paused)
+		draw_debugger(nes, app_state.paused)
 
-		if rl.IsKeyPressed(.M) {
+		// show old menu
+		if rl.IsKeyPressed(.N) {
 			// draw GUI
 			app_state.in_menu = !app_state.in_menu
+		}
+
+		// show new menu
+		if rl.IsKeyPressed(.M) {
+			app_state.menu_show = !app_state.menu_show
 		}
 
 		if app_state.in_menu {
@@ -242,9 +252,8 @@ window_main :: proc() {
 			draw_pattern_tables(&nes)
 		}
 
-		// if rl.GuiButton({200, 200, 200, 200}, "hello button") {
-		// 	fmt.println("clicked on button")
-		// }
+		gui_draw(&nes)
+
 
 		rl.EndDrawing()
 		free_all(context.temp_allocator)
@@ -252,6 +261,7 @@ window_main :: proc() {
 
 	print_faulty_ops(&nes)
 }
+
 
 is_key_hex :: proc(key: rune) -> bool {
 	switch key {
@@ -546,5 +556,89 @@ draw_tile :: proc(tile: [8 * 8]int, x_pos, y_pos: int) {
 		// pixel_grid.pixels[the_p_i] = col
 
 		rl.DrawPixel(i32(x_pos + x_add) + nes_width * scale_factor + 10, i32(y_pos + y_add), col)
+	}
+}
+
+// raygui stuff
+
+style_select := 0
+
+gui_init :: proc(nes: ^NES) {
+	rl.GuiLoadStyle("style_amber.rgs")
+}
+
+// this runs every frame before beginDrawing
+gui_update :: proc(nes: ^NES) {
+
+	// TODO: idk how to load the included styles, if they are included in odin.
+	// switch style_select {
+	// 	case 0: rl.GuiLoadStyleDefault()
+	// 	case 1: rl.GuiLoadStyle("amber")
+	// }
+}
+
+gui_draw :: proc(nes: ^NES) {
+	// if rl.GuiButton({200, 200, 200, 200}, "hello button") {
+	// 	fmt.println("clicked on button")
+	// }
+
+	if !app_state.menu_show do return
+	context.allocator = context.temp_allocator
+
+	padding :: 30
+	item_count :: 8
+	panel_rec := rl.Rectangle{10, 10, 300, padding * item_count}
+	rec := rl.Rectangle{panel_rec.x + 10, panel_rec.y + 30, 200, padding - 5}
+
+	if rl.GuiWindowBox(panel_rec, "lucynes settings") != 0 {
+		app_state.menu_show = false
+	}
+
+	playing_str := fmt.aprintf("Playing: %v", rom_in_nes)
+	rl.GuiLabel(rec, strings.clone_to_cstring(playing_str))
+	rec.y += padding
+	if rl.GuiButton(rec, "Toggle Fullscreen") {
+		toggle_fullscreen()
+	}
+	rec.y += padding
+	if rl.GuiButton(rec, "Pause Emulation") {
+		toggle_pause()
+	}
+	rec.y += padding
+	if rl.GuiButton(rec, "Toggle Debug Palette") {
+		app_state.debug_palette = !app_state.debug_palette
+	}
+	rec.y += padding
+	if rl.GuiButton(rec, "Save state") {
+		assert(savestate_order(nes, .Save))
+	}
+	rec.y += padding
+	if rl.GuiButton(rec, "Load state") {
+		assert(savestate_order(nes, .Load))
+	}
+	rec.y += padding
+	if rl.GuiButton(rec, "Toggle shader") {
+		app_state.enable_shader = !app_state.enable_shader
+	}
+}
+
+toggle_fullscreen :: proc() {
+	rl.ToggleBorderlessWindowed()
+	w := rl.GetScreenWidth()
+	h := rl.GetScreenHeight()
+
+	app_state.scale_factor_f = f32(h) / f32(framebuffer_height)
+
+	nes_w := framebuffer_width * app_state.scale_factor_f
+	app_state.x_offset = (f32(w) / 2) - (f32(nes_w) / 2)
+	app_state.is_fullscreen = !app_state.is_fullscreen
+}
+
+toggle_pause :: proc() {
+	app_state.paused = !app_state.paused
+
+	if !app_state.paused {
+		// if unpausing, advance one instruction no matter what
+		app_state.tick_force = true
 	}
 }
