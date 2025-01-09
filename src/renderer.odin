@@ -8,6 +8,7 @@ import "core:mem"
 import "core:strings"
 import "core:strconv"
 import "core:slice"
+import "core:encoding/cbor"
 import rl "vendor:raylib"
 
 scale_factor :: 2
@@ -41,20 +42,30 @@ palette_file :: "palettes/Composite_wiki.pal"
 shader_file :: "shaders/easymode.fs"
 // shader_file :: "shaders/scanlines.fs"
 
+appstate_file :: "appstate.cbor"
+
 PixelGrid :: struct {
 	pixels: []rl.Color,
 	width:  int,
 	height: int,
 }
 
-send_samples := true
-
 pixel_grid: PixelGrid
 
 font: rl.Font
 font_size :: 30
 
+AppStateSerialized :: struct {
+	menu_show:     bool,
+	enable_shader: bool,
+	send_samples:  bool,
+	is_fullscreen: bool,
+	paused:        bool, // Is NES emulation paused?
+	debug_palette: bool,
+}
+
 AppState :: struct {
+	using serialized:    AppStateSerialized,
 	in_menu:             bool, // Showing HUD?
 
 	// Menu state
@@ -66,21 +77,39 @@ AppState :: struct {
 	given_pc_b:          strings.Builder,
 	given_pc:            u16,
 
-	// new menu state
-	menu_show:           bool,
-
 	// window dimensions stuff
 	scale_factor_f:      f32,
 	x_offset:            f32,
-	is_fullscreen:       bool,
 
 	// emulation stuff
-	paused:              bool, // Is NES emulation paused?
 	tick_force:          bool,
-	debug_palette:       bool,
+}
 
-	// rendering
-	enable_shader:       bool,
+app_state_init :: proc(app_state: ^AppState) {
+
+	app_state.given_pc_b = strings.builder_make_len_cap(0, 10)
+	app_state.item_count = 3
+
+	app_state.scale_factor_f = f32(scale_factor)
+	app_state.x_offset = 0
+	app_state.menu_show = true
+	app_state.send_samples = true
+
+	// trying to load state
+	app_state_bin, ok := os.read_entire_file_from_filename(appstate_file, allocator = context.temp_allocator)
+	if ok {
+		app_state_temp: AppStateSerialized = ---
+		derr2 := cbor.unmarshal_from_string(string(app_state_bin), &app_state_temp, allocator = context.temp_allocator)
+		if derr2 != nil {
+			fmt.eprintln("cbor decode error ", derr2)
+		} else {
+			app_state.serialized = app_state_temp
+		}
+	}
+
+	if app_state.is_fullscreen {
+		toggle_fullscreen(false)
+	}
 }
 
 app_state: AppState
@@ -89,18 +118,13 @@ clear_color := rl.Color{36, 41, 46, 255}
 
 window_main :: proc() {
 
-	app_state = {}
-	app_state.given_pc_b = strings.builder_make_len_cap(0, 10)
-	app_state.item_count = 3
-
-	app_state.scale_factor_f = f32(scale_factor)
-	app_state.x_offset = 0
-	app_state.menu_show = true
-
 	rl.SetTraceLogLevel(.ERROR)
 	rl.InitWindow(screen_width, screen_height, "lucynes")
 	rl.SetWindowPosition(20, 50)
 	rl.SetTargetFPS(target_fps)
+
+	app_state = {}
+	app_state_init(&app_state)
 
 	font = rl.LoadFontEx("fonts/JetBrainsMono-Bold.ttf", font_size, nil, 250)
 
@@ -586,11 +610,13 @@ gui_draw :: proc(nes: ^NES) {
 	context.allocator = context.temp_allocator
 
 	padding :: 30
-	item_count :: 8
+	item_count :: 9
 	panel_rec := rl.Rectangle{10, 10, 300, padding * item_count}
 	rec := rl.Rectangle{panel_rec.x + 10, panel_rec.y + 30, 200, padding - 5}
+	appstate_dirty: bool
 
 	if rl.GuiWindowBox(panel_rec, "lucynes settings") != 0 {
+		appstate_dirty = true
 		app_state.menu_show = false
 	}
 
@@ -598,14 +624,17 @@ gui_draw :: proc(nes: ^NES) {
 	rl.GuiLabel(rec, strings.clone_to_cstring(playing_str))
 	rec.y += padding
 	if rl.GuiButton(rec, "Toggle Fullscreen") {
+		appstate_dirty = true
 		toggle_fullscreen()
 	}
 	rec.y += padding
 	if rl.GuiButton(rec, "Pause Emulation") {
+		appstate_dirty = true
 		toggle_pause()
 	}
 	rec.y += padding
 	if rl.GuiButton(rec, "Toggle Debug Palette") {
+		appstate_dirty = true
 		app_state.debug_palette = !app_state.debug_palette
 	}
 	rec.y += padding
@@ -618,11 +647,37 @@ gui_draw :: proc(nes: ^NES) {
 	}
 	rec.y += padding
 	if rl.GuiButton(rec, "Toggle shader") {
+		appstate_dirty = true
 		app_state.enable_shader = !app_state.enable_shader
+	}
+	rec.y += padding
+	if rl.GuiButton(rec, "Toggle mute") {
+		appstate_dirty = true
+		app_state.send_samples = !app_state.send_samples
+	}
+
+	if appstate_dirty {
+		// save
+		marshal_flags := cbor.Encoder_Flags {
+			.Self_Described_CBOR,
+			//  .Deterministic_Int_Size, .Deterministic_Float_Size, .Deterministic_Map_Sorting
+		}
+
+		appstate_bin, err := cbor.marshal_into_bytes(
+			app_state.serialized,
+			flags = marshal_flags,
+			allocator = context.temp_allocator,
+		)
+
+		if err != nil {
+			fmt.eprintfln("cbor error %v", err)
+		} else {
+			os.write_entire_file(appstate_file, appstate_bin)
+		}
 	}
 }
 
-toggle_fullscreen :: proc() {
+toggle_fullscreen :: proc(toggle_flag := true) {
 	rl.ToggleBorderlessWindowed()
 	w := rl.GetScreenWidth()
 	h := rl.GetScreenHeight()
@@ -631,7 +686,10 @@ toggle_fullscreen :: proc() {
 
 	nes_w := framebuffer_width * app_state.scale_factor_f
 	app_state.x_offset = (f32(w) / 2) - (f32(nes_w) / 2)
-	app_state.is_fullscreen = !app_state.is_fullscreen
+
+	if toggle_flag {
+		app_state.is_fullscreen = !app_state.is_fullscreen
+	}
 }
 
 toggle_pause :: proc() {

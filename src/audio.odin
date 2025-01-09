@@ -486,7 +486,7 @@ generate_sample :: proc(using apu: ^APU) {
 	// pulse1_osc.freq = 1789773.0 / (16.0 * f64(pulse1_seq.reload + 1))
 	// pulse1_sample = osc_sample(&pulse1_osc, global_time)
 
-	if send_samples {
+	if app_state.send_samples {
 		add_sample(apu, f32(sample))
 	}
 
