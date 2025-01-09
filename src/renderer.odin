@@ -42,7 +42,7 @@ palette_file :: "palettes/Composite_wiki.pal"
 shader_file :: "shaders/easymode.fs"
 // shader_file :: "shaders/scanlines.fs"
 
-appstate_file :: "appstate.cbor"
+appstate_filename :: "appstate.cbor"
 
 PixelGrid :: struct {
 	pixels: []rl.Color,
@@ -95,16 +95,10 @@ app_state_init :: proc(app_state: ^AppState) {
 	app_state.menu_show = true
 	app_state.send_samples = true
 
-	// trying to load state
-	app_state_bin, ok := os.read_entire_file_from_filename(appstate_file, allocator = context.temp_allocator)
+	app_state_temp: AppStateSerialized = ---
+	ok := load_thing(appstate_filename, &app_state_temp, allocator = context.temp_allocator)
 	if ok {
-		app_state_temp: AppStateSerialized = ---
-		derr2 := cbor.unmarshal_from_string(string(app_state_bin), &app_state_temp, allocator = context.temp_allocator)
-		if derr2 != nil {
-			fmt.eprintln("cbor decode error ", derr2)
-		} else {
-			app_state.serialized = app_state_temp
-		}
+		app_state.serialized = app_state_temp
 	}
 
 	if app_state.is_fullscreen {
@@ -658,23 +652,8 @@ gui_draw :: proc(nes: ^NES) {
 	}
 
 	if appstate_dirty {
-		// save
-		marshal_flags := cbor.Encoder_Flags {
-			.Self_Described_CBOR,
-			//  .Deterministic_Int_Size, .Deterministic_Float_Size, .Deterministic_Map_Sorting
-		}
-
-		appstate_bin, err := cbor.marshal_into_bytes(
-			app_state.serialized,
-			flags = marshal_flags,
-			allocator = context.temp_allocator,
-		)
-
-		if err != nil {
-			fmt.eprintfln("cbor error %v", err)
-		} else {
-			os.write_entire_file(appstate_file, appstate_bin)
-		}
+		// save state
+		assert(save_thing(app_state.serialized, appstate_filename))
 	}
 }
 

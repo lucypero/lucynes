@@ -61,37 +61,11 @@ SaveStateOrder :: enum {
 savestate_order :: proc(nes: ^NES, savestate_order: SaveStateOrder) -> bool {
 	switch savestate_order {
 	case .Save:
-		marshal_flags := cbor.Encoder_Flags {
-			.Self_Described_CBOR,
-			//  .Deterministic_Int_Size, .Deterministic_Float_Size, .Deterministic_Map_Sorting
-		}
-		nes_binary, err := cbor.marshal_into_bytes(
-			nes.nes_serialized,
-			flags = marshal_flags,
-			allocator = context.temp_allocator,
-		)
-		if err != nil {
-			fmt.eprintfln("cbor error %v", err)
-			return false
-		}
-		os.write_entire_file(nes.rom_info.hash, nes_binary) or_return
+		save_thing(nes.nes_serialized, nes.rom_info.hash) or_return
 		fmt.printfln("Saved save state to %v", nes.rom_info.hash)
 	case .Load:
-		nes_binary := os.read_entire_file_from_filename(nes.rom_info.hash, allocator = context.temp_allocator) or_return
-
 		nes_serialized_temp: NesSerialized
-		decoder_flags: cbor.Decoder_Flags = {.Disallow_Streaming, .Trusted_Input, .Shrink_Excess}
-
-		derr2 := cbor.unmarshal_from_string(
-			string(nes_binary),
-			&nes_serialized_temp,
-			flags = decoder_flags,
-			allocator = context.temp_allocator,
-		)
-		if derr2 != nil {
-			fmt.eprintln("cbor decode error ", derr2)
-			return false
-		}
+		load_thing(nes.rom_info.hash, &nes_serialized_temp, allocator = context.temp_allocator) or_return
 
 		// backup things you want from current NES before wiping NES allocator.
 		prg_rom_backup := slice.clone(nes.prg_rom, allocator = context.temp_allocator)

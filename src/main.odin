@@ -18,8 +18,8 @@ import hash "core:crypto/hash"
 import base64 "core:encoding/base64"
 import rl "vendor:raylib"
 import wt "wav_tools"
-import "core:encoding/cbor"
 import "base:intrinsics"
+import "core:encoding/cbor"
 
 // NES emulation arena emulator.
 // allocates all NES emulation memory
@@ -460,87 +460,6 @@ main :: proc() {
 
 	warn_leaks(&track, "Forever")
 	print_allocated_temp()
-}
-
-set_up_cbor :: proc() {
-	// set up cbor
-	RAW_TAG_NR_LUCYREG8 :: 200
-
-	reg8_tag_impl := cbor.Tag_Implementation {
-		marshal = proc(_: ^cbor.Tag_Implementation, e: cbor.Encoder, v: any) -> cbor.Marshal_Error {
-			// encoding the tag
-			cbor._encode_u8(e.writer, RAW_TAG_NR_LUCYREG8, .Tag) or_return
-			// encoding the value as a u8
-			the_val: u8 = (cast(^u8)v.data)^
-			err := cbor._encode_u8(e.writer, the_val, .Unsigned)
-			return err
-		},
-		unmarshal = proc(
-			_: ^cbor.Tag_Implementation,
-			d: cbor.Decoder,
-			_: cbor.Tag_Number,
-			v: any,
-		) -> cbor.Unmarshal_Error {
-			hdr := cbor._decode_header(d.reader) or_return
-			maj, add := cbor._header_split(hdr)
-			if maj != .Unsigned {
-				return .Bad_Tag_Value
-			}
-
-			val: u8
-
-			// Check if the u8 is inside the header (tiny int optimization)
-			// This has cost me 5 hours of debugging. thanks.
-			// https://github.com/odin-lang/Odin/issues/4661
-			if add != .One_Byte {
-				val = cbor._decode_tiny_u8(add) or_return
-			} else {
-				val = cbor._decode_u8(d.reader) or_return
-			}
-
-			intrinsics.mem_copy_non_overlapping(v.data, &val, 1)
-			return nil
-		},
-	}
-
-	cbor.tag_register_type(reg8_tag_impl, RAW_TAG_NR_LUCYREG8, PpuCtrl)
-	cbor.tag_register_type(reg8_tag_impl, RAW_TAG_NR_LUCYREG8, PpuMask)
-	cbor.tag_register_type(reg8_tag_impl, RAW_TAG_NR_LUCYREG8, PpuStatus)
-
-	// 16 bit registers
-	RAW_TAG_NR_LUCYREG16 :: 201
-
-	reg16_tag_impl := cbor.Tag_Implementation {
-		marshal = proc(_: ^cbor.Tag_Implementation, e: cbor.Encoder, v: any) -> cbor.Marshal_Error {
-			// encoding the header (tag)
-			cbor._encode_u8(e.writer, RAW_TAG_NR_LUCYREG16, .Tag) or_return
-			the_val: u16 = (cast(^u16)v.data)^
-			err := cbor._encode_u16(e, the_val, .Unsigned)
-			return cbor.err_conv(err)
-		},
-		unmarshal = proc(
-			_: ^cbor.Tag_Implementation,
-			d: cbor.Decoder,
-			_: cbor.Tag_Number,
-			v: any,
-		) -> cbor.Unmarshal_Error {
-			hdr := cbor._decode_header(d.reader) or_return
-			maj, add := cbor._header_split(hdr)
-			if maj != .Unsigned {
-				return .Bad_Tag_Value
-			}
-
-			val, err := cbor._decode_u16(d.reader)
-			if err != .None {
-				fmt.eprintln("err heree")
-				return err
-			}
-			intrinsics.mem_copy_non_overlapping(v.data, &val, 2)
-			return nil
-		},
-	}
-
-	cbor.tag_register_type(reg16_tag_impl, RAW_TAG_NR_LUCYREG16, LoopyRegister)
 }
 
 _main :: proc() {
