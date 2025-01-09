@@ -38,6 +38,25 @@
                 "reveal": "silent"
             },
             "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "vet",
+            "type": "shell",
+            "command": "odin",
+            "args": [
+                "build",
+                "src/.",
+                "-o:none",
+                "-vet-unused-imports"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "silent"
+            },
+            "problemMatcher": "$msCompile"
         }
     ]
 }

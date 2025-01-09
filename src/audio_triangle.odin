@@ -1,7 +1,5 @@
 package main
 
-import "core:fmt"
-
 // -- Triangle channel
 
 LinearCounter :: struct {

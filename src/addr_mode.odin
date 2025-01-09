@@ -1,7 +1,5 @@
 package main
 
-import "core:fmt"
-
 // TODO: make sure these addr functions return
 //  the address of the things. never just the value.
 //  so the caller can either write or read to these addresses.

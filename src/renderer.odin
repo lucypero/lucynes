@@ -1,14 +1,9 @@
 package main
 
-import "core:c"
 import "core:fmt"
-import "core:math"
 import "core:os"
-import "core:mem"
 import "core:strings"
 import "core:strconv"
-import "core:slice"
-import "core:encoding/cbor"
 import rl "vendor:raylib"
 
 scale_factor :: 2

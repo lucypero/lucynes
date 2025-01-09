@@ -1,12 +1,7 @@
 package main
 
-import "base:runtime"
 import "core:fmt"
-import "core:mem"
-import "core:os"
 import "core:slice"
-import "core:strconv"
-import "core:strings"
 
 PpuMask :: struct #raw_union {
 	// BGRs bMmG

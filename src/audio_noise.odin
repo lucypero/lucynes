@@ -1,7 +1,5 @@
 package main
 
-import "core:fmt"
-
 NoiseChannel :: struct {
 	envelope:       Envelope,
 	seq:            Sequencer,

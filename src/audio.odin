@@ -1,14 +1,12 @@
 package main
 
 import "base:runtime"
-import "core:c"
 import "core:fmt"
 import "core:math"
 import "core:mem"
 import "core:os"
 import "core:sync"
 import "core:sync/chan"
-import "core:thread"
 import ma "vendor:miniaudio"
 
 // audio demo

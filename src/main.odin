@@ -1,25 +1,20 @@
 package main
 
 import "base:runtime"
-import "core:bufio"
 import "core:bytes"
 import "core:encoding/endian"
 import "core:fmt"
-import "core:io"
-import "core:math"
 import "core:mem"
 import mv "core:mem/virtual"
 import "core:os"
 import "core:strconv"
 import "core:strings"
 import "core:sync"
-import "core:sync/chan"
 import hash "core:crypto/hash"
 import base64 "core:encoding/base64"
 import rl "vendor:raylib"
 import wt "wav_tools"
 import "base:intrinsics"
-import "core:encoding/cbor"
 
 // NES emulation arena emulator.
 // allocates all NES emulation memory

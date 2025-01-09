@@ -2,7 +2,6 @@ package main
 
 import "core:os"
 import "core:fmt"
-import "core:time"
 
 Mapper :: enum {
 	M0, // NROM128, NROM256

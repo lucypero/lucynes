@@ -1,14 +1,9 @@
 package main
 
 import "core:fmt"
-import "core:mem"
-import "core:os"
 import "core:slice"
-import "core:encoding/cbor"
 import mv "core:mem/virtual"
 import "core:strings"
-import "core:bytes"
-import "core:io"
 
 // In-memory save state:
 

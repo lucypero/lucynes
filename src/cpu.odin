@@ -4,14 +4,8 @@
 package main
 
 import "core:fmt"
-import "core:math"
-import "core:mem"
 import "core:os"
 import "core:strings"
-import "core:slice"
-import "core:encoding/cbor"
-import "core:encoding/json"
-import "core:reflect"
 import "base:intrinsics"
 import mv "core:mem/virtual"
 
