@@ -180,6 +180,7 @@ window_main :: proc() {
 	// initializing nes
 	nes: NES
 	nes_reset(&nes, the_rom)
+	savestate_order(&nes, .Load)
 
 	gui_init(&nes)
 
