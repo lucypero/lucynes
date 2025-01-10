@@ -4,6 +4,7 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 import "core:strconv"
+import "core:c"
 import rl "vendor:raylib"
 
 scale_factor :: 3
@@ -51,33 +52,37 @@ font: rl.Font
 font_size :: 30
 
 AppStateSerialized :: struct {
-	menu_show:     bool,
-	enable_shader: bool,
-	send_samples:  bool,
-	is_fullscreen: bool,
-	paused:        bool, // Is NES emulation paused?
-	debug_palette: bool,
+	menu_show:         bool,
+	enable_shader:     bool,
+	send_samples:      bool,
+	is_fullscreen:     bool,
+	paused:            bool, // Is NES emulation paused?
+	debug_palette:     bool,
+	save_state_select: i32,
 }
 
 AppState :: struct {
-	using serialized:    AppStateSerialized,
-	in_menu:             bool, // Showing HUD?
+	using serialized:     AppStateSerialized,
+	in_menu:              bool, // Showing HUD?
 
 	// Menu state
-	item_selected:       int,
-	item_count:          int,
-	break_on_nmi:        bool,
-	break_on_game_start: bool, // not used
-	break_on_given_pc:   bool,
-	given_pc_b:          strings.Builder,
-	given_pc:            u16,
+	item_selected:        int,
+	item_count:           int,
+	break_on_nmi:         bool,
+	break_on_game_start:  bool, // not used
+	break_on_given_pc:    bool,
+	given_pc_b:           strings.Builder,
+	given_pc:             u16,
 
 	// window dimensions stuff
-	scale_factor_f:      f32,
-	x_offset:            f32,
+	scale_factor_f:       f32,
+	x_offset:             f32,
 
 	// emulation stuff
-	tick_force:          bool,
+	tick_force:           bool,
+
+	// new menu state
+	save_combobox_active: bool,
 }
 
 app_state_init :: proc(app_state: ^AppState) {
@@ -209,12 +214,12 @@ window_main :: proc() {
 
 		// Saving
 		if rl.IsKeyPressed(.F1) {
-			assert(savestate_order(&nes, .Save))
+			savestate_order(&nes, .Save)
 		}
 
 		// Loading
 		if rl.IsKeyPressed(.F4) {
-			assert(savestate_order(&nes, .Load))
+			savestate_order(&nes, .Load)
 		}
 
 		if rl.IsKeyPressed(.L) {
@@ -600,7 +605,7 @@ gui_draw :: proc(nes: ^NES) {
 	context.allocator = context.temp_allocator
 
 	padding :: 30
-	item_count :: 9
+	item_count :: 10
 	panel_rec := rl.Rectangle{10, 10, 300, padding * item_count}
 	rec := rl.Rectangle{panel_rec.x + 10, panel_rec.y + 30, 200, padding - 5}
 	appstate_dirty: bool
@@ -627,23 +632,32 @@ gui_draw :: proc(nes: ^NES) {
 		appstate_dirty = true
 		app_state.debug_palette = !app_state.debug_palette
 	}
+	// list of savestates
 	rec.y += padding
-	if rl.GuiButton(rec, "Save state") {
-		assert(savestate_order(nes, .Save))
+	in_i32: ^c.int = cast(^c.int)&app_state.save_state_select
+	save_dropdown_rec := rec
+	rec.y += padding
+	if rl.GuiButton(rec, "Save state") && !app_state.save_combobox_active {
+		savestate_order(nes, .Save)
 	}
 	rec.y += padding
-	if rl.GuiButton(rec, "Load state") {
-		assert(savestate_order(nes, .Load))
+	if rl.GuiButton(rec, "Load state") && !app_state.save_combobox_active {
+		savestate_order(nes, .Load)
 	}
 	rec.y += padding
-	if rl.GuiButton(rec, "Toggle shader") {
+	if rl.GuiButton(rec, "Toggle shader") && !app_state.save_combobox_active {
 		appstate_dirty = true
 		app_state.enable_shader = !app_state.enable_shader
 	}
 	rec.y += padding
-	if rl.GuiButton(rec, "Toggle mute") {
+	if rl.GuiButton(rec, "Toggle mute") && !app_state.save_combobox_active {
 		appstate_dirty = true
 		app_state.send_samples = !app_state.send_samples
+	}
+
+	// draw dropdown box on top
+	if rl.GuiDropdownBox(save_dropdown_rec, "Save 0;Save 1;Save 2;Save 3;Save 4;Save 5;Save 6;Save 7;Save 8;Save 9", in_i32, app_state.save_combobox_active) {
+		app_state.save_combobox_active = !app_state.save_combobox_active
 	}
 
 	if appstate_dirty {

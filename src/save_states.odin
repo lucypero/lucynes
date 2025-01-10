@@ -4,6 +4,7 @@ import "core:fmt"
 import "core:slice"
 import mv "core:mem/virtual"
 import "core:strings"
+import "base:runtime"
 
 // In-memory save state:
 
@@ -54,13 +55,14 @@ SaveStateOrder :: enum {
 
 // Saves/Load Nes state into/from file
 savestate_order :: proc(nes: ^NES, savestate_order: SaveStateOrder) -> bool {
+	save_filename := get_save_filename(nes.rom_info.hash, context.temp_allocator)
 	switch savestate_order {
 	case .Save:
-		save_thing(nes.nes_serialized, nes.rom_info.hash) or_return
-		fmt.printfln("Saved save state to %v", nes.rom_info.hash)
+		save_thing(nes.nes_serialized, save_filename) or_return
+		fmt.printfln("Saved save state to %v", save_filename)
 	case .Load:
 		nes_serialized_temp: NesSerialized
-		load_thing(nes.rom_info.hash, &nes_serialized_temp, allocator = context.temp_allocator) or_return
+		load_thing(save_filename, &nes_serialized_temp, allocator = context.temp_allocator) or_return
 
 		// backup things you want from current NES before wiping NES allocator.
 		prg_rom_backup := slice.clone(nes.prg_rom, allocator = context.temp_allocator)
@@ -78,4 +80,8 @@ savestate_order :: proc(nes: ^NES, savestate_order: SaveStateOrder) -> bool {
 	}
 
 	return true
+}
+
+get_save_filename :: proc(rom_hash: string, allocator: runtime.Allocator) -> string {
+	return fmt.aprintf("saves/%v_%v", rom_hash, app_state.save_state_select, allocator = allocator)
 }
