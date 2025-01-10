@@ -638,10 +638,12 @@ gui_draw :: proc(nes: ^NES) {
 	save_dropdown_rec := rec
 	rec.y += padding
 	if rl.GuiButton(rec, "Save state") && !app_state.save_combobox_active {
+		appstate_dirty = true
 		savestate_order(nes, .Save)
 	}
 	rec.y += padding
 	if rl.GuiButton(rec, "Load state") && !app_state.save_combobox_active {
+		appstate_dirty = true
 		savestate_order(nes, .Load)
 	}
 	rec.y += padding
