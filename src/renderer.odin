@@ -6,7 +6,7 @@ import "core:strings"
 import "core:strconv"
 import rl "vendor:raylib"
 
-scale_factor :: 2
+scale_factor :: 4
 
 nes_width :: 256
 nes_height :: 240

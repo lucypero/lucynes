@@ -3,11 +3,11 @@ import rl "vendor:raylib"
 import "core:strings"
 import "core:c"
 
-// draw_debugger_view :: true
-draw_debugger_view :: false
+draw_debugger_view :: true
+// draw_debugger_view :: false
 
-// draw_pattern_tables_view :: false
-draw_pattern_tables_view :: true
+draw_pattern_tables_view :: false
+// draw_pattern_tables_view :: true
 
 instructions_y_start :: 200
 
