@@ -107,6 +107,10 @@ PPU :: struct {
 	sprite_zero_being_rendered: bool,
 }
 
+ppu_get_screen_coordinate :: proc(cycle_x, scanline: int) -> (x: int, y: int) {
+	return cycle_x - 1, scanline
+}
+
 ppu_init :: proc(using ppu: ^PPU) {
 	ppu_status.vertical_blank = 1
 }
@@ -154,7 +158,7 @@ write_ppu_register :: proc(nes: ^NES, ppu_reg: u16, val: u8) {
 			// increment_scroll_x(&nes.ppu)
 			// increment_scroll_y(&nes.ppu)
 		} else {
-			rendering_enabled = next_rendering_enabled
+			toggle_rendering(nes, next_rendering_enabled)
 		}
 
 		ppu_mask.reg = val
@@ -723,7 +727,8 @@ ppu_tick :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
 				// _videoRamAddr is V
 			}
 
-			rendering_enabled = next_rendering_enabled
+			toggle_rendering(nes, next_rendering_enabled)
+
 			// //When rendering is disabled midscreen, set the vram bus back to the value of 'v'
 			// SetBusAddress(_videoRamAddr & 0x3FFF);
 		}
@@ -738,6 +743,22 @@ ppu_tick :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
 			scanline = -1
 		}
 	}
+}
+
+toggle_rendering :: proc(nes: ^NES, new_toggle: bool) {
+
+	// logging 
+	if .PPURenderToggle in nes.log_flags {
+		instr_info: InstructionInfo
+		instr_info.ppu_cycle = nes.ppu.cycle_x
+		instr_info.ppu_scanline = nes.ppu.scanline
+		instr_info.ppu_event = new_toggle ? .PPURenderEnabled : .PPURenderDisabled
+		instr_info.ppu_vblank_count = nes.ppu.vblank_count
+		ringthing_add(&nes.instr_history_log, instr_info)
+	}
+
+	nes.ppu.rendering_enabled = new_toggle
+
 }
 
 // Does the sprite evaluation for the next scanline
@@ -1002,7 +1023,7 @@ draw_pixel :: proc(using ppu: ^PPU, pixel_grid: ^PixelGrid) {
 
 	// pixel = bg_pixel
 	// palette_final = bg_palette
-	nes_color :u8
+	nes_color: u8
 
 	if app_state.debug_palette {
 		nes_color = get_color_from_fake_palettes(ppu^, pixel, palette_final)

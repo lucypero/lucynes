@@ -12,7 +12,7 @@ draw_pattern_tables_view :: false
 instructions_y_start :: 200
 
 // how many previous instructions to log
-prev_instructions_log_count :: 10
+prev_instructions_log_count :: 10000
 
 // how many previous instructions to display
 prev_instructions_count :: 20
@@ -273,7 +273,7 @@ draw_debugger :: proc(nes: NES, is_paused: bool) {
 	ypos += f32(vertical_spacing)
 
 	// Drawing instructions
-	the_indx := nes.instr_history.last_placed
+	the_indx := nes.instr_history.next_placed
 	the_buf_len := len(nes.instr_history.buf)
 
 	// retrace it back
@@ -329,6 +329,25 @@ draw_debugger :: proc(nes: NES, is_paused: bool) {
 }
 
 get_instr_str_builder :: proc(nes: NES, pc: u16) -> (b: strings.Builder, next_pc: u16) {
+
+	get_ppu_register_name :: proc(mem : u16) -> string {
+
+		// PPU registers address range
+		ppu_reg := get_mirrored(mem, 0x2000, 0x2007)
+
+		switch ppu_reg {
+			case 0x2000: return "PPUCTRL"
+			case 0x2001: return "PPUMASK"
+			case 0x2002: return "PPUSTATUS"
+			case 0x2003: return "OAMADDR"
+			case 0x2004: return "OAMDATA"
+			case 0x2005: return "PPUSCROLL"
+			case 0x2006: return "PPUADDR"
+			case 0x2007: return "PPUDATA"
+			case 0x4014: return "OAMDMA"
+			case: return "NOTAPPUREGISTER"
+		}
+	}
 
 	b = strings.builder_make_len_cap(0, 10)
 	strings.write_string(&b, "$")
@@ -393,32 +412,49 @@ get_instr_str_builder :: proc(nes: NES, pc: u16) -> (b: strings.Builder, next_pc
 			strings.write_string(b, " $")
 			addr_1 := fake_read(nes, pc + 1)
 			addr_2 := fake_read(nes, pc + 2)
-			write_with_padding(b, int(addr_2), .ShowTwo)
-			write_with_padding(b, int(addr_1), .ShowTwo)
+			addr : u16 = (u16(addr_2) << 8) | u16(addr_1)
+			if is_ppu_register(addr) {
+				strings.write_string(b, get_ppu_register_name(addr))
+				strings.write_string(b, "_")
+			}
+			write_with_padding(b, int(addr), .ShowFour)
 		case .AbsoluteX:
 			pc_advance += 3
 			// absolute, x
 			strings.write_string(b, " $")
 			addr_1 := fake_read(nes, pc + 1)
 			addr_2 := fake_read(nes, pc + 2)
-			write_with_padding(b, int(addr_2), .ShowTwo)
-			write_with_padding(b, int(addr_1), .ShowTwo)
+			addr : u16 = (u16(addr_2) << 8) | u16(addr_1)
+			if is_ppu_register(addr) {
+				strings.write_string(b, get_ppu_register_name(addr))
+				strings.write_string(b, "_")
+			}
+			write_with_padding(b, int(addr), .ShowFour)
 			strings.write_string(b, ",X")
 		case .AbsoluteY:
 			pc_advance += 3
 			strings.write_string(b, " $")
 			addr_1 := fake_read(nes, pc + 1)
 			addr_2 := fake_read(nes, pc + 2)
-			write_with_padding(b, int(addr_2), .ShowTwo)
-			write_with_padding(b, int(addr_1), .ShowTwo)
+			addr : u16 = (u16(addr_2) << 8) | u16(addr_1)
+			if is_ppu_register(addr) {
+				strings.write_string(b, get_ppu_register_name(addr))
+				strings.write_string(b, "_")
+			}
+			write_with_padding(b, int(addr), .ShowFour)
 			strings.write_string(b, ",Y")
 		case .Indirect:
 			pc_advance += 3
 			strings.write_string(b, " -> ($")
 			addr_1 := fake_read(nes, pc + 1)
 			addr_2 := fake_read(nes, pc + 2)
-			write_with_padding(b, int(addr_2), .ShowTwo)
-			write_with_padding(b, int(addr_1), .ShowTwo)
+			addr : u16 = (u16(addr_2) << 4) | u16(addr_1)
+			if is_ppu_register(addr) {
+				strings.write_string(b, get_ppu_register_name(addr))
+				strings.write_string(b, "_")
+				write_with_padding(b, int(addr), .ShowFour)
+			}
+			write_with_padding(b, int(addr), .ShowFour)
 			strings.write_string(b, ")")
 		case .IndirectX:
 			pc_advance += 2

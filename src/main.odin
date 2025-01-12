@@ -15,6 +15,7 @@ import base64 "core:encoding/base64"
 import rl "vendor:raylib"
 import wt "wav_tools"
 import "base:intrinsics"
+import "core:log"
 
 // NES emulation arena emulator.
 // allocates all NES emulation memory
@@ -134,6 +135,12 @@ FaultyOp :: struct {
 	cycles_taken:    int,
 }
 
+PPUEvent :: enum {
+	NoPPUEvent, // was probably just logging an instruction
+	PPURenderEnabled,
+	PPURenderDisabled,
+}
+
 InstructionInfo :: struct {
 	pc:               u16,
 	next_pc:          u16, // The next position of the PC like, for real
@@ -145,20 +152,25 @@ InstructionInfo :: struct {
 	ppu_vblank_count: uint,
 	// you can find out the rest from the PC.
 	// you can add other state later.
+	instr_type:       InstructionType,
+	mem: u16, // mem address that is writing/reading 
+	ppu_event: PPUEvent,
 }
 
-RingThing :: struct($ring_size: uint, $T: typeid) {
-	buf:         [ring_size]T,
-	last_placed: int,
+// TODO make an iterator for this structure
+RingThing :: struct($T: typeid) {
+	buf:         []T,
+	next_placed: int,
+	is_filled: bool
 }
 
-ringthing_add :: proc(using ringthing: ^RingThing($N, $T), data: T) {
-	last_placed += 1
-	if last_placed >= len(buf) {
-		last_placed = 0
+ringthing_add :: proc(using ringthing: ^RingThing($T), data: T) {
+	buf[next_placed] = data
+	next_placed += 1
+	if next_placed >= len(buf) {
+		next_placed = 0
+		is_filled = true
 	}
-
-	buf[last_placed] = data
 }
 
 // Mapper read operation. Returns true if the mapper handled the read.
@@ -169,53 +181,65 @@ mwrite_op :: proc(nes: ^NES, addr: u16, val: u8) -> bool
 
 // The state needed to restore NES state (for serialization)
 NesSerialized :: struct {
-	using registers:                Registers, // CPU Registers
-	ram:                            [0x800]u8, // 2 KiB of memory
-	ignore_extra_addressing_cycles: bool,
-	instruction_type:               InstructionType,
-	prg_ram:                        []u8,
+	using registers: Registers, // CPU Registers
+	ram:             [0x800]u8, // 2 KiB of memory
+	prg_ram:         []u8,
 	// This is CHR RAM if rom_info.chr_rom_size == 0, otherwise it's CHR ROM
-	chr_mem:                        []u8,
-	nmi_triggered:                  int,
-	ppu:                            PPU,
+	chr_mem:         []u8,
+	nmi_triggered:   int,
+	ppu:             PPU,
 
 	// input
-	port_0_register:                u8,
-	port_1_register:                u8,
-	poll_input:                     bool,
+	port_0_register: u8,
+	port_1_register: u8,
+	poll_input:      bool,
 
 	// Mappers
-	mapper_data:                    MapperData,
+	mapper_data:     MapperData,
 }
+
+LogFlagEnum :: enum {
+	NormalInstruction,
+	PPURead, // ppu register read
+	PPUWrite, // ppu register write
+	PPURenderToggle, // when the actual render toggle happens in ppu tick
+}
+
+LogFlags :: bit_set[LogFlagEnum;u16]
 
 NES :: struct {
-	using nes_serialized: NesSerialized,
-	apu:                  APU,
-	prg_rom:              []u8,
-	rom_info:             RomInfo,
-	m_cpu_read:           mread_op,
-	m_cpu_write:          mwrite_op,
-	m_ppu_read:           mread_op,
-	m_ppu_write:          mwrite_op,
-	m_scanline_hit:       proc(nes: ^NES),
-	m_get_irq_state:      proc(nes: ^NES) -> bool,
-	m_irq_clear:          proc(nes: ^NES),
+	using nes_serialized:           NesSerialized,
+	// this resets at every instruction execution
+	instruction_type:               InstructionType,
+	// this resets at every instruction execution
+	ignore_extra_addressing_cycles: bool,
+	apu:                            APU,
+	prg_rom:                        []u8,
+	rom_info:                       RomInfo,
+	m_cpu_read:                     mread_op,
+	m_cpu_write:                    mwrite_op,
+	m_ppu_read:                     mread_op,
+	m_ppu_write:                    mwrite_op,
+	m_scanline_hit:                 proc(nes: ^NES),
+	m_get_irq_state:                proc(nes: ^NES) -> bool,
+	m_irq_clear:                    proc(nes: ^NES),
 
 	// INSTRUMENTING FOR THE OUTSIDE WORLD
-	vblank_hit:           bool,
+	vblank_hit:                     bool,
 
 	// DEBUGGING
+	log_flags:                      LogFlags,
+	instr_info:                     InstructionInfo, // info about the current instruction being executed. stored for logging purposes
 
 	// history for display in debugger
-	instr_history:        RingThing(prev_instructions_count, InstructionInfo),
+	instr_history:                  RingThing(InstructionInfo),
 	// history for log dump
-	instr_history_log:    RingThing(prev_instructions_log_count, InstructionInfo),
-	faulty_ops:           map[u8]FaultyOp,
-	read_writes:          uint,
-	last_write_addr:      u16,
-	last_write_val:       u8,
+	instr_history_log:              RingThing(InstructionInfo),
+	faulty_ops:                     map[u8]FaultyOp,
+	read_writes:                    uint,
+	last_write_addr:                u16,
+	last_write_val:                 u8,
 }
-
 
 set_flag :: proc(flags: ^RegisterFlags, flag: RegisterFlagEnum, predicate: bool) {
 	if predicate {
@@ -225,7 +249,7 @@ set_flag :: proc(flags: ^RegisterFlags, flag: RegisterFlagEnum, predicate: bool)
 	}
 }
 
-parse_log_file :: proc(log_file: string) -> (res: [dynamic]NesTestLog, ok: bool) {
+parse_nestest_log_file :: proc(log_file: string) -> (res: [dynamic]NesTestLog, ok: bool) {
 
 	ok = false
 
@@ -255,7 +279,7 @@ parse_log_file :: proc(log_file: string) -> (res: [dynamic]NesTestLog, ok: bool)
 run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> bool {
 	// processing log file
 
-	register_logs, ok := parse_log_file(log_file)
+	register_logs, ok := parse_nestest_log_file(log_file)
 
 	if !ok {
 		fmt.eprintln("could not parse log file")
@@ -434,7 +458,7 @@ warn_leaks :: proc(allocator: ^mem.Tracking_Allocator, allocator_name: string) {
 }
 
 main :: proc() {
-	// initializing default allocator (wrapping it in a trackign allocator)
+	// initializing default allocator (wrapping it in a tracking allocator)
 	track: mem.Tracking_Allocator
 	mem.tracking_allocator_init(&track, context.allocator)
 	context.allocator = mem.tracking_allocator(&track)
@@ -446,6 +470,19 @@ main :: proc() {
 	// initializing nes arena
 	assert(mv.arena_init_growing(&nes_arena) == .None)
 
+	// initializing logger
+	mode: int = 0
+	when ODIN_OS == .Linux || ODIN_OS == .Darwin {
+		mode = os.S_IRUSR | os.S_IWUSR | os.S_IRGRP | os.S_IROTH
+	}
+
+	logh, logh_err := os.open("log.log", (os.O_CREATE | os.O_TRUNC | os.O_RDWR), mode)
+
+	logger := logh_err == os.ERROR_NONE ? log.create_file_logger(logh) : log.create_console_logger()
+	context.logger = logger
+
+	// running program
+
 	_main()
 
 	// Allocations report
@@ -455,6 +492,12 @@ main :: proc() {
 
 	warn_leaks(&track, "Forever")
 	print_allocated_temp()
+
+	if logh_err == os.ERROR_NONE {
+		log.destroy_file_logger(logger)
+	} else {
+		log.destroy_console_logger(logger)
+	}
 }
 
 _main :: proc() {
@@ -940,7 +983,6 @@ casting_test :: proc() {
 
 run_nestest_test :: proc() {
 	nes: NES
-
 
 	context.allocator = context.temp_allocator
 	ok := run_nestest(&nes, "nestest/nestest.nes", "nestest/nestest.log")

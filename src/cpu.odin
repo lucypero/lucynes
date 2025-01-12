@@ -188,7 +188,14 @@ nes_reset :: proc(nes: ^NES, rom_file: string) {
 		fmt.eprintln("could not load rom")
 		os.exit(1)
 	}
+
 	nes_init(nes)
+
+	nes.instr_history.buf = make_slice([]InstructionInfo, prev_instructions_count, allocator = nes_allocator)
+	nes.instr_history_log.buf = make_slice([]InstructionInfo, prev_instructions_log_count, allocator = nes_allocator)
+
+	// setting logger
+	nes.log_flags = {.PPUWrite, .PPURead, .PPURenderToggle}
 
 	// loading ram from file if there is a backup
 	// ram_bup, ok := os.read_entire_file(nes.rom_info.hash)
@@ -223,8 +230,8 @@ run_instruction :: proc(using nes: ^NES) {
 	// get first byte of instruction
 	instr := read(nes, program_counter)
 
-	instr_inf: InstructionInfo
-	instr_inf.pc = program_counter
+	instr_info = {}
+	instr_info.pc = program_counter
 
 	// if program_counter == 0xBC50 {
 	// 	os.exit(1)
@@ -992,16 +999,52 @@ run_instruction :: proc(using nes: ^NES) {
 
 	}
 
-	instr_inf.next_pc = program_counter
-	instr_inf.triggered_nmi = nmi_triggered != 0
-	instr_inf.cpu_status = nes.registers
-	instr_inf.ppu_scanline = nes.ppu.scanline
-	instr_inf.ppu_cycle = nes.ppu.cycle_x
-	instr_inf.ppu_vblank_count = nes.ppu.vblank_count
 
-	ringthing_add(&instr_history, instr_inf)
-	ringthing_add(&instr_history_log, instr_inf)
+	// Logging info
+
+	instr_info.next_pc = program_counter
+	instr_info.triggered_nmi = nmi_triggered != 0
+	instr_info.cpu_status = nes.registers
+	instr_info.ppu_scanline = nes.ppu.scanline
+	instr_info.ppu_cycle = nes.ppu.cycle_x
+	instr_info.ppu_vblank_count = nes.ppu.vblank_count
+
+	ringthing_add(&instr_history, instr_info)
+
+	if should_log(nes^, instr_info) {
+		ringthing_add(&instr_history_log, instr_info)
+	}
+
+	// adding No effect flag
+
 	flags += {.NoEffect1}
+}
+
+is_ppu_register :: proc(mem: u16) -> bool {
+	return mem >= 0x2000 && mem <= 0x3FFF
+}
+
+should_log :: proc(nes: NES, instr_info: InstructionInfo) -> bool {
+
+	if .NormalInstruction in nes.log_flags do return true
+
+	// is ppu read?
+	if .PPURead in nes.log_flags &&
+	   (instr_info.instr_type == .Read || instr_info.instr_type == .ReadModifyWrite) &&
+	   is_ppu_register(instr_info.mem) {
+		// is ppu register?
+		return true
+	}
+
+	// is ppu write?
+	if .PPUWrite in nes.log_flags &&
+	   (instr_info.instr_type == .Write || instr_info.instr_type == .ReadModifyWrite) &&
+	   is_ppu_register(instr_info.mem) {
+		// is ppu register?
+		return true
+	}
+
+	return false
 }
 
 reset_debugging_vars :: proc(using nes: ^NES) {
@@ -1043,13 +1086,11 @@ dump_log :: proc(using nes: ^NES) {
 	b := strings.builder_make_len_cap(0, 10000)
 
 	// Drawing instructions
-	the_indx := nes.instr_history_log.last_placed
+	the_indx := nes.instr_history_log.next_placed
 	the_buf_len := len(nes.instr_history_log.buf)
-
-	the_indx += 1
-
-	if the_indx >= the_buf_len {
+	if !nes.instr_history_log.is_filled {
 		the_indx = 0
+		the_buf_len = nes.instr_history.next_placed
 	}
 
 	for i in 0 ..< the_buf_len {
@@ -1060,6 +1101,39 @@ dump_log :: proc(using nes: ^NES) {
 		if the_indx >= the_buf_len {
 			the_indx = 0
 		}
+
+		coord_x, coord_y := ppu_get_screen_coordinate(instr.ppu_cycle, instr.ppu_scanline)
+
+		// if it's a ppu event, it's a special case
+		if instr.ppu_event != .NoPPUEvent {
+
+			switch instr.ppu_event {
+			case .NoPPUEvent:
+			case .PPURenderEnabled:
+				fmt.sbprintfln(
+					&b,
+					"PPU Render enabled! PY: %v, PX: %v, (x:%v, y:%v), PV %v",
+					instr.ppu_scanline,
+					instr.ppu_cycle,
+					coord_x,
+					coord_y,
+					instr.ppu_vblank_count,
+				)
+			case .PPURenderDisabled:
+				fmt.sbprintfln(
+					&b,
+					"PPU Render disabled! PY: %v, PX: %v, (x:%v, y:%v), PV: %v",
+					instr.ppu_scanline,
+					instr.ppu_cycle,
+					coord_x,
+					coord_y,
+					instr.ppu_vblank_count,
+				)
+			}
+
+			continue
+		}
+
 
 		tb, np := get_instr_str_builder(nes^, instr.pc)
 		strings.write_string(&b, strings.to_upper(strings.to_string(tb)))
@@ -1073,12 +1147,14 @@ dump_log :: proc(using nes: ^NES) {
 
 		fmt.sbprintf(
 			&b,
-			" // A:$%X, X:$%X, Y:$%X, PY: %v, PX: %v, PV: %v",
+			" // A:$%X, X:$%X, Y:$%X, PY: %v, PX: %v, (x:%v, y:%v), PV: %v",
 			instr.cpu_status.accumulator,
 			instr.cpu_status.index_x,
 			instr.cpu_status.index_y,
 			instr.ppu_scanline,
 			instr.ppu_cycle,
+			coord_x,
+			coord_y,
 			instr.ppu_vblank_count,
 		)
 
@@ -1099,7 +1175,7 @@ dump_log :: proc(using nes: ^NES) {
 tick_nes_till_vblank :: proc(
 	using nes: ^NES,
 	tick_force: bool, // force running at least one tick, ignoring breakpoints
-	port_0_input: u8, 
+	port_0_input: u8,
 	port_1_input: u8,
 	pixel_grid: ^PixelGrid,
 ) -> (
@@ -1118,7 +1194,7 @@ tick_nes_till_vblank :: proc(
 		instruction_tick(nes, port_0_input, port_1_input, pixel_grid)
 		reset_debugging_vars(nes)
 
-		instr_info := instr_history.buf[instr_history.last_placed]
+		instr_info := instr_history.buf[instr_history.next_placed]
 
 		if !tick_force && app_state.break_on_nmi && instr_info.triggered_nmi {
 			return true
@@ -1130,7 +1206,7 @@ tick_nes_till_vblank :: proc(
 
 		// breaking at NMI. 
 		// if instr_info.triggered_nmi {
-			// return true;
+		// return true;
 		// }
 
 		if vblank_hit {

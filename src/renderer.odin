@@ -6,6 +6,7 @@ import "core:strings"
 import "core:strconv"
 import "core:c"
 import rl "vendor:raylib"
+import "core:log"
 
 scale_factor :: 3
 
@@ -199,7 +200,7 @@ window_main :: proc() {
 
 		if rl.IsKeyPressed(.P) {
 			toggle_pause()
-
+			log.info("paused game")
 		}
 
 		if rl.IsKeyPressed(.F) {
@@ -608,7 +609,7 @@ gui_draw :: proc(nes: ^NES) {
 	context.allocator = context.temp_allocator
 
 	padding :: 30
-	item_count :: 10
+	item_count :: 11
 	panel_rec := rl.Rectangle{10, 10, 300, padding * item_count}
 	rec := rl.Rectangle{panel_rec.x + 10, panel_rec.y + 30, 200, padding - 5}
 	appstate_dirty: bool
@@ -658,6 +659,10 @@ gui_draw :: proc(nes: ^NES) {
 	if rl.GuiButton(rec, "Toggle mute") && !app_state.save_combobox_active {
 		appstate_dirty = true
 		app_state.send_samples = !app_state.send_samples
+	}
+	rec.y += padding
+	if rl.GuiButton(rec, "Dump Log") && !app_state.save_combobox_active {
+		dump_log(nes)
 	}
 
 	// draw dropdown box on top

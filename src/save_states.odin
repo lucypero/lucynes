@@ -62,6 +62,7 @@ savestate_order :: proc(nes: ^NES, savestate_order: SaveStateOrder) -> bool {
 		fmt.printfln("Saved save state to %v", save_filename)
 	case .Load:
 		nes_serialized_temp: NesSerialized
+		fmt.printfln("Trying to load from %v", save_filename)
 		load_thing(save_filename, &nes_serialized_temp, allocator = context.temp_allocator) or_return
 
 		// backup things you want from current NES before wiping NES allocator.

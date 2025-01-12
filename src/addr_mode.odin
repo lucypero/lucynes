@@ -79,6 +79,8 @@ do_opcode :: proc(nes: ^NES, addr_mode: AddressMode, instruction: proc(_: ^NES, 
 	// delete later
 	nes.instruction_type = .Branch
 	instruction(nes, mem)
+	nes.instr_info.mem = mem
+	nes.instr_info.instr_type = nes.instruction_type
 
 	if nes.ignore_extra_addressing_cycles {
 		extra_cycles = 0
