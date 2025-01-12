@@ -26,7 +26,8 @@
             "command": "odin",
             "args": [
                 "build",
-                "src/.",
+                "./src/.",
+                "-out=lucynes.exe",
                 "-o:none",
                 "-debug"
             ],

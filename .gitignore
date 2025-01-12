@@ -4,3 +4,10 @@ lucynes
 roms/
 debug.rdbg
 tests/
+saves/
+*.log
+appstate.cbor
+*.rdi
+Taskfile.yml
+*.sublime-build
+*.dll

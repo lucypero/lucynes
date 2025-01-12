@@ -176,6 +176,8 @@ window_main :: proc() {
 	nes_reset(&nes, the_rom)
 	savestate_order(&nes, .Load)
 
+	// mu_init()
+
 	gui_init(&nes)
 
 	for !rl.WindowShouldClose() {
@@ -272,8 +274,9 @@ window_main :: proc() {
 		}
 
 		gui_draw(&nes)
-
-
+		// mu_instrument()
+		// mu_draw()
+		// mu_render(&guistate.mu_ctx)
 		rl.EndDrawing()
 		free_all(context.temp_allocator)
 	}
