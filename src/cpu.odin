@@ -101,8 +101,13 @@ write :: proc(using nes: ^NES, addr: u16, val: u8) {
 		// OAM DMA 
 		start_addr: u16 = u16(val) << 8
 
+		// halt cycle
+		dummy_read(nes)
+
 		for i in 0x0000 ..= 0x00FF {
 			v := read(nes, u16(i) + start_addr)
+			// simulating a ppu write, it's an extra cycle
+			dummy_read(nes)
 			ppu.oam[i] = v
 		}
 

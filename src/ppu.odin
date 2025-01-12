@@ -153,7 +153,7 @@ write_ppu_register :: proc(nes: ^NES, ppu_reg: u16, val: u8) {
 		if next_rendering_enabled && !rendering_enabled {
 			// current_loopy.reg = temp_loopy.reg & 0x3FFF
 			// rendering_enabled = next_rendering_enabled
-			rendering_toggle_timer = 400
+			rendering_toggle_timer = 3
 			// rendering_enabled = next_rendering_enabled
 			// increment_scroll_x(&nes.ppu)
 			// increment_scroll_y(&nes.ppu)
