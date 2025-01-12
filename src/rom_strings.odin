@@ -5,7 +5,7 @@ package main
 
 // rom_in_nes :: "roms/Battletoads.nes"
 // rom_in_nes :: "roms/Castlevania.nes"
-rom_in_nes :: "roms/Super Mario Bros. 3.nes"
+// rom_in_nes :: "roms/Super Mario Bros. 3.nes"
 // rom_in_nes :: "roms/SuperMarioBros.nes"
 
 /// FULLY WORKING GAMES:
@@ -28,7 +28,6 @@ rom_in_nes :: "roms/Super Mario Bros. 3.nes"
 // rom_in_nes :: "roms/Final Fantasy II (USA) (Proto).nes"
 // rom_in_nes :: "roms/Metroid.nes"
 // rom_in_nes :: "roms/Blaster Master.nes"
-// rom_in_nes :: "roms/Batman.nes"
 
 // Mapper 2
 
@@ -80,11 +79,11 @@ rom_in_nes :: "roms/Super Mario Bros. 3.nes"
 
 // Reason: Emulator Bug
 
-// rom_in_nes :: "roms/Battletoads & Double Dragon - The Ultimate Team.nes"
-// rom_in_nes :: "roms/Battletoads.nes" // doesn't work after start screens and start cutscene. if i force sprite 0 hit, it works.
+rom_in_nes :: "roms/Battletoads & Double Dragon - The Ultimate Team.nes"
 // rom_in_nes :: "roms/Spelunker.nes"
 // rom_in_nes :: "roms/Adventures of Lolo II , The.nes"
 // rom_in_nes :: "roms/Dragon Warrior.nes" // this is dragon quest. mapper 1
+// rom_in_nes :: "roms/Batman.nes"
 
 /// TEST ROMS:
 
@@ -122,3 +121,19 @@ rom_in_nes :: "roms/Super Mario Bros. 3.nes"
 
 // rom_in_nes :: "tests/audio/clip_5b_nrom.nes"
 // rom_in_nes :: "tests/audio/sweep_5b_nrom.nes"
+
+// Sprite 0 Hit tests
+
+// 5 and 9 fail. the rest pass.
+
+// rom_in_nes :: "tests/sprite_hit_tests_2005.10.05/01.basics.nes"
+// rom_in_nes :: "tests/sprite_hit_tests_2005.10.05/02.alignment.nes"
+// rom_in_nes :: "tests/sprite_hit_tests_2005.10.05/03.corners.nes"
+// rom_in_nes :: "tests/sprite_hit_tests_2005.10.05/04.flip.nes"
+// rom_in_nes :: "tests/sprite_hit_tests_2005.10.05/05.left_clip.nes"
+// rom_in_nes :: "tests/sprite_hit_tests_2005.10.05/06.right_edge.nes"
+// rom_in_nes :: "tests/sprite_hit_tests_2005.10.05/07.screen_bottom.nes"
+// rom_in_nes :: "tests/sprite_hit_tests_2005.10.05/08.double_height.nes"
+// rom_in_nes :: "tests/sprite_hit_tests_2005.10.05/09.timing_basics.nes"
+// rom_in_nes :: "tests/sprite_hit_tests_2005.10.05/10.timing_order.nes"
+// rom_in_nes :: "tests/sprite_hit_tests_2005.10.05/11.edge_timing.nes"

@@ -1002,7 +1002,7 @@ draw_pixel :: proc(using ppu: ^PPU, pixel_grid: ^PixelGrid) {
 		if sprite_zero_being_rendered && sprite_zero_hit_possible {
 			if ppu_mask.show_background != 0 && ppu_mask.show_sprites != 0 {
 
-				if ~(ppu_mask.show_left_background | ppu_mask.show_left_sprites) != 0 {
+				if ppu_mask.show_left_background == 0 || ppu_mask.show_left_sprites == 0 {
 					if cycle_x >= 9 && cycle_x <= 255 {
 						ppu_status.sprite_zero_hit = 1
 					}

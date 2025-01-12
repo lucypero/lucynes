@@ -972,6 +972,7 @@ load_rom_from_file :: proc(nes: ^NES, filename: string, allocator: runtime.Alloc
 	rom_info.hash = hash_str
 
 	nes.rom_info = rom_info
+	fmt.println("mapper:", rom_info.mapper)
 	return true
 }
 
