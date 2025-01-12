@@ -78,6 +78,14 @@ savestate_order :: proc(nes: ^NES, savestate_order: SaveStateOrder) -> bool {
 		nes.prg_ram = slice.clone(nes_serialized_temp.prg_ram, allocator = nes_arena_alloc)
 		nes.prg_rom = slice.clone(prg_rom_backup, allocator = nes_arena_alloc)
 		nes.rom_info.hash = strings.clone(hash_str_backup, allocator = nes_arena_alloc)
+
+		// instr history slices
+		nes.instr_history.buf = make_slice([]InstructionInfo, prev_instructions_count, allocator = nes_arena_alloc)
+		nes.instr_history_log.buf = make_slice(
+			[]InstructionInfo,
+			prev_instructions_log_count,
+			allocator = nes_arena_alloc,
+		)
 	}
 
 	return true
