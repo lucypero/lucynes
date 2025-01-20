@@ -8,33 +8,13 @@ BC52
 
 # Todo
 
-- do a proper OAMDMA implementation.
-
-- figure out what to do on the NES init reads (should u tick the PPU?)
-
-- don't allocate memory for the whole bus.
- the bus is a fake thing. it's not ram
- put actual ram in separate fields. it's easier.
-
-- an article on 6502 interrupts
-	http://wilsonminesco.com/6502interrupts/
-
 - Wrap up audio
 	- Make Mario sound normal
 	- DMC channel
 
-- save states
-
 - PPUMASK
 	- greyscale, modification of colors, and all that
 	- test with color_test.nes
-
-- Debugger:
-	- do something special for ppu and apu registers
-	- have some indication to when it got NMI'd. Maybe also when it jumped normally.
-	- PPU state display
-
-- Support controllers
 
 # Input
 
@@ -50,79 +30,6 @@ order of inputs:
 (highest bit) -> lowest bit
 
 A B Select Start Up Down Left Right
-
-# possible bug
-
-when i was playing mario and i went rainbow mode, this happened:
-
-edit: it happens at other times too.
-
-idk what u read/writing here at ppu bus FFF6
-idk what u read/writing here at ppu bus FFFE
-idk what u read/writing here at ppu bus FFF6
-idk what u read/writing here at ppu bus FFFE
-idk what u read/writing here at ppu bus FFF3
-idk what u read/writing here at ppu bus FFFB
-idk what u read/writing here at ppu bus FFF3
-idk what u read/writing here at ppu bus FFFB
-idk what u read/writing here at ppu bus FFF0
-idk what u read/writing here at ppu bus FFF8
-idk what u read/writing here at ppu bus FFF0
-idk what u read/writing here at ppu bus FFF8
-idk what u read/writing here at ppu bus FFF5
-idk what u read/writing here at ppu bus FFFD
-idk what u read/writing here at ppu bus FFF5
-idk what u read/writing here at ppu bus FFFD
-idk what u read/writing here at ppu bus FFF2
-idk what u read/writing here at ppu bus FFFA
-idk what u read/writing here at ppu bus FFF2
-idk what u read/writing here at ppu bus FFFA
-
-# notes compared to javidx
-
-it seems he has the same sprite misalignment as me.
-sprites are one pixel to the left. or more.
-also they are one pixel up. i checked
-
-see this for reference
-https://www.youtube.com/watch?v=7qirrV8w5SQ&t=344s
-
-
-
-# odin stuff
-
-default_allocator :: heap_allocator
-default_allocator_proc :: heap_allocator_proc
-
-heap allocator has no data of what is storing so u can't know what was allocated, and how many bytes were allocated
-
-
-	Default_Temp_Allocator :: struct {
-		arena: Arena,
-	}
-
-temp allocator is an arena
-core/mem/allocators.odin
-
-
-- figure out how to figure out how much allocators are allocating
-- does the temp allocator even exist if u don't init it?
-
-
-
-# Playable games list:
-
-SMB1
-Megaman 1
-Contra
-Duck Tales
-Castlevania
-Metal Gear
-Ice Climber
-Donkey Kong
-Kung Fu
-Bomberman
-
 
 # Mapper code
 
@@ -157,87 +64,24 @@ VRAM 	0 KB
 CIC Type 	6113B1
 Hardware 	MMC1B2
 
-## Fixing batman:
 
-(it's still broken)
-
-
-## fixing battletoads
-
-it freezes when loading the first level.
-
-- print logs, the ones you did.
-- force sprite 0 hit and see what happens.
-	- game works fine if u force sprite 0 hit.
-
-after debugging in Mesen, i see the entire screen is palette index 3 in mesen, so sprite 0 is hit.
-in lucynes, background is at 0, so the hit is never done. i don't know why this happens.
-might be a mapper bug.
-
-sprite 0 hit happens in 255, 30
-background tile:
-id $61
-addr: $1610
-pattern: all 3, not 0. that's why it hits.
+## Fixing spelunker
 
 
+$82FD: INC $48 // A:$20, X:$1C, Y:$FF, PY: 45, PX: 119, (x:118, y:45), PV: 149
+$82FF: RTS // A:$20, X:$1C, Y:$FF, PY: 45, PX: 137, (x:136, y:45), PV: 149
+$822D: DEC $1F // A:$20, X:$1C, Y:$FF, PY: 45, PX: 152, (x:151, y:45), PV: 149
+$822F: BNE -> $822A // A:$20, X:$1C, Y:$FF, PY: 45, PX: 161, (x:160, y:45), PV: 149
+$822A: JSR $82BA // A:$20, X:$1C, Y:$FF, PY: 45, PX: 179, (x:178, y:45), PV: 149
+$82BA: LDA $023E // A:$2D, X:$1C, Y:$FF, PY: 45, PX: 191, (x:190, y:45), PV: 149
+$82BD: STA $10 // A:$2D, X:$1C, Y:$FF, PY: 45, PX: 200, (x:199, y:45), PV: 149
+$82BF: LDA $023F // A:$BE, X:$1C, Y:$FF, PY: 45, PX: 212, (x:211, y:45), PV: 149
+$82C2: STA $11 // A:$BE, X:$1C, Y:$FF, PY: 45, PX: 221, (x:220, y:45), PV: 149
+$82C4: JSR $BC43 // A:$BE, X:$1C, Y:$FF, PY: 45, PX: 239, (x:238, y:45), PV: 149
+$BC43: LDA $10 // A:$2D, X:$1C, Y:$FF, PY: 45, PX: 248, (x:247, y:45), PV: 149
+$BC45: CMP $3C // A:$2D, X:$1C, Y:$FF, PY: 45, PX: 257, (x:256, y:45), PV: 149
+$BC47: BNE -> $BC50 // A:$2D, X:$1C, Y:$FF, PY: 45, PX: 266, (x:265, y:45), PV: 149
+$BC50: LDA $3E // A:$4, X:$1C, Y:$FF, PY: 45, PX: 275, (x:274, y:45), PV: 149
+$BC52: BNE -> $BC50 // A:$4, X:$1C, Y:$FF, PY: 45, PX: 284, (x:283, y:45), PV: 149
 
-maybe u have to do this.. this is from mesen
-
-```cpp
-	//Rendering enabled flag is apparently set with a 1 cycle delay (i.e setting it at cycle 5 will render cycle 6 like cycle 5 and then take the new settings for cycle 7)
-	if(_prevRenderingEnabled != _renderingEnabled) {
-		_emu->AddDebugEvent<CpuType::Nes>(DebugEventType::BgColorChange);
-		_prevRenderingEnabled = _renderingEnabled;
-		if(_scanline < 240) {
-			if(_prevRenderingEnabled) {
-				//Rendering was just enabled, perform oam corruption if any is pending
-				ProcessOamCorruption();
-			} else if(!_prevRenderingEnabled) {
-				//Rendering was just disabled by a write to $2001, check for oam row corruption glitch
-				SetOamCorruptionFlags();
-
-				//When rendering is disabled midscreen, set the vram bus back to the value of 'v'
-				SetBusAddress(_videoRamAddr & 0x3FFF);
-				
-				if(_cycle >= 65 && _cycle <= 256) {
-					//Disabling rendering during OAM evaluation will trigger a glitch causing the current address to be incremented by 1
-					//The increment can be "delayed" by 1 PPU cycle depending on whether or not rendering is disabled on an even/odd cycle
-					//e.g, if rendering is disabled on an even cycle, the following PPU cycle will increment the address by 5 (instead of 4)
-					//     if rendering is disabled on an odd cycle, the increment will wait until the next odd cycle (at which point it will be incremented by 1)
-					//In practice, there is no way to see the difference, so we just increment by 1 at the end of the next cycle after rendering was disabled
-					_spriteRamAddr++;
-
-					//Also corrupt H/L to replicate a bug found in oam_flicker_test_reenable when rendering is disabled around scanlines 128-136
-					//Reenabling the causes the OAM evaluation to restart misaligned, and ends up generating a single sprite that's offset by 1
-					//such that it's Y=tile index, index = attributes, attributes = x, and X = the next sprite's Y value
-					_spriteAddrH = (_spriteRamAddr >> 2) & 0x3F;
-					_spriteAddrL = _spriteRamAddr & 0x03;
-				}
-			}
-		}
-	}
-```
-
-loopy explained better:
-
-https://forums.nesdev.org/viewtopic.php?p=5578#p5578
-
-
-- no matter what i do, i cannot make battletoads work without forcing a sprite 0 hit.
-
-
-
-- good debugging ideas:
-	- draw only bg
-	- draw only fg
-	- draw with debug palette
-	- make these toggleables in a menu.
-	- implement save states to disk so u can get to the bug fast.
-
-
-# save state/ allocator issue
-
-// TODO there's still some bugs. I saved and loaded and it crashed.
-// cbor decode error  Unsupported_Type_Error{id = PPU, hdr = %!(BAD ENUM VALUE=0), add = %!(BAD ENUM VALUE=0)}
-// file read error
+it gets stuck between those 2 lines

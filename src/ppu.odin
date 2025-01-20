@@ -218,6 +218,7 @@ write_ppu_register :: proc(nes: ^NES, ppu_reg: u16, val: u8) {
 	}
 }
 
+before_1 := false
 read_ppu_register :: proc(nes: ^NES, ppu_reg: u16) -> u8 {
 
 	using nes.ppu
@@ -245,8 +246,19 @@ read_ppu_register :: proc(nes: ^NES, ppu_reg: u16) -> u8 {
 		// return v blank as 1, rest 0
 		returned_status := ppu_status
 		ppu_status.vertical_blank = 0
+
 		ppu_w = false
 		// fmt.printfln("reading ppu status. %X", ppu_status.reg)
+
+		// the bug right before vblank set
+		if scanline == 241 && cycle_x == 0 {
+			fmt.println("it happened", vblank_count)
+			before_1 = true
+		}
+
+		fmt.println("reading ppu status", returned_status.vertical_blank, scanline, cycle_x)
+			// fmt.println("vblank ret", scanline, cycle_x, returned_status.vertical_blank)
+
 		return returned_status.reg
 
 	// OAMADDR
@@ -689,13 +701,21 @@ ppu_tick :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
 
 	// Setting vblank
 	if scanline == 241 && cycle_x == 1 {
-		ppu_status.vertical_blank = 1
-		vblank_count += 1
-		nes.vblank_hit = true
-		if ppu_ctrl.v != 0 {
-			// nmi(nes, false)
-			nes.nmi_triggered = 1
+		// now if i do this, 4) fails!!
+		if !before_1 {
+			ppu_status.vertical_blank = 1
+			nes.vblank_hit = true
+			if ppu_ctrl.v != 0 {
+				// nmi(nes, false)
+				nes.nmi_triggered = 1
+			}
+			// fmt.println("not suppressed",vblank_count)
+		} else {
+			fmt.println("suppressed",vblank_count)
 		}
+
+		vblank_count += 1
+		before_1 = false
 	}
 
 	if rendering_enabled && cycle_x == 260 && scanline < 240 {

@@ -7,6 +7,7 @@ package main
 // rom_in_nes :: "roms/Castlevania.nes"
 // rom_in_nes :: "roms/Super Mario Bros. 3.nes"
 // rom_in_nes :: "roms/SuperMarioBros.nes"
+// rom_in_nes :: "roms/Spelunker.nes"
 
 /// FULLY WORKING GAMES:
 
@@ -59,6 +60,7 @@ package main
 // rom_in_nes :: "roms/R.C. Pro-Am II.nes"
 // rom_in_nes :: "roms/Teenage Mutant Ninja Turtles.nes"
 // rom_in_nes :: "roms/Ghosts 'N Goblins.nes"
+// rom_in_nes :: "roms/Battletoads & Double Dragon - The Ultimate Team.nes"
 
 /// NON-WORKING GAMES: 
 
@@ -79,7 +81,6 @@ package main
 
 // Reason: Emulator Bug
 
-rom_in_nes :: "roms/Battletoads & Double Dragon - The Ultimate Team.nes"
 // rom_in_nes :: "roms/Spelunker.nes"
 // rom_in_nes :: "roms/Adventures of Lolo II , The.nes"
 // rom_in_nes :: "roms/Dragon Warrior.nes" // this is dragon quest. mapper 1
@@ -101,13 +102,13 @@ rom_in_nes :: "roms/Battletoads & Double Dragon - The Ultimate Team.nes"
 
 /// VBL NMI TIMING
 
-// rom_in_nes :: "tests/vbl_nmi_timing/1.frame_basics.nes" // Fails. Fix it.
-// rom_in_nes :: "tests/vbl_nmi_timing/2.vbl_timing.nes"
-// rom_in_nes :: "tests/vbl_nmi_timing/3.even_odd_frames.nes"
-// rom_in_nes :: "tests/vbl_nmi_timing/4.vbl_clear_timing.nes"
-// rom_in_nes :: "tests/vbl_nmi_timing/5.nmi_suppression.nes"
-// rom_in_nes :: "tests/vbl_nmi_timing/6.nmi_disable.nes"
-// rom_in_nes :: "tests/vbl_nmi_timing/7.nmi_timing.nes"
+// rom_in_nes :: "tests/vbl_nmi_timing/1.frame_basics.nes" // passed
+rom_in_nes :: "tests/vbl_nmi_timing/2.vbl_timing.nes" // failed #8
+// rom_in_nes :: "tests/vbl_nmi_timing/3.even_odd_frames.nes" // failed
+// rom_in_nes :: "tests/vbl_nmi_timing/4.vbl_clear_timing.nes" // passed
+// rom_in_nes :: "tests/vbl_nmi_timing/5.nmi_suppression.nes" // failed #3
+// rom_in_nes :: "tests/vbl_nmi_timing/6.nmi_disable.nes" // failed #2
+// rom_in_nes :: "tests/vbl_nmi_timing/7.nmi_timing.nes" // failed #3
 
 // NMI tests
 
@@ -116,15 +117,12 @@ rom_in_nes :: "roms/Battletoads & Double Dragon - The Ultimate Team.nes"
 // rom_in_nes :: "tests/cpu_interrupts_v2/rom_singles/2-nmi_and_brk.nes"
 // rom_in_nes :: "tests/cpu_interrupts_v2/rom_singles/3-nmi_and_irq.nes"
 
-
 // Audio tests
 
 // rom_in_nes :: "tests/audio/clip_5b_nrom.nes"
 // rom_in_nes :: "tests/audio/sweep_5b_nrom.nes"
 
-// Sprite 0 Hit tests
-
-// 5 and 9 fail. the rest pass.
+// Sprite 0 Hit tests. they all pass
 
 // rom_in_nes :: "tests/sprite_hit_tests_2005.10.05/01.basics.nes"
 // rom_in_nes :: "tests/sprite_hit_tests_2005.10.05/02.alignment.nes"

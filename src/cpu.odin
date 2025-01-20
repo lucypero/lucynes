@@ -200,7 +200,8 @@ nes_reset :: proc(nes: ^NES, rom_file: string) {
 	nes.instr_history_log.buf = make_slice([]InstructionInfo, prev_instructions_log_count, allocator = nes_allocator)
 
 	// setting logger
-	nes.log_flags = {.PPUWrite, .PPURead, .PPURenderToggle}
+	// nes.log_flags = {.PPUWrite, .PPURead, .PPURenderToggle}
+	nes.log_flags = {.PPUWrite, .PPURead, .PPURenderToggle, .NormalInstruction}
 
 	// loading ram from file if there is a backup
 	// ram_bup, ok := os.read_entire_file(nes.rom_info.hash)
