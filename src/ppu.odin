@@ -105,6 +105,10 @@ PPU :: struct {
 	// sprite zero collision flags
 	sprite_zero_hit_possible:   bool, // if a SZH is possible in the next scanline
 	sprite_zero_being_rendered: bool,
+
+	// flag to keep track of V flag read right before vblank
+	// "Reading the flag on the dot before it is set (scanling 241, dot 0) causes it to read as 0 and be cleared"
+	vflag_read_before_vblank : bool,
 }
 
 ppu_get_screen_coordinate :: proc(cycle_x, scanline: int) -> (x: int, y: int) {
@@ -218,7 +222,6 @@ write_ppu_register :: proc(nes: ^NES, ppu_reg: u16, val: u8) {
 	}
 }
 
-before_1 := false
 read_ppu_register :: proc(nes: ^NES, ppu_reg: u16) -> u8 {
 
 	using nes.ppu
@@ -251,12 +254,11 @@ read_ppu_register :: proc(nes: ^NES, ppu_reg: u16) -> u8 {
 		// fmt.printfln("reading ppu status. %X", ppu_status.reg)
 
 		// the bug right before vblank set
-		if scanline == 241 && cycle_x == 0 {
-			fmt.println("it happened", vblank_count)
-			before_1 = true
+		if scanline == 241 && cycle_x == 1 {
+			vflag_read_before_vblank = true
 		}
 
-		fmt.println("reading ppu status", returned_status.vertical_blank, scanline, cycle_x)
+		// fmt.println("reading ppu status", returned_status.vertical_blank, scanline, cycle_x)
 			// fmt.println("vblank ret", scanline, cycle_x, returned_status.vertical_blank)
 
 		return returned_status.reg
@@ -701,8 +703,7 @@ ppu_tick :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
 
 	// Setting vblank
 	if scanline == 241 && cycle_x == 1 {
-		// now if i do this, 4) fails!!
-		if !before_1 {
+		if !vflag_read_before_vblank {
 			ppu_status.vertical_blank = 1
 			nes.vblank_hit = true
 			if ppu_ctrl.v != 0 {
@@ -710,12 +711,10 @@ ppu_tick :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
 				nes.nmi_triggered = 1
 			}
 			// fmt.println("not suppressed",vblank_count)
-		} else {
-			fmt.println("suppressed",vblank_count)
-		}
+		} 
 
 		vblank_count += 1
-		before_1 = false
+		vflag_read_before_vblank = false
 	}
 
 	if rendering_enabled && cycle_x == 260 && scanline < 240 {
