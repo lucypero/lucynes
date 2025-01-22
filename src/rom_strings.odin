@@ -109,9 +109,10 @@ package main
 // rom_in_nes :: "tests/vbl_nmi_timing/4.vbl_clear_timing.nes" // passed
 
 // i fail 3 but i don't understand this one.
-rom_in_nes :: "tests/vbl_nmi_timing/5.nmi_suppression.nes" // failed #3
-// rom_in_nes :: "tests/vbl_nmi_timing/6.nmi_disable.nes" // failed #2
-// rom_in_nes :: "tests/vbl_nmi_timing/7.nmi_timing.nes" // failed #3
+// rom_in_nes :: "tests/vbl_nmi_timing/5.nmi_suppression.nes" // passed
+// rom_in_nes :: "tests/vbl_nmi_timing/6.nmi_disable.nes" // passed
+// HERE
+rom_in_nes :: "tests/vbl_nmi_timing/7.nmi_timing.nes" // failed #3
 
 // NMI tests
 

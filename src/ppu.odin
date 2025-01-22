@@ -29,7 +29,7 @@ PpuCtrl :: struct #raw_union {
 		b: u8 | 1, // bg pattern table address (0: $0000, 1: $1000)
 		h: u8 | 1, // sprite size (0: 8x8, 1: 8x16)
 		p: u8 | 1,
-		v: u8 | 1,
+		v: u8 | 1, // vblank NMI enable
 	},
 	reg:         u8,
 }
@@ -130,14 +130,23 @@ write_ppu_register :: proc(nes: ^NES, ppu_reg: u16, val: u8) {
 		// writing to ppuctrl
 		// fmt.printfln("writing to PPUCTRL %b", val)
 
+		ppuctrl_newreg : PpuCtrl
+		ppuctrl_newreg.reg = val
+
 		// if vblank is set, and you change nmi flag from 0 to 1, trigger nmi now
-		if (ppu_status.vertical_blank == 1) && val & 0x80 != 0 && ppu_ctrl.v == 0 {
+		if (ppu_status.vertical_blank == 1) && ppuctrl_newreg.v != 0 && ppu_ctrl.v == 0 {
 			// trigger NMI immediately
 			nes.nmi_triggered = 2
 			// nmi(nes,true)
 		}
 
-		ppu_ctrl.reg = val
+		// This is to pass vbl_nmi_timing -> 6
+		if ppuctrl_newreg.v == 0 && scanline == 241 && 
+		   (cycle_x >= 0 && cycle_x <= 3) {
+			nes.nmi_triggered = 0
+		}
+
+		ppu_ctrl = ppuctrl_newreg
 		// fmt.printfln("set to %X", val)
 		temp_loopy.nametable_x = u16(ppu_ctrl.n & 0b1) != 0 ? 1 : 0
 		temp_loopy.nametable_y = u16(ppu_ctrl.n & 0b10) != 0 ? 1 : 0
@@ -264,7 +273,7 @@ read_ppu_register :: proc(nes: ^NES, ppu_reg: u16) -> u8 {
 		}
 
 		// fmt.println("reading ppu status", returned_status.vertical_blank, scanline, cycle_x)
-			// fmt.println("vblank ret", scanline, cycle_x, returned_status.vertical_blank)
+		// fmt.println("vblank ret", scanline, cycle_x, returned_status.vertical_blank)
 
 		return returned_status.reg
 
