@@ -258,6 +258,11 @@ read_ppu_register :: proc(nes: ^NES, ppu_reg: u16) -> u8 {
 			vflag_read_before_vblank = true
 		}
 
+		if scanline == 241 && 
+		   (cycle_x >= 0 && cycle_x <= 3) {
+			nes.nmi_triggered = 0
+		}
+
 		// fmt.println("reading ppu status", returned_status.vertical_blank, scanline, cycle_x)
 			// fmt.println("vblank ret", scanline, cycle_x, returned_status.vertical_blank)
 
@@ -707,10 +712,8 @@ ppu_tick :: proc(nes: ^NES, framebuffer: ^PixelGrid) {
 			ppu_status.vertical_blank = 1
 			nes.vblank_hit = true
 			if ppu_ctrl.v != 0 {
-				// nmi(nes, false)
 				nes.nmi_triggered = 1
 			}
-			// fmt.println("not suppressed",vblank_count)
 		} 
 
 		vblank_count += 1
