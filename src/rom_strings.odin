@@ -101,12 +101,15 @@ package main
 // rom_in_nes :: "tests/color_test.nes" // failed. tests ppu mask emphasis and grayscale (important)
 
 /// VBL NMI TIMING
+// https://github.com/christopherpow/nes-test-roms/blob/master/vbl_nmi_timing/readme.txt
 
 // rom_in_nes :: "tests/vbl_nmi_timing/1.frame_basics.nes" // passed
-rom_in_nes :: "tests/vbl_nmi_timing/2.vbl_timing.nes" // failed #8
-// rom_in_nes :: "tests/vbl_nmi_timing/3.even_odd_frames.nes" // failed
+// rom_in_nes :: "tests/vbl_nmi_timing/2.vbl_timing.nes" // passed
+// rom_in_nes :: "tests/vbl_nmi_timing/3.even_odd_frames.nes" // passed
 // rom_in_nes :: "tests/vbl_nmi_timing/4.vbl_clear_timing.nes" // passed
-// rom_in_nes :: "tests/vbl_nmi_timing/5.nmi_suppression.nes" // failed #3
+
+// i fail 3 but i don't understand this one.
+rom_in_nes :: "tests/vbl_nmi_timing/5.nmi_suppression.nes" // failed #3
 // rom_in_nes :: "tests/vbl_nmi_timing/6.nmi_disable.nes" // failed #2
 // rom_in_nes :: "tests/vbl_nmi_timing/7.nmi_timing.nes" // failed #3
 
