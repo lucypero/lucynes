@@ -81,8 +81,8 @@ package main
 
 // Reason: Emulator Bug
 
-// rom_in_nes :: "roms/Spelunker.nes"
-// rom_in_nes :: "roms/Adventures of Lolo II , The.nes"
+// rom_in_nes :: "roms/Spelunker.nes" // seems to work after vbl nmi test progress
+// rom_in_nes :: "roms/Adventures of Lolo II , The.nes" // seems to work after vbl nmi test progress
 // rom_in_nes :: "roms/Dragon Warrior.nes" // this is dragon quest. mapper 1
 // rom_in_nes :: "roms/Batman.nes"
 

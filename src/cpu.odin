@@ -9,7 +9,9 @@ import "core:strings"
 import "base:intrinsics"
 import mv "core:mem/virtual"
 
+// this is called every CPU cycle
 readwrite_things :: proc(using nes: ^NES, addr: u16, val: u8, is_write: bool, is_dummy: bool) {
+	prev_nmi = nmi_triggered
 	advance_ppu_and_apu(nes)
 	read_writes += 1
 }
@@ -120,7 +122,7 @@ write :: proc(using nes: ^NES, addr: u16, val: u8) {
 
 }
 
-nmi :: proc(using nes: ^NES, nmi_type: int) {
+nmi :: proc(using nes: ^NES) {
 
 	// from_2000 == true: from writing to 2000
 	// from_2000 == false: from ppu tick when hitting vblank
@@ -1066,9 +1068,10 @@ instruction_tick :: proc(using nes: ^NES, port_0_input: u8, port_1_input: u8, pi
 	// If you run NMI after running the instruction normally,
 	//  then bomberman start screen works. it's weird.
 
-	if nmi_triggered != 0 {
-		nmi(nes, nmi_triggered)
+	if prev_nmi != 0 {
+		nmi(nes)
 		nmi_triggered = 0
+		prev_nmi = 0
 	}
 
 	// Check if cartridge is requesting IRQ

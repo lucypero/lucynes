@@ -153,15 +153,15 @@ InstructionInfo :: struct {
 	// you can find out the rest from the PC.
 	// you can add other state later.
 	instr_type:       InstructionType,
-	mem: u16, // mem address that is writing/reading 
-	ppu_event: PPUEvent,
+	mem:              u16, // mem address that is writing/reading 
+	ppu_event:        PPUEvent,
 }
 
 // TODO make an iterator for this structure
 RingThing :: struct($T: typeid) {
 	buf:         []T,
 	next_placed: int,
-	is_filled: bool
+	is_filled:   bool,
 }
 
 ringthing_add :: proc(using ringthing: ^RingThing($T), data: T) {
@@ -186,6 +186,7 @@ NesSerialized :: struct {
 	prg_ram:         []u8,
 	// This is CHR RAM if rom_info.chr_rom_size == 0, otherwise it's CHR ROM
 	chr_mem:         []u8,
+	prev_nmi:        int,
 	nmi_triggered:   int,
 	ppu:             PPU,
 
