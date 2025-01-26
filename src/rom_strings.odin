@@ -7,7 +7,8 @@ package main
 // rom_in_nes :: "roms/Castlevania.nes"
 // rom_in_nes :: "roms/Super Mario Bros. 3.nes"
 // rom_in_nes :: "roms/SuperMarioBros.nes"
-// rom_in_nes :: "roms/Spelunker.nes"
+rom_in_nes :: "roms/Batman.nes"
+// rom_in_nes :: "roms/Final Fantasy III (Japan).nes"
 
 /// FULLY WORKING GAMES:
 
@@ -55,6 +56,7 @@ package main
 // rom_in_nes :: "roms/Mega Man VI.nes"
 // rom_in_nes :: "roms/Final Fantasy III (Japan).nes"
 // rom_in_nes :: "roms/Super Mario Bros. 3.nes"
+// rom_in_nes :: "roms/Adventures of Lolo II , The.nes"
 
 // Mapper 7
 
@@ -70,6 +72,15 @@ package main
 
 /// NON-WORKING GAMES: 
 
+
+// Reason: Emulator Bug
+
+// rom_in_nes :: "roms/Dragon Warrior.nes" // this is dragon quest. mapper 1
+
+// batman situation: it works if i `&` the prg banks to `& 0x0F` in m4_cpu_write
+//  but when i do that, FF 3 stops working.
+// rom_in_nes :: "roms/Batman.nes"
+
 // Reason: Mapper unsupported
 
 // Mapper 67
@@ -80,12 +91,6 @@ package main
 // Mapper 69
 
 // rom_in_nes :: "roms/Batman - Return of the Joker.nes"
-
-// Reason: Emulator Bug
-
-// rom_in_nes :: "roms/Adventures of Lolo II , The.nes" // seems to work after vbl nmi test progress
-// rom_in_nes :: "roms/Dragon Warrior.nes" // this is dragon quest. mapper 1
-// rom_in_nes :: "roms/Batman.nes"
 
 /// TEST ROMS:
 
@@ -111,7 +116,7 @@ package main
 // rom_in_nes :: "tests/vbl_nmi_timing/5.nmi_suppression.nes" // passed
 // rom_in_nes :: "tests/vbl_nmi_timing/6.nmi_disable.nes" // passed
 // HERE
-rom_in_nes :: "tests/vbl_nmi_timing/7.nmi_timing.nes" // failed #7
+// rom_in_nes :: "tests/vbl_nmi_timing/7.nmi_timing.nes" // failed #7
 
 // NMI tests
 

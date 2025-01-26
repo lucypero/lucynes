@@ -80,3 +80,11 @@ read "Branch instructions and interrupts"
 there's special cases with branch instructions.
 
 that's probably why #7 fails at the last vbl nmi timing testa.
+
+
+## mmc2
+
+https://www.nesdev.org/wiki/MMC2
+
+maybe considering coding mmc2. seems to be similar to mmc4. punch out runs on mmc2
+
