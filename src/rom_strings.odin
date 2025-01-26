@@ -19,6 +19,8 @@ package main
 // rom_in_nes :: "roms/IceClimber.nes"
 // rom_in_nes :: "roms/PacMan.nes"
 // rom_in_nes :: "roms/Bomberman.nes"
+// rom_in_nes :: "roms/Ms. Pac-Man (USA).nes"
+// rom_in_nes :: "roms/Ms. Pac-Man (USA) (Tengen) (Unl).nes"
 
 // Mapper 1
 
@@ -62,13 +64,13 @@ package main
 // rom_in_nes :: "roms/Ghosts 'N Goblins.nes"
 // rom_in_nes :: "roms/Battletoads & Double Dragon - The Ultimate Team.nes"
 
+/// WORKING GAMES WITH SOME PROBLEMS
+
+// rom_in_nes :: "roms/Spelunker.nes" // main character has a line on the hat. music bugs
+
 /// NON-WORKING GAMES: 
 
 // Reason: Mapper unsupported
-
-// Mapper 64
-
-// rom_in_nes :: "roms/Ms. Pac Man (Tengen).nes"
 
 // Mapper 67
 
@@ -81,7 +83,6 @@ package main
 
 // Reason: Emulator Bug
 
-// rom_in_nes :: "roms/Spelunker.nes" // seems to work after vbl nmi test progress
 // rom_in_nes :: "roms/Adventures of Lolo II , The.nes" // seems to work after vbl nmi test progress
 // rom_in_nes :: "roms/Dragon Warrior.nes" // this is dragon quest. mapper 1
 // rom_in_nes :: "roms/Batman.nes"
@@ -107,12 +108,10 @@ package main
 // rom_in_nes :: "tests/vbl_nmi_timing/2.vbl_timing.nes" // passed
 // rom_in_nes :: "tests/vbl_nmi_timing/3.even_odd_frames.nes" // passed
 // rom_in_nes :: "tests/vbl_nmi_timing/4.vbl_clear_timing.nes" // passed
-
-// i fail 3 but i don't understand this one.
 // rom_in_nes :: "tests/vbl_nmi_timing/5.nmi_suppression.nes" // passed
 // rom_in_nes :: "tests/vbl_nmi_timing/6.nmi_disable.nes" // passed
 // HERE
-rom_in_nes :: "tests/vbl_nmi_timing/7.nmi_timing.nes" // failed #3
+rom_in_nes :: "tests/vbl_nmi_timing/7.nmi_timing.nes" // failed #7
 
 // NMI tests
 

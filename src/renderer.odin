@@ -192,7 +192,7 @@ window_main :: proc() {
 		// clear_pixels(pixels, rl.BLACK)
 
 		// doing input
-		if rl.IsKeyDown(.ENTER) {
+		if rl.IsKeyPressed(.ENTER) {
 			// reset nes
 			nes_reset(&nes, the_rom)
 		}
@@ -200,7 +200,6 @@ window_main :: proc() {
 
 		if rl.IsKeyPressed(.P) {
 			toggle_pause()
-			log.info("paused game")
 		}
 
 		if rl.IsKeyPressed(.F) {
