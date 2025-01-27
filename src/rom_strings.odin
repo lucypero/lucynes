@@ -7,7 +7,7 @@ package main
 // rom_in_nes :: "roms/Castlevania.nes"
 // rom_in_nes :: "roms/Super Mario Bros. 3.nes"
 // rom_in_nes :: "roms/SuperMarioBros.nes"
-rom_in_nes :: "roms/Batman.nes"
+// rom_in_nes :: "roms/Batman.nes"
 // rom_in_nes :: "roms/Final Fantasy III (Japan).nes"
 
 /// FULLY WORKING GAMES:
@@ -53,7 +53,7 @@ rom_in_nes :: "roms/Batman.nes"
 // rom_in_nes :: "roms/Mega Man III.nes"
 // rom_in_nes :: "roms/Mega Man IV.nes"
 // rom_in_nes :: "roms/Mega Man V.nes"
-// rom_in_nes :: "roms/Mega Man VI.nes"
+rom_in_nes :: "roms/Mega Man VI.nes"
 // rom_in_nes :: "roms/Final Fantasy III (Japan).nes"
 // rom_in_nes :: "roms/Super Mario Bros. 3.nes"
 // rom_in_nes :: "roms/Adventures of Lolo II , The.nes"
@@ -71,7 +71,6 @@ rom_in_nes :: "roms/Batman.nes"
 // rom_in_nes :: "roms/Spelunker.nes" // main character has a line on the hat. music bugs
 
 /// NON-WORKING GAMES: 
-
 
 // Reason: Emulator Bug
 
