@@ -2,6 +2,8 @@
 
 NES emulator written in Odin.
 
+[Blog post](https://lucypero.com/lucynes.html)
+
 # Features
 
 - Debugger view with some debugging features
