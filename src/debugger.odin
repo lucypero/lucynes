@@ -1,3 +1,4 @@
+#+feature using-stmt
 package main
 import rl "vendor:raylib"
 import "core:strings"

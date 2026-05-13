@@ -1,3 +1,4 @@
+#+feature using-stmt
 package main
 
 // TODO: make sure these addr functions return

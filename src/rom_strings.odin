@@ -1,4 +1,4 @@
-
+#+feature using-stmt
 package main
 
 /// scratch, quick access

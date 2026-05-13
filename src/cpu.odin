@@ -1,7 +1,8 @@
+#+feature using-stmt
+package main
+
 /// This file is about:
 ///  NES CPU and higher level NES stuff (ticking the entire NES, initializing it, etc)
-
-package main
 
 import "core:fmt"
 import "core:os"
