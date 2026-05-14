@@ -59,6 +59,8 @@ NES emulator written in Odin.
 
 # How to build
 
+Last tested on Odin version: `dev-2026-05:ea5175d86`
+
 `odin run src -out:lucynes.exe`
 
 It will not run if the default ROM isn't in the `roms` directory. If you want to play a specific ROM, you can...:
