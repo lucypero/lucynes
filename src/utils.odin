@@ -99,13 +99,14 @@ save_thing :: proc(thing: $T, filename: string) -> bool {
 		fmt.eprintfln("cbor error %v", err)
 		return false
 	}
-	os.write_entire_file(filename, bin) or_return
-	return true
+	err_os := os.write_entire_file(filename, bin)
+	return err_os == os.General_Error.None
 }
 
 load_thing :: proc(filename: string, thing: ^$T, allocator: runtime.Allocator) -> bool {
 
-	bin := os.read_entire_file_from_filename(filename, allocator = context.temp_allocator) or_return
+	bin, err := os.read_entire_file_from_path(filename, allocator = context.temp_allocator)
+	if err != os.General_Error.None do return false
 	nes_serialized_temp: NesSerialized
 	decoder_flags: cbor.Decoder_Flags = {.Disallow_Streaming, .Trusted_Input, .Shrink_Excess}
 

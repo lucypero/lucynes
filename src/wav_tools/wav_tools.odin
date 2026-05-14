@@ -171,8 +171,8 @@ wav_load_file :: proc ( file_name, path : string ) ->
     file_path := fmt.aprintf( "%s%s", path, file_name ); 
 
     // Reads the entire file in binary mode.
-    file_data , success := os.read_entire_file_from_filename( file_path )
-    if !success {
+    file_data , err_os := os.read_entire_file_from_path(file_path, context.allocator)
+    if err_os != os.General_Error.None {
         wav_error = Error{ ErrorType.File_Not_Found, "File not found." }
         return wav_info, wav_error
     }
@@ -500,8 +500,8 @@ wav_write_file :: proc ( wav_info : ^WavInfo ) -> ( wav_error : WAVError ) {
     file_path := fmt.aprintf( "%s%s", wav_info.path, wav_info.file_name );
 
     // Writes the file to disk.
-    success := os.write_entire_file( file_path, wav_info.file_buf_start )
-    if !success {
+    err_os := os.write_entire_file( file_path, wav_info.file_buf_start )
+    if err_os != os.General_Error.None {
         wav_error = Error{ ErrorType.File_Not_Found, "File error, while writting file to disk." }
         return wav_error
     }

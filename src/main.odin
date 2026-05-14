@@ -255,7 +255,8 @@ parse_nestest_log_file :: proc(log_file: string) -> (res: [dynamic]NesTestLog, o
 
 	ok = false
 
-	log_bytes := os.read_entire_file(log_file) or_return
+	log_bytes, err_os := os.read_entire_file_from_path(log_file, context.allocator)
+	if err_os != os.General_Error.None do return nil, false
 
 	log_string := string(log_bytes)
 
@@ -292,9 +293,9 @@ run_nestest :: proc(using nes: ^NES, program_file: string, log_file: string) -> 
 
 	nes_reset(nes, program_file)
 
-	test_rom, ok_2 := os.read_entire_file(program_file)
+	test_rom, err_os := os.read_entire_file(program_file, context.allocator)
 
-	if !ok_2 {
+	if err_os != os.General_Error.None {
 		fmt.eprintln("could not read program file")
 		return false
 	}
@@ -473,12 +474,7 @@ main :: proc() {
 	assert(mv.arena_init_growing(&nes_arena) == .None)
 
 	// initializing logger
-	mode: int = 0
-	when ODIN_OS == .Linux || ODIN_OS == .Darwin {
-		mode = os.S_IRUSR | os.S_IWUSR | os.S_IRGRP | os.S_IROTH
-	}
-
-	logh, logh_err := os.open("log.log", (os.O_CREATE | os.O_TRUNC | os.O_RDWR), mode)
+	logh, logh_err := os.open("log.log", (os.O_CREATE | os.O_TRUNC | os.O_RDWR), os.Permissions_Default)
 
 	logger := logh_err == os.ERROR_NONE ? log.create_file_logger(logh) : log.create_console_logger()
 	context.logger = logger
@@ -620,8 +616,8 @@ write_sample_wav_file :: proc() -> bool {
 	bytes.buffer_write(&buf, {1, 2, 3})
 	bytes.buffer_write(&buf, {1, 2, 3})
 
-	ok := os.write_entire_file("hello.txt", buf.buf[:])
-	if !ok {
+	err_os := os.write_entire_file("hello.txt", buf.buf[:])
+	if err_os != os.General_Error.None {
 		fmt.eprintfln("could not write file")
 		os.exit(1)
 	}
@@ -638,7 +634,8 @@ get_palette :: proc(pal_file: string) -> (p_palette: []rl.Color, ok: bool) {
 
 	palette := make([]rl.Color, 64)
 
-	log_bytes := os.read_entire_file(pal_file) or_return
+	log_bytes, err := os.read_entire_file_from_path(pal_file, context.allocator)
+	if err != os.General_Error.None do return nil, false
 	defer delete(log_bytes)
 
 	if len(log_bytes) < 64 {
@@ -835,9 +832,9 @@ load_rom_from_file :: proc(nes: ^NES, filename: string, allocator: runtime.Alloc
 
 	rom_info: RomInfo
 
-	test_rom, ok := os.read_entire_file(filename, allocator = context.temp_allocator)
+	test_rom, err := os.read_entire_file(filename, allocator = context.temp_allocator)
 
-	if !ok {
+	if err != os.General_Error.None {
 		fmt.eprintln("could not read rom file")
 		return false
 	}

@@ -1172,8 +1172,8 @@ dump_log :: proc(using nes: ^NES) {
 
 	}
 
-	ok := os.write_entire_file("dump.log", b.buf[:])
-	if !ok {
+	err := os.write_entire_file("dump.log", b.buf[:])
+	if err != os.General_Error.None{
 		fmt.eprintfln("could not write dump")
 		os.exit(1)
 	}

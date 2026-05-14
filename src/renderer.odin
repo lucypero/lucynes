@@ -7,7 +7,6 @@ import "core:strings"
 import "core:strconv"
 import "core:c"
 import rl "vendor:raylib"
-import "core:log"
 
 scale_factor :: 3
 
